@@ -1,0 +1,15 @@
+services:
+  downloader:
+    build:
+      context: ../downloader
+      dockerfile: Dockerfile
+    container_name: sounddrop-downloader
+    ports:
+      - "8081:8081"
+    environment:
+      DOWNLOADER_API_KEY: ${DOWNLOADER_API_KEY:-change-me}
+      DOWNLOADER_PUBLIC_BASE_URL: ${DOWNLOADER_PUBLIC_BASE_URL:-http://localhost:8081}
+      DOWNLOADER_STORAGE_DIR: /data/files
+    volumes:
+      - ../.data/downloader:/data/files
+    restart: unless-stopped

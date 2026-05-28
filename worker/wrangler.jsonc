@@ -1,0 +1,73 @@
+﻿// SoundDrop v7 Cloudflare Worker configuration
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "sounddrop",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-27",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": "./public/",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sounddrop-db",
+      "database_id": "9691110a-611b-452b-85a6-858f36fd32a9"
+    }
+  ],
+
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "27a7520824504c91aac1339913185ebe",
+      "preview_id": "f651624329ca4861bb2ecd19b2f185d5"
+    }
+  ],
+
+  "queues": {
+    "producers": [
+      {
+        "binding": "DOWNLOAD_QUEUE",
+        "queue": "sounddrop-downloads"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "sounddrop-downloads",
+        "max_batch_size": 5,
+        "max_batch_timeout": 10,
+        "max_retries": 5,
+        "retry_delay": 20,
+        "dead_letter_queue": "sounddrop-downloads-dlq"
+      }
+    ]
+  },
+
+  "vars": {
+    "DOWNLOADER_API_URL": "https://september-kurt-louisville-pen.trycloudflare.com",
+    "CORS_ORIGINS": "https://sounddrop.biramentv.workers.dev,http://localhost:8787,http://localhost:3000",
+    "DOWNLOAD_TOKEN_TTL_SECONDS": "3600",
+    "SEARCH_CACHE_TTL_SECONDS": "180",
+    "DOWNLOAD_DEDUPE_TTL_SECONDS": "120",
+    "PUBLIC_BASE_URL": "https://sounddrop.biramentv.workers.dev",
+    "INVIDIOUS_BASE_URL": "https://invidious.f5.si"
+  }
+
+  // secrets (wrangler secret put):
+  // TELEGRAM_BOT_TOKEN
+  // TELEGRAM_SECRET_TOKEN
+  // DOWNLOADER_API_KEY
+  // DOWNLOAD_TOKEN_SECRET
+}
+
+
+

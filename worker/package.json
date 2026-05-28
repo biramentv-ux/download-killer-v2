@@ -1,0 +1,19 @@
+{
+  "name": "sounddrop-worker",
+  "version": "7.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --config wrangler.jsonc",
+    "deploy": "wrangler deploy --config wrangler.jsonc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build:tg-archive-seed": "node scripts/build-telegram-archive-seed.mjs --out telegram_archive_seed.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260520.0",
+    "typescript": "^5.8.3",
+    "vitest": "^2.1.9",
+    "wrangler": "^4.20.0"
+  }
+}

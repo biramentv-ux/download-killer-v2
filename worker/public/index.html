@@ -1,0 +1,2741 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SoundDrop v7</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#150625">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SoundDrop">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;700&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #02040c;
+      --bg-2: #071127;
+      --surface: rgba(7, 15, 34, 0.76);
+      --surface-strong: rgba(8, 19, 41, 0.9);
+      --line: rgba(133, 171, 255, 0.2);
+      --line-soft: rgba(109, 150, 240, 0.16);
+      --text: #d9e8ff;
+      --muted: #7e94c0;
+      --muted-soft: #61729b;
+      --accent: #00f7a8;
+      --accent-2: #00d0ff;
+      --danger: #ff6f7e;
+      --radius: 16px;
+      --radius-sm: 12px;
+      --shadow: 0 24px 50px rgba(0, 0, 0, 0.4);
+      --mono: "IBM Plex Mono", monospace;
+      --display: "Sora", sans-serif;
+      --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      min-height: 100%;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: var(--mono);
+      background:
+        radial-gradient(950px 520px at -8% -12%, rgba(0, 247, 168, 0.22), transparent 62%),
+        radial-gradient(980px 640px at 110% 12%, rgba(0, 208, 255, 0.22), transparent 62%),
+        linear-gradient(152deg, #02040b 0%, #050a19 52%, #02040b 100%);
+      background-size: 120% 120%;
+      animation: skyShift 16s ease-in-out infinite alternate;
+      padding: max(14px, env(safe-area-inset-top))
+               max(14px, env(safe-area-inset-right))
+               max(14px, env(safe-area-inset-bottom))
+               max(14px, env(safe-area-inset-left));
+      overflow-x: hidden;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      z-index: 0;
+      inset: auto;
+      border-radius: 999px;
+      filter: blur(56px);
+      pointer-events: none;
+      opacity: 0.34;
+    }
+
+    body::before {
+      width: 300px;
+      height: 300px;
+      left: -90px;
+      bottom: -90px;
+      background: linear-gradient(135deg, rgba(0, 247, 168, 0.95), rgba(0, 208, 255, 0.42));
+      animation: floatBlobA 13s var(--ease) infinite;
+    }
+
+    body::after {
+      width: 380px;
+      height: 380px;
+      right: -120px;
+      top: -120px;
+      background: linear-gradient(145deg, rgba(59, 121, 255, 0.9), rgba(0, 247, 168, 0.35));
+      animation: floatBlobB 16s var(--ease) infinite;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      min-height: calc(100svh - 28px);
+      max-width: 1680px;
+      margin: 0 auto;
+      border-radius: 24px;
+      border: 1px solid rgba(123, 165, 255, 0.22);
+      background: linear-gradient(164deg, rgba(4, 10, 24, 0.88), rgba(3, 8, 18, 0.95));
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      animation: stageIn 0.8s var(--ease) both;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 8;
+      min-height: 92px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 18px 26px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(5, 13, 31, 0.95) 0%, rgba(5, 12, 27, 0.82) 100%);
+      backdrop-filter: blur(12px);
+    }
+
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .logo-box {
+      width: 46px;
+      height: 46px;
+      border: 1px solid rgba(0, 247, 168, 0.58);
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      font-size: 22px;
+      line-height: 1;
+      color: #d7ffe7;
+      background: linear-gradient(160deg, rgba(0, 247, 168, 0.2), rgba(0, 127, 255, 0.2));
+      box-shadow: inset 0 0 0 1px rgba(0, 247, 168, 0.18), 0 0 18px rgba(0, 247, 168, 0.26);
+      animation: pulseLogo 3.3s var(--ease) infinite;
+    }
+
+    .brand {
+      font-family: var(--display);
+      font-size: clamp(1.8rem, 3.2vw, 2.7rem);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      white-space: nowrap;
+    }
+
+    .brand .drop {
+      color: var(--accent);
+      text-shadow: 0 0 14px rgba(0, 247, 168, 0.3);
+    }
+
+    .badge {
+      border: 1px solid var(--line-soft);
+      border-radius: 9px;
+      padding: 5px 10px;
+      line-height: 1;
+      font-size: 0.78rem;
+      color: #9eb5dd;
+      background: rgba(6, 14, 31, 0.75);
+    }
+
+    .tabs {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .tab,
+    .lang-btn,
+    .source-pill,
+    .pill,
+    #queueBtn,
+    .action-btn,
+    .exe-link,
+    .result-card,
+    .queue-item,
+    .card {
+      transition:
+        transform 0.28s var(--ease),
+        border-color 0.28s var(--ease),
+        background 0.28s var(--ease),
+        color 0.28s var(--ease),
+        box-shadow 0.28s var(--ease),
+        opacity 0.28s var(--ease);
+    }
+
+    .tab {
+      min-width: 118px;
+      height: 42px;
+      padding: 0 16px;
+      border-radius: 999px;
+      border: 1px solid var(--line-soft);
+      background: rgba(6, 14, 32, 0.7);
+      color: #a4bbdf;
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tab:hover {
+      transform: translateY(-2px);
+      border-color: rgba(149, 188, 255, 0.55);
+      color: #d8e8ff;
+    }
+
+    .tab.active {
+      color: #02281a;
+      border-color: rgba(0, 247, 168, 0.72);
+      background: linear-gradient(130deg, var(--accent) 0%, #48ffd2 100%);
+      box-shadow: 0 10px 20px rgba(0, 247, 168, 0.28);
+    }
+
+    .lang-switch {
+      display: flex;
+      gap: 8px;
+      margin-left: 2px;
+    }
+
+    .lang-btn {
+      height: 38px;
+      min-width: 72px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line-soft);
+      background: rgba(8, 18, 39, 0.78);
+      color: #97b1da;
+      font-family: var(--mono);
+      font-size: 0.74rem;
+      cursor: pointer;
+    }
+
+    .lang-btn:hover {
+      transform: translateY(-2px);
+      color: #d6e6ff;
+      border-color: rgba(149, 188, 255, 0.55);
+    }
+
+    .lang-btn.active {
+      border-color: rgba(0, 247, 168, 0.7);
+      color: #ceffea;
+      background: linear-gradient(145deg, rgba(0, 247, 168, 0.2), rgba(7, 26, 38, 0.95));
+      box-shadow: inset 0 0 0 1px rgba(0, 247, 168, 0.22);
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: minmax(320px, 41%) minmax(420px, 59%);
+      min-height: calc(100svh - 128px);
+      animation: panelIn 0.65s var(--ease) both;
+    }
+
+    .left-pane,
+    .right-pane {
+      padding: 22px;
+    }
+
+    .left-pane {
+      background: linear-gradient(180deg, rgba(5, 12, 30, 0.86) 0%, rgba(5, 11, 27, 0.7) 100%);
+      border-right: 1px solid var(--line-soft);
+    }
+
+    .right-pane {
+      background: linear-gradient(180deg, rgba(7, 15, 36, 0.85) 0%, rgba(6, 13, 29, 0.72) 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .right-pane::before {
+      content: "";
+      position: absolute;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      right: -80px;
+      top: -90px;
+      background: radial-gradient(circle, rgba(0, 247, 168, 0.28), transparent 68%);
+      pointer-events: none;
+    }
+
+    .search-shell {
+      position: relative;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      padding: 8px;
+      margin-bottom: 18px;
+      background: linear-gradient(180deg, rgba(11, 24, 52, 0.75), rgba(9, 18, 39, 0.78));
+      box-shadow: inset 0 1px 0 rgba(211, 228, 255, 0.08);
+    }
+
+    .search-shell:focus-within {
+      border-color: rgba(0, 247, 168, 0.62);
+      box-shadow:
+        inset 0 1px 0 rgba(211, 228, 255, 0.12),
+        0 0 0 3px rgba(0, 247, 168, 0.16);
+    }
+
+    #searchInput {
+      width: calc(100% - 62px);
+      height: 54px;
+      border: none;
+      outline: none;
+      border-radius: 11px;
+      background: transparent;
+      font-family: var(--mono);
+      font-size: clamp(0.95rem, 1.5vw, 1.05rem);
+      color: #e2ecff;
+      padding: 0 12px;
+    }
+
+    #searchInput::placeholder {
+      color: #6f85af;
+    }
+
+    #searchBtn {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 48px;
+      height: 48px;
+      border: 0;
+      border-radius: 12px;
+      color: #032616;
+      font-size: 1.35rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: linear-gradient(140deg, #00f7a8, #00d0ff);
+      box-shadow: 0 9px 16px rgba(0, 204, 178, 0.28);
+    }
+
+    #searchBtn:hover {
+      transform: translateY(-50%) scale(1.04);
+      box-shadow: 0 12px 22px rgba(0, 207, 182, 0.36);
+    }
+
+    .source-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .source-pill {
+      min-height: 42px;
+      border-radius: 999px;
+      border: 1px solid var(--line-soft);
+      background: rgba(6, 14, 33, 0.75);
+      color: #99b2da;
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      letter-spacing: 0.01em;
+      text-align: left;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .source-pill::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(130deg, rgba(0, 247, 168, 0.18), rgba(0, 208, 255, 0.02));
+      opacity: 0;
+      transition: opacity 0.24s var(--ease);
+    }
+
+    .source-pill:hover {
+      transform: translateY(-2px);
+      border-color: rgba(132, 181, 255, 0.52);
+      color: #d7e8ff;
+    }
+
+    .source-pill:hover::after {
+      opacity: 1;
+    }
+
+    .source-pill .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      box-shadow: 0 0 10px currentColor;
+    }
+
+    .dot.all { background: #adb8d2; color: #adb8d2; }
+    .dot.youtube { background: #ff5f73; color: #ff5f73; }
+    .dot.spotify { background: #2be076; color: #2be076; }
+    .dot.soundcloud { background: #ffaf40; color: #ffaf40; }
+    .dot.deezer { background: #37d5ff; color: #37d5ff; }
+    .dot.apple { background: #ff758d; color: #ff758d; }
+
+    .source-pill.active {
+      border-color: rgba(0, 247, 168, 0.72);
+      color: #cbffeb;
+      background: linear-gradient(135deg, rgba(0, 247, 168, 0.2), rgba(9, 26, 33, 0.88));
+      box-shadow: inset 0 0 0 1px rgba(0, 247, 168, 0.24), 0 8px 16px rgba(0, 247, 168, 0.16);
+    }
+
+    .source-pill.active::after {
+      opacity: 1;
+    }
+
+    .section-title {
+      margin: 6px 0 12px;
+      letter-spacing: 0.28em;
+      font-size: 0.75rem;
+      color: #8aa2cb;
+      text-transform: uppercase;
+    }
+
+    .results-pane {
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      min-height: 410px;
+      max-height: calc(100svh - 350px);
+      overflow: auto;
+      padding: 8px;
+      background: linear-gradient(180deg, rgba(6, 14, 33, 0.8), rgba(5, 12, 28, 0.78));
+    }
+
+    .result-card {
+      border: 1px solid rgba(127, 164, 233, 0.16);
+      background: linear-gradient(145deg, rgba(9, 20, 45, 0.72), rgba(8, 18, 39, 0.86));
+      border-radius: var(--radius-sm);
+      padding: 11px 12px;
+      cursor: pointer;
+      margin-bottom: 8px;
+      animation: cardIn 0.36s var(--ease) both;
+    }
+
+    .result-card:last-child {
+      margin-bottom: 0;
+    }
+
+    .result-card.selected,
+    .result-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(0, 208, 255, 0.48);
+      background: linear-gradient(145deg, rgba(11, 25, 57, 0.82), rgba(9, 23, 52, 0.94));
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .result-title {
+      color: #e3eeff;
+      font-size: 0.86rem;
+      margin-bottom: 4px;
+      word-break: break-word;
+    }
+
+    .result-meta {
+      color: #84a0cc;
+      font-size: 0.72rem;
+    }
+
+    .results-empty {
+      min-height: 360px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: #7f94bc;
+      font-size: 0.86rem;
+      line-height: 1.6;
+      padding: 18px;
+    }
+
+    .results-empty .note {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 2.65rem;
+      color: #5e7daa;
+    }
+
+    .picker-empty {
+      min-height: calc(100svh - 210px);
+      border: 1px dashed rgba(127, 164, 233, 0.22);
+      border-radius: var(--radius);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: #7a92bd;
+      font-size: clamp(1rem, 1.6vw, 1.28rem);
+      line-height: 1.55;
+      letter-spacing: 0.01em;
+      background: linear-gradient(180deg, rgba(7, 17, 39, 0.72), rgba(7, 15, 35, 0.8));
+      animation: panelIn 0.45s var(--ease) both;
+    }
+
+    .picker-empty .arrow {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 2.6rem;
+      color: #6c85b2;
+      animation: nudge 2.8s var(--ease) infinite;
+    }
+
+    .picker-content {
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(7, 16, 37, 0.85), rgba(7, 14, 34, 0.88));
+      padding: 14px;
+      animation: panelIn 0.35s var(--ease) both;
+    }
+
+    .picked-track {
+      border: 1px solid rgba(131, 170, 241, 0.26);
+      border-radius: 12px;
+      background: linear-gradient(145deg, rgba(10, 24, 54, 0.74), rgba(9, 21, 48, 0.9));
+      padding: 11px;
+      margin-bottom: 12px;
+    }
+
+    .label {
+      margin-bottom: 8px;
+      color: #89a2cc;
+      font-size: 0.72rem;
+      letter-spacing: 0.19em;
+    }
+
+    .pill-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 13px;
+    }
+
+    .pill {
+      min-height: 38px;
+      border-radius: 11px;
+      border: 1px solid var(--line-soft);
+      background: rgba(7, 17, 39, 0.84);
+      color: #99b3da;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .pill:hover {
+      transform: translateY(-2px);
+      border-color: rgba(136, 183, 255, 0.5);
+      color: #deecff;
+    }
+
+    .pill.active {
+      border-color: rgba(0, 247, 168, 0.72);
+      background: linear-gradient(135deg, rgba(0, 247, 168, 0.22), rgba(11, 28, 34, 0.9));
+      color: #ccffeb;
+      box-shadow: inset 0 0 0 1px rgba(0, 247, 168, 0.22);
+    }
+
+    #queueBtn {
+      width: 100%;
+      min-height: 44px;
+      border: 0;
+      border-radius: 12px;
+      margin-bottom: 14px;
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 0.83rem;
+      font-weight: 700;
+      color: #032b1b;
+      background: linear-gradient(135deg, #00f7a8 0%, #56ffd0 100%);
+      box-shadow: 0 11px 20px rgba(0, 237, 164, 0.26);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #queueBtn::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: -120%;
+      width: 62%;
+      height: 100%;
+      transform: skewX(-24deg);
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.42), transparent);
+      animation: shine 3.4s linear infinite;
+    }
+
+    #queueBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 24px rgba(0, 237, 164, 0.34);
+    }
+
+    .queue-list {
+      border-top: 1px solid rgba(126, 166, 238, 0.16);
+      padding-top: 11px;
+      display: grid;
+      gap: 8px;
+      max-height: 248px;
+      overflow: auto;
+    }
+
+    .queue-item {
+      border: 1px solid rgba(126, 166, 238, 0.18);
+      border-radius: 12px;
+      background: linear-gradient(145deg, rgba(9, 21, 46, 0.8), rgba(9, 20, 44, 0.92));
+      padding: 10px;
+      display: flex;
+      gap: 9px;
+      animation: cardIn 0.34s var(--ease) both;
+    }
+
+    .queue-item:hover {
+      transform: translateY(-2px);
+      border-color: rgba(139, 180, 248, 0.45);
+    }
+
+    .status {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      margin-top: 6px;
+      flex: 0 0 auto;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    .status.queued { background: #9fb0cb; color: #9fb0cb; }
+    .status.processing { background: #43d4ff; color: #43d4ff; }
+    .status.done { background: #00f7a8; color: #00f7a8; }
+    .status.failed { background: #ff7685; color: #ff7685; }
+
+    .item-title {
+      color: #dce9ff;
+      font-size: 0.78rem;
+      margin-bottom: 4px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .item-meta,
+    .item-error,
+    .item-link {
+      font-size: 0.7rem;
+      line-height: 1.45;
+    }
+
+    .item-meta {
+      color: #89a3cb;
+    }
+
+    .item-error {
+      color: #ff8d9a;
+      margin-top: 4px;
+    }
+
+    .item-link {
+      color: #79cfff;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      margin-top: 4px;
+    }
+
+    .item-link.item-action {
+      border: 1px solid rgba(103, 182, 236, 0.45);
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-family: var(--mono);
+      background: rgba(8, 22, 42, 0.62);
+      cursor: pointer;
+    }
+
+    .item-link.item-action:hover {
+      border-color: rgba(0, 208, 255, 0.78);
+      color: #c5efff;
+      transform: translateY(-1px);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .tab-panel {
+      min-height: calc(100svh - 128px);
+      padding: 22px;
+      background: linear-gradient(180deg, rgba(6, 14, 34, 0.84), rgba(5, 12, 28, 0.78));
+      animation: panelIn 0.4s var(--ease) both;
+      display: grid;
+      align-content: start;
+      gap: 12px;
+    }
+
+    .panel-stack {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .surface-card {
+      border: 1px solid rgba(122, 162, 234, 0.24);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      background: linear-gradient(145deg, rgba(9, 21, 48, 0.76), rgba(8, 18, 40, 0.9));
+      box-shadow: inset 0 1px 0 rgba(209, 227, 255, 0.06);
+    }
+
+    .card {
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius-sm);
+      padding: 13px;
+      margin-bottom: 10px;
+      background: linear-gradient(145deg, rgba(9, 20, 45, 0.78), rgba(8, 18, 41, 0.9));
+    }
+
+    .soft {
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
+    #desktopModeBox {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border: 1px solid rgba(0, 247, 168, 0.34);
+      border-radius: 10px;
+      background: linear-gradient(145deg, rgba(7, 27, 28, 0.78), rgba(8, 23, 38, 0.76));
+      color: #bcffe2;
+    }
+
+    .inline-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .action-btn,
+    .exe-link {
+      min-height: 38px;
+      padding: 0 12px;
+      border-radius: 10px;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.01em;
+    }
+
+    .action-btn {
+      border: 1px solid rgba(110, 156, 236, 0.38);
+      background: linear-gradient(145deg, rgba(8, 20, 44, 0.82), rgba(8, 18, 39, 0.9));
+      color: #bad0f2;
+      cursor: pointer;
+    }
+
+    .action-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(0, 208, 255, 0.56);
+      color: #e0eeff;
+    }
+
+    .exe-link {
+      border: 1px solid rgba(0, 247, 168, 0.48);
+      background: linear-gradient(145deg, rgba(8, 27, 27, 0.92), rgba(8, 27, 42, 0.88));
+      color: #baffdf;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .exe-link:hover {
+      transform: translateY(-1px);
+      border-color: rgba(0, 247, 168, 0.8);
+      color: #e1ffef;
+      box-shadow: 0 8px 16px rgba(0, 247, 168, 0.2);
+    }
+
+    #historyList {
+      display: grid;
+      gap: 10px;
+      max-height: calc(100svh - 300px);
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    #historyList .card {
+      margin-bottom: 0;
+    }
+
+    #platformDownloads .action-btn,
+    #platformDownloads .exe-link {
+      flex: 1 1 170px;
+      text-align: center;
+    }
+
+    body.desktop-wrapper #platformDownloads .mobile-install-btn {
+      display: none !important;
+    }
+
+    .results-pane,
+    .queue-list,
+    #historyList {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(117, 162, 243, 0.5) rgba(8, 16, 35, 0.62);
+    }
+
+    .results-pane::-webkit-scrollbar,
+    .queue-list::-webkit-scrollbar,
+    #historyList::-webkit-scrollbar {
+      width: 9px;
+    }
+
+    .results-pane::-webkit-scrollbar-thumb,
+    .queue-list::-webkit-scrollbar-thumb,
+    #historyList::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, rgba(76, 144, 235, 0.84), rgba(0, 247, 168, 0.62));
+      border-radius: 12px;
+    }
+
+    @keyframes stageIn {
+      from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.995);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes panelIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes cardIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes pulseLogo {
+      0%, 100% {
+        box-shadow: inset 0 0 0 1px rgba(0, 247, 168, 0.18), 0 0 14px rgba(0, 247, 168, 0.2);
+      }
+      50% {
+        box-shadow: inset 0 0 0 1px rgba(0, 247, 168, 0.36), 0 0 24px rgba(0, 247, 168, 0.36);
+      }
+    }
+
+    @keyframes shine {
+      to {
+        left: 175%;
+      }
+    }
+
+    @keyframes nudge {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(-6px); }
+    }
+
+    @keyframes skyShift {
+      from {
+        background-position: 0% 0%;
+      }
+      to {
+        background-position: 100% 100%;
+      }
+    }
+
+    @keyframes floatBlobA {
+      0%, 100% { transform: translate(0, 0); }
+      50% { transform: translate(34px, -22px); }
+    }
+
+    @keyframes floatBlobB {
+      0%, 100% { transform: translate(0, 0); }
+      50% { transform: translate(-34px, 18px); }
+    }
+
+    @media (max-width: 1220px) {
+      .topbar {
+        padding: 14px 18px;
+      }
+
+      .main {
+        grid-template-columns: minmax(280px, 44%) minmax(340px, 56%);
+      }
+    }
+
+    @media (max-width: 980px) {
+      .topbar {
+        position: static;
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .tabs {
+        justify-content: space-between;
+        flex-wrap: wrap;
+      }
+
+      .tab {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .lang-switch {
+        width: 100%;
+        justify-content: flex-end;
+        margin-left: 0;
+      }
+
+      .main {
+        grid-template-columns: 1fr;
+        min-height: auto;
+      }
+
+      .left-pane {
+        border-right: none;
+        border-bottom: 1px solid var(--line-soft);
+      }
+
+      .results-pane {
+        max-height: 340px;
+        min-height: 300px;
+      }
+
+      .picker-empty {
+        min-height: 280px;
+      }
+    }
+
+    @media (max-width: 680px) {
+      body {
+        padding: 6px 6px max(10px, env(safe-area-inset-bottom));
+      }
+
+      .app {
+        border-radius: 16px;
+      }
+
+      .topbar,
+      .left-pane,
+      .right-pane,
+      .tab-panel {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
+      .brand-wrap {
+        gap: 10px;
+      }
+
+      .badge {
+        display: none;
+      }
+
+      .tabs {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        align-items: center;
+        gap: 6px;
+      }
+
+      .tab {
+        height: 40px;
+        min-width: 0;
+        flex: initial;
+        font-size: 0.72rem;
+        padding: 0 8px;
+        width: 100%;
+      }
+
+      .lang-switch {
+        grid-column: 1 / -1;
+        justify-content: center;
+        margin-top: 2px;
+      }
+
+      .lang-btn {
+        min-width: 88px;
+        font-size: 0.68rem;
+      }
+
+      .source-grid {
+        grid-template-columns: 1fr;
+      }
+
+      #searchInput {
+        font-size: 0.88rem;
+      }
+
+      .pill-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+      }
+
+      body::before,
+      body::after {
+        display: none;
+      }
+    }
+  </style>
+  <style id="retro-wave-overrides">
+    :root {
+      --bg: #090215;
+      --bg-2: #140726;
+      --surface: rgba(33, 12, 58, 0.74);
+      --surface-strong: rgba(25, 8, 44, 0.9);
+      --line: rgba(255, 117, 222, 0.34);
+      --line-soft: rgba(180, 109, 255, 0.22);
+      --text: #f8e9ff;
+      --muted: #c5a0e8;
+      --muted-soft: #a77fd3;
+      --accent: #ff47d6;
+      --accent-2: #59f0ff;
+      --danger: #ff7f99;
+      --shadow: 0 28px 58px rgba(8, 2, 18, 0.62);
+      --display: "Sora", sans-serif;
+      --mono: "IBM Plex Mono", monospace;
+    }
+
+    body {
+      background:
+        radial-gradient(1200px 650px at 14% -6%, rgba(255, 71, 214, 0.3), transparent 65%),
+        radial-gradient(980px 700px at 93% 8%, rgba(89, 240, 255, 0.2), transparent 62%),
+        linear-gradient(140deg, #080212 0%, #16072b 36%, #0c0320 68%, #05010f 100%);
+      background-attachment: fixed;
+      animation: retroShift 22s ease-in-out infinite alternate;
+    }
+
+    body::before {
+      background: linear-gradient(140deg, rgba(255, 71, 214, 0.9), rgba(128, 94, 255, 0.4));
+      opacity: 0.44;
+      filter: blur(70px);
+    }
+
+    body::after {
+      background: linear-gradient(145deg, rgba(89, 240, 255, 0.82), rgba(255, 97, 197, 0.22));
+      opacity: 0.38;
+      filter: blur(74px);
+    }
+
+    .app {
+      border: 1px solid rgba(255, 132, 228, 0.46);
+      background:
+        linear-gradient(165deg, rgba(28, 8, 50, 0.9), rgba(13, 4, 28, 0.95)),
+        repeating-linear-gradient(
+          -35deg,
+          rgba(255, 255, 255, 0.015) 0 2px,
+          rgba(255, 255, 255, 0) 2px 10px
+        );
+      box-shadow: 0 0 0 1px rgba(255, 132, 228, 0.1), var(--shadow);
+      overflow: hidden;
+    }
+
+    .app::before {
+      content: "";
+      position: absolute;
+      left: -10%;
+      right: -10%;
+      top: 94px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, rgba(255, 132, 228, 0.6) 50%, transparent 100%);
+      opacity: 0.6;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .topbar {
+      background:
+        linear-gradient(180deg, rgba(31, 10, 54, 0.95) 0%, rgba(21, 8, 40, 0.78) 100%);
+      border-bottom: 1px solid rgba(255, 132, 228, 0.3);
+      box-shadow: inset 0 -1px 0 rgba(89, 240, 255, 0.14);
+    }
+
+    .logo-box {
+      border-color: rgba(255, 132, 228, 0.7);
+      color: #ffe9fb;
+      background: linear-gradient(155deg, rgba(255, 71, 214, 0.3), rgba(89, 240, 255, 0.28));
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 132, 228, 0.32),
+        0 0 22px rgba(255, 71, 214, 0.35);
+    }
+
+    .brand {
+      letter-spacing: -0.03em;
+      text-shadow: 0 0 18px rgba(255, 100, 217, 0.22);
+    }
+
+    .brand .drop {
+      color: #6fffff;
+      text-shadow: 0 0 20px rgba(89, 240, 255, 0.44);
+    }
+
+    .badge {
+      border-color: rgba(255, 132, 228, 0.34);
+      color: #ffcdf3;
+      background: rgba(39, 13, 66, 0.72);
+    }
+
+    .tab {
+      border-color: rgba(205, 130, 255, 0.4);
+      background: linear-gradient(150deg, rgba(43, 13, 72, 0.72), rgba(20, 8, 39, 0.85));
+      color: #e3c2ff;
+    }
+
+    .tab:hover {
+      border-color: rgba(255, 132, 228, 0.62);
+      box-shadow: 0 10px 20px rgba(255, 71, 214, 0.2);
+    }
+
+    .tab.active {
+      color: #250227;
+      border-color: rgba(255, 206, 247, 0.88);
+      background: linear-gradient(120deg, #ff47d6 0%, #60f4ff 100%);
+      box-shadow: 0 14px 28px rgba(255, 71, 214, 0.3);
+    }
+
+    .topbar-exe {
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+      border-color: rgba(255, 201, 243, 0.86);
+      background: linear-gradient(125deg, #ff74e5 0%, #67f7ff 100%);
+      color: #210021;
+      box-shadow: 0 12px 24px rgba(255, 71, 214, 0.28);
+      font-weight: 700;
+    }
+
+    .lang-btn {
+      border-color: rgba(196, 123, 255, 0.36);
+      background: rgba(44, 14, 72, 0.7);
+      color: #e7c7ff;
+    }
+
+    .lang-btn.active {
+      border-color: rgba(255, 132, 228, 0.74);
+      color: #ffe5f9;
+      background: linear-gradient(160deg, rgba(255, 71, 214, 0.26), rgba(25, 9, 45, 0.94));
+      box-shadow: inset 0 0 0 1px rgba(255, 132, 228, 0.26);
+    }
+
+    .main {
+      grid-template-columns: minmax(360px, 43%) minmax(420px, 57%);
+      min-height: calc(100svh - 124px);
+      background:
+        radial-gradient(900px 460px at 20% 6%, rgba(255, 71, 214, 0.08), transparent 72%),
+        radial-gradient(1000px 560px at 86% 8%, rgba(89, 240, 255, 0.06), transparent 72%);
+    }
+
+    .left-pane,
+    .right-pane {
+      position: relative;
+      padding: 22px;
+    }
+
+    .left-pane {
+      border-right: 1px solid rgba(255, 132, 228, 0.22);
+      background: linear-gradient(180deg, rgba(26, 10, 45, 0.58), rgba(16, 7, 30, 0.76));
+    }
+
+    .right-pane {
+      background: linear-gradient(185deg, rgba(13, 7, 29, 0.78), rgba(9, 4, 20, 0.88));
+    }
+
+    .input-wrap {
+      border-color: rgba(255, 132, 228, 0.34);
+      background: linear-gradient(145deg, rgba(48, 14, 81, 0.8), rgba(19, 8, 35, 0.88));
+      box-shadow: inset 0 0 0 1px rgba(255, 132, 228, 0.12);
+    }
+
+    #searchInput {
+      color: #f7e8ff;
+    }
+
+    #searchInput::placeholder {
+      color: #c39bdf;
+    }
+
+    #searchBtn {
+      border-color: rgba(255, 206, 247, 0.78);
+      background: linear-gradient(125deg, #ff47d6 0%, #6bf8ff 100%);
+      color: #280025;
+      box-shadow: 0 12px 22px rgba(255, 71, 214, 0.32);
+    }
+
+    .source-pill {
+      border-color: rgba(201, 130, 255, 0.36);
+      background: rgba(40, 13, 67, 0.64);
+      color: #e3bffb;
+    }
+
+    .source-pill.active {
+      border-color: rgba(255, 201, 243, 0.86);
+      background: linear-gradient(130deg, rgba(255, 71, 214, 0.32), rgba(89, 240, 255, 0.26));
+      color: #fff0fb;
+      box-shadow: inset 0 0 0 1px rgba(255, 201, 243, 0.24);
+    }
+
+    .section-title,
+    .queue-title {
+      color: #ffc5ef;
+      letter-spacing: 0.2em;
+    }
+
+    #results,
+    #historyList,
+    #queueList {
+      scrollbar-color: rgba(255, 132, 228, 0.6) rgba(38, 10, 63, 0.45);
+    }
+
+    .result-card,
+    .queue-item,
+    .history-item,
+    .surface-card {
+      border-color: rgba(255, 132, 228, 0.28) !important;
+      background: linear-gradient(160deg, rgba(41, 13, 69, 0.66), rgba(14, 7, 29, 0.86)) !important;
+      box-shadow: inset 0 0 0 1px rgba(255, 132, 228, 0.11);
+    }
+
+    .result-card:hover,
+    .queue-item:hover,
+    .history-item:hover {
+      transform: translateY(-2px) scale(1.003);
+      border-color: rgba(255, 201, 243, 0.62) !important;
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 201, 243, 0.22),
+        0 16px 28px rgba(255, 71, 214, 0.16);
+    }
+
+    .result-card.active {
+      border-color: rgba(255, 201, 243, 0.9) !important;
+      background: linear-gradient(145deg, rgba(255, 71, 214, 0.24), rgba(16, 8, 33, 0.92)) !important;
+      box-shadow: 0 0 0 1px rgba(255, 201, 243, 0.24), 0 18px 32px rgba(255, 71, 214, 0.2);
+    }
+
+    .picker-empty {
+      border: 1px dashed rgba(255, 132, 228, 0.44);
+      color: #d3a7ee;
+      background:
+        linear-gradient(170deg, rgba(31, 11, 52, 0.56), rgba(11, 6, 26, 0.82)),
+        radial-gradient(circle at 16% 22%, rgba(255, 71, 214, 0.14), transparent 40%);
+    }
+
+    #pickerArea .arrow {
+      color: #6af7ff;
+      text-shadow: 0 0 12px rgba(89, 240, 255, 0.42);
+    }
+
+    .pill {
+      border-color: rgba(200, 129, 255, 0.34);
+      color: #eacfff;
+      background: rgba(40, 13, 67, 0.66);
+    }
+
+    .pill.active {
+      border-color: rgba(255, 201, 243, 0.9);
+      color: #200220;
+      background: linear-gradient(120deg, #ff6fe1 0%, #66f7ff 100%);
+      box-shadow: 0 12px 22px rgba(255, 71, 214, 0.25);
+    }
+
+    #queueBtn {
+      border-color: rgba(255, 201, 243, 0.88);
+      color: #2a0528;
+      background: linear-gradient(122deg, #ff47d6 0%, #5cf3ff 100%);
+      box-shadow: 0 20px 36px rgba(255, 71, 214, 0.34);
+    }
+
+    #queueBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 26px 44px rgba(255, 71, 214, 0.38);
+    }
+
+    .status {
+      color: #ffc5e8;
+    }
+
+    .status.failed {
+      color: #ff8fa9;
+    }
+
+    .status.done {
+      color: #98fff0;
+    }
+
+    .soft {
+      border-color: rgba(255, 132, 228, 0.24);
+      background: rgba(38, 11, 61, 0.48);
+      color: #e8c8fd;
+    }
+
+    .action-btn,
+    .exe-link {
+      border-color: rgba(213, 140, 255, 0.44);
+      background: linear-gradient(150deg, rgba(46, 15, 74, 0.74), rgba(25, 10, 43, 0.9));
+      color: #f4d9ff;
+    }
+
+    .action-btn:hover,
+    .exe-link:hover {
+      border-color: rgba(255, 201, 243, 0.76);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px rgba(255, 71, 214, 0.2);
+    }
+
+    #primaryPlatformBtn {
+      border-color: rgba(255, 206, 247, 0.88);
+      color: #260024;
+      background: linear-gradient(120deg, #ff6de1 0%, #6af7ff 100%);
+      box-shadow: 0 16px 30px rgba(255, 71, 214, 0.3);
+    }
+
+    .meta {
+      color: #d9b2f7;
+    }
+
+    @keyframes retroShift {
+      0% { filter: hue-rotate(0deg) saturate(1); }
+      100% { filter: hue-rotate(-10deg) saturate(1.09); }
+    }
+
+    @media (max-width: 1200px) {
+      .main {
+        grid-template-columns: 1fr;
+      }
+
+      .left-pane {
+        border-right: 0;
+        border-bottom: 1px solid rgba(255, 132, 228, 0.24);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand-wrap">
+        <div class="logo-box">↓</div>
+        <div class="brand">Sound<span class="drop">Drop</span></div>
+        <span class="badge">v7</span>
+      </div>
+      <nav class="tabs">
+        <button class="tab active" data-tab="download" id="tabDownload">Download</button>
+        <button class="tab" data-tab="history" id="tabHistory">History</button>
+        <button class="tab" data-tab="settings" id="tabSettings">Settings</button>
+        <a class="exe-link topbar-exe" id="quickExeBtn" href="/downloads/SoundDropDesktop.exe" download>Windows EXE</a>
+        <div class="lang-switch" id="langSwitch">
+          <button class="lang-btn" data-lang="en">🇬🇧 EN</button>
+          <button class="lang-btn" data-lang="bg">🇧🇬 BG</button>
+        </div>
+      </nav>
+    </header>
+
+    <section id="downloadTab" class="main">
+      <aside class="left-pane">
+        <div class="search-shell">
+          <input id="searchInput" placeholder="Paste URL or search">
+          <button id="searchBtn" aria-label="Search">⌕</button>
+        </div>
+
+        <div id="sourcePills" class="source-grid">
+          <button class="source-pill active" data-source="all"><span class="dot all"></span>All</button>
+          <button class="source-pill" data-source="youtube"><span class="dot youtube"></span>YouTube</button>
+          <button class="source-pill" data-source="spotify"><span class="dot spotify"></span>Spotify</button>
+          <button class="source-pill" data-source="soundcloud"><span class="dot soundcloud"></span>SoundCloud</button>
+          <button class="source-pill" data-source="deezer"><span class="dot deezer"></span>Deezer</button>
+          <button class="source-pill" data-source="apple"><span class="dot apple"></span>Apple Music</button>
+        </div>
+
+        <div class="section-title" id="resultsTitle">RESULTS</div>
+        <div id="resultsList" class="results-pane"></div>
+      </aside>
+
+      <section class="right-pane">
+        <div id="pickerArea" class="picker-empty">
+          <div>
+            <span class="arrow">←</span>
+            Select a track<br>to choose format &amp; quality
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="historyTab" class="tab-panel hidden">
+      <div class="panel-stack">
+        <div class="surface-card">
+          <div class="inline-row">
+            <button class="action-btn" id="refreshHistoryBtn">Refresh history</button>
+          </div>
+          <div id="historyMeta" class="soft">Recent jobs</div>
+        </div>
+        <div id="historyList"></div>
+      </div>
+    </section>
+
+    <section id="settingsTab" class="tab-panel hidden">
+      <div class="panel-stack">
+        <div class="surface-card">
+          <div class="inline-row">
+            <button class="action-btn" id="checkHealthBtn">Check API health</button>
+            <button class="action-btn" id="copySyncLinkBtn">Copy Sync Link</button>
+            <a class="exe-link hidden" id="primaryPlatformBtn" href="#" download></a>
+          </div>
+          <div id="healthBox" class="soft">Not checked yet.</div>
+        </div>
+        <div class="surface-card">
+          <div class="inline-row" id="platformDownloads">
+            <a class="exe-link" id="windowsDownloadBtn" href="/downloads/SoundDropDesktop.exe" download>Download Windows EXE</a>
+            <a class="exe-link" id="macDownloadBtn" href="/downloads/SoundDropDesktop-macOS.zip" download>Download macOS Portable</a>
+            <button class="action-btn mobile-install-btn hidden" id="installAppBtn">Install Mobile App</button>
+            <button class="action-btn mobile-install-btn" id="androidInstallBtn">Install Android App</button>
+            <button class="action-btn mobile-install-btn" id="iosInstallBtn">Install iOS App</button>
+          </div>
+        </div>
+        <div class="surface-card">
+          <div class="inline-row" id="browserExtensions">
+            <a class="exe-link" id="chromeExtensionBtn" href="/downloads/SoundDrop-Extension-Chrome.zip" download>Download Chrome Extension</a>
+            <a class="exe-link" id="firefoxExtensionBtn" href="/downloads/SoundDrop-Extension-Firefox.zip" download>Download Firefox Extension</a>
+          </div>
+          <div class="soft" id="extensionHelpText" style="margin-top:8px;">
+            Install the extension zip in your browser's developer mode for one-click downloading.
+          </div>
+        </div>
+        <div class="surface-card">
+          <div class="inline-row">
+            <a class="exe-link hidden" id="telegramBotBtn" target="_blank" rel="noreferrer">Open Telegram Bot</a>
+            <a class="exe-link hidden" id="telegramDownloadBtn" target="_blank" rel="noreferrer">Download via Telegram</a>
+          </div>
+          <div id="syncBox" class="soft"></div>
+          <div id="desktopModeBox" class="soft hidden"></div>
+          <div class="soft" id="mobileHelpText" style="margin-top:8px;">
+            Mobile mode: open this page on Android/iOS and use Install/Add to Home Screen.
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const API_BASE = "/api";
+    const FORMATS = ["mp3", "m4a", "ogg", "opus", "flac", "wav"];
+    const LOSSLESS = ["flac", "wav"];
+    const QUALITY_LOSSY = ["best", "320", "256", "192", "128", "96"];
+    const QUALITY_LOSSLESS = ["lossless", "best"];
+    const WINDOWS_EXE_URL = "/downloads/SoundDropDesktop.exe";
+    const MACOS_ZIP_URL = "/downloads/SoundDropDesktop-macOS.zip";
+    const CHROME_EXTENSION_ZIP_URL = "/downloads/SoundDrop-Extension-Chrome.zip";
+    const FIREFOX_EXTENSION_ZIP_URL = "/downloads/SoundDrop-Extension-Firefox.zip";
+
+    const I18N = {
+      en: {
+        tab_download: "Download",
+        tab_history: "History",
+        tab_settings: "Settings",
+        search_placeholder: "Paste URL or search",
+        results_title: "RESULTS",
+        source_all: "All",
+        source_youtube: "YouTube",
+        source_spotify: "Spotify",
+        source_soundcloud: "SoundCloud",
+        source_deezer: "Deezer",
+        source_apple: "Apple Music",
+        refresh_history: "Refresh history",
+        check_health: "Check API health",
+        copy_sync_link: "Copy Sync Link",
+        sync_link_copied: "Sync link copied.",
+        sync_link_copy_failed: "Could not copy automatically. Use this link:",
+        install_mobile: "Install Mobile App",
+        install_android: "Install Android App",
+        install_ios: "Install iOS App",
+        desktop_open_web: "Open Web Version",
+        desktop_mode_hint: "Desktop wrapper mode active: downloads are saved directly to your folders.",
+        telegram_open: "Open Telegram Bot",
+        telegram_download: "Download via Telegram",
+        windows_download: "Download Windows EXE",
+        quick_windows_exe: "Windows EXE",
+        mac_download: "Download macOS Portable",
+        chrome_extension_download: "Download Chrome Extension",
+        firefox_extension_download: "Download Firefox Extension",
+        extension_help: "Install the extension ZIP in browser developer mode for right-click and popup downloads.",
+        select_track_hint: "Select a track<br>to choose format &amp; quality",
+        empty_results: "Paste a link or<br>search for a track<br>to get started",
+        queue_download: "Queue Download",
+        save_to_folder: "Save To Folder",
+        queue_playlist: "Queue Playlist",
+        save_playlist: "Save Playlist To Folder",
+        format_label: "FORMAT",
+        quality_label: "QUALITY",
+        queue_label: "QUEUE",
+        queue_empty: "Queue is empty.",
+        no_jobs: "No jobs yet.",
+        history_recent: "Recent jobs",
+        playlist_badge: "Playlist",
+        direct_track_title: "Direct URL",
+        direct_playlist_title: "Direct Playlist URL",
+        direct_track_artist: "Direct URL",
+        direct_playlist_artist: "Playlist",
+        unknown_artist: "Unknown Artist",
+        unknown_track: "Track",
+        unknown_source: "Unknown",
+        saved_prefix: "Saved",
+        download_file: "Download file",
+        download: "Download",
+        save_failed: "Save failed: {message}",
+        desktop_playlist_requires_latest: "Desktop playlist mode requires the latest SoundDrop EXE.",
+        playlist_saved_meta: "Saved {saved}/{total} tracks",
+        playlist_failed_meta: "Failed tracks: {failed}",
+        playlist_queued_meta: "Queued {queued}/{total} tracks",
+        loading_history: "Loading history...",
+        loaded_history: "Loaded {count} / total {total}",
+        history_error: "History error: {message}",
+        failed_history: "Failed to load history.",
+        health_checking: "Checking...",
+        health_idle: "Not checked yet.",
+        health_ok: "Status: OK | Service: {service}",
+        health_failed: "Health check failed: {message}",
+        mobile_help: "iPhone/iPad: tap Share, then Add to Home Screen.",
+        mobile_help_generic: "Use your browser menu and choose Install app / Add to Home Screen.",
+        mobile_mode_hint: "Mobile mode: open this page on Android/iOS and use Install/Add to Home Screen.",
+        sync_label: "Sync key: {key} | Language sync: {lang}",
+      },
+      bg: {
+        tab_download: "Сваляне",
+        tab_history: "История",
+        tab_settings: "Настройки",
+        search_placeholder: "Постави URL или търси",
+        results_title: "РЕЗУЛТАТИ",
+        source_all: "Всички",
+        source_youtube: "YouTube",
+        source_spotify: "Spotify",
+        source_soundcloud: "SoundCloud",
+        source_deezer: "Deezer",
+        source_apple: "Apple Music",
+        refresh_history: "Обнови история",
+        check_health: "Провери API",
+        copy_sync_link: "Копирай Sync Линк",
+        sync_link_copied: "Sync линкът е копиран.",
+        sync_link_copy_failed: "Неуспешно автоматично копиране. Използвай този линк:",
+        install_mobile: "Инсталирай мобилно приложение",
+        install_android: "Инсталирай Android приложение",
+        install_ios: "Инсталирай iOS приложение",
+        desktop_open_web: "Отвори web версията",
+        desktop_mode_hint: "Desktop режимът е активен: свалянията се записват директно в избраните папки.",
+        telegram_open: "Отвори Telegram бота",
+        telegram_download: "Свали чрез Telegram",
+        windows_download: "Свали Windows EXE",
+        quick_windows_exe: "Windows EXE",
+        mac_download: "Свали macOS Portable",
+        chrome_extension_download: "Свали Chrome разширение",
+        firefox_extension_download: "Свали Firefox разширение",
+        extension_help: "Инсталирай ZIP файла през developer mode в браузъра за сваляне от popup и десен бутон.",
+        select_track_hint: "Избери трак<br>за формат и качество",
+        empty_results: "Постави линк или<br>потърси песен<br>за да започнеш",
+        queue_download: "Добави за сваляне",
+        save_to_folder: "Запази в папка",
+        queue_playlist: "Добави плейлист",
+        save_playlist: "Запази плейлист в папка",
+        format_label: "ФОРМАТ",
+        quality_label: "КАЧЕСТВО",
+        queue_label: "ОПАШКА",
+        queue_empty: "Опашката е празна.",
+        no_jobs: "Няма задачи.",
+        history_recent: "Последни задачи",
+        playlist_badge: "Плейлист",
+        direct_track_title: "Директен URL",
+        direct_playlist_title: "Директен URL плейлист",
+        direct_track_artist: "Директен URL",
+        direct_playlist_artist: "Плейлист",
+        unknown_artist: "Неизвестен изпълнител",
+        unknown_track: "Песен",
+        unknown_source: "Неизвестен",
+        saved_prefix: "Запазено",
+        download_file: "Свали файл",
+        download: "Свали",
+        save_failed: "Грешка при запазване: {message}",
+        desktop_playlist_requires_latest: "За плейлист режим е нужна последната SoundDrop EXE версия.",
+        playlist_saved_meta: "Запазени {saved}/{total} песни",
+        playlist_failed_meta: "Провалени песни: {failed}",
+        playlist_queued_meta: "Добавени {queued}/{total} песни",
+        loading_history: "Зареждане на история...",
+        loaded_history: "Заредени {count} / общо {total}",
+        history_error: "Грешка в историята: {message}",
+        failed_history: "Неуспешно зареждане на историята.",
+        health_checking: "Проверка...",
+        health_idle: "Все още не е проверено.",
+        health_ok: "Статус: OK | Услуга: {service}",
+        health_failed: "Проверката се провали: {message}",
+        mobile_help: "За iPhone/iPad: Share -> Add to Home Screen.",
+        mobile_help_generic: "От менюто на браузъра избери Install app / Add to Home Screen.",
+        mobile_mode_hint: "Мобилен режим: отвори страницата на Android/iOS и избери Install/Add to Home Screen.",
+        sync_label: "Sync ключ: {key} | Език sync: {lang}",
+      },
+    };
+
+    let searchResults = [];
+    let selectedTrack = null;
+    let selectedFormat = "mp3";
+    let selectedQuality = "320";
+    let currentSource = "all";
+    let currentLang = "en";
+    let syncKey = "";
+    let activeTab = "download";
+    const queueJobs = new Map();
+    const jobStreams = new Map();
+    let deferredInstallPrompt = null;
+
+    const tabs = document.querySelectorAll(".tab");
+    const tabPanels = {
+      download: document.getElementById("downloadTab"),
+      history: document.getElementById("historyTab"),
+      settings: document.getElementById("settingsTab"),
+    };
+    const installAppBtn = document.getElementById("installAppBtn");
+
+    function translate(key, vars = {}) {
+      const pack = I18N[currentLang] || I18N.en;
+      const template = pack[key] || I18N.en[key] || key;
+      return String(template).replace(/\{(\w+)\}/g, (_, name) => String(vars[name] ?? ""));
+    }
+
+    function normalizeLang(raw) {
+      const value = String(raw || "").toLowerCase().trim();
+      if (value === "bg" || value === "en") return value;
+      return "";
+    }
+
+    function languageFromBrowser() {
+      const browserLang = String(navigator.language || "en").toLowerCase();
+      return browserLang.startsWith("bg") ? "bg" : "en";
+    }
+
+    function getOrCreateSyncKey() {
+      const params = new URLSearchParams(window.location.search);
+      const fromQuery = params.get("sync") || "";
+      const fromStorage = localStorage.getItem("sd_sync_key") || "";
+      const candidate = /^[a-zA-Z0-9_-]{8,64}$/.test(fromQuery)
+        ? fromQuery
+        : (/^[a-zA-Z0-9_-]{8,64}$/.test(fromStorage) ? fromStorage : "");
+
+      if (candidate) {
+        localStorage.setItem("sd_sync_key", candidate);
+        return candidate;
+      }
+
+      const generated = `sd${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`.slice(0, 24);
+      localStorage.setItem("sd_sync_key", generated);
+      return generated;
+    }
+
+    async function saveLanguagePreference() {
+      if (!syncKey) return;
+      try {
+        await apiJson("/preferences", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: syncKey, language: currentLang }),
+        });
+      } catch {
+        // ignore preference sync errors
+      }
+    }
+
+    async function loadLanguagePreference() {
+      syncKey = getOrCreateSyncKey();
+      const queryLang = normalizeLang(new URLSearchParams(window.location.search).get("lang"));
+      const storedLang = normalizeLang(localStorage.getItem("sd_lang"));
+
+      currentLang = storedLang || queryLang || languageFromBrowser();
+
+      try {
+        const payload = await apiJson(`/preferences?key=${encodeURIComponent(syncKey)}`);
+        if (payload && payload.language) {
+          currentLang = normalizeLang(payload.language) || currentLang;
+        }
+      } catch {
+        // keep local fallback
+      }
+
+      localStorage.setItem("sd_lang", currentLang);
+      await saveLanguagePreference();
+      renderSyncInfo();
+    }
+
+    function updateLanguageButtons() {
+      document.querySelectorAll(".lang-btn").forEach((node) => {
+        node.classList.toggle("active", node.dataset.lang === currentLang);
+      });
+    }
+
+    function applyLanguage() {
+      document.documentElement.lang = currentLang;
+      updateLanguageButtons();
+
+      const tabDownload = document.getElementById("tabDownload");
+      const tabHistory = document.getElementById("tabHistory");
+      const tabSettings = document.getElementById("tabSettings");
+      if (tabDownload) tabDownload.textContent = translate("tab_download");
+      if (tabHistory) tabHistory.textContent = translate("tab_history");
+      if (tabSettings) tabSettings.textContent = translate("tab_settings");
+
+      const searchInput = document.getElementById("searchInput");
+      if (searchInput) searchInput.placeholder = translate("search_placeholder");
+
+      const resultsTitle = document.getElementById("resultsTitle");
+      if (resultsTitle) resultsTitle.textContent = translate("results_title");
+
+      const sourceMap = {
+        all: translate("source_all"),
+        youtube: translate("source_youtube"),
+        spotify: translate("source_spotify"),
+        soundcloud: translate("source_soundcloud"),
+        deezer: translate("source_deezer"),
+        apple: translate("source_apple"),
+      };
+      document.querySelectorAll(".source-pill").forEach((pill) => {
+        const source = pill.dataset.source || "all";
+        const label = sourceMap[source] || source;
+        const dot = pill.querySelector(".dot");
+        pill.innerHTML = `${dot ? dot.outerHTML : ""}${label}`;
+      });
+
+      const refreshHistoryBtn = document.getElementById("refreshHistoryBtn");
+      if (refreshHistoryBtn) refreshHistoryBtn.textContent = translate("refresh_history");
+
+      const checkHealthBtn = document.getElementById("checkHealthBtn");
+      if (checkHealthBtn) checkHealthBtn.textContent = translate("check_health");
+
+      const copySyncLinkBtn = document.getElementById("copySyncLinkBtn");
+      if (copySyncLinkBtn) copySyncLinkBtn.textContent = translate("copy_sync_link");
+
+      const installBtn = document.getElementById("installAppBtn");
+      if (installBtn) installBtn.textContent = translate("install_mobile");
+      const quickExeBtn = document.getElementById("quickExeBtn");
+      if (quickExeBtn) quickExeBtn.textContent = translate("quick_windows_exe");
+      const chromeExtensionBtn = document.getElementById("chromeExtensionBtn");
+      if (chromeExtensionBtn) chromeExtensionBtn.textContent = translate("chrome_extension_download");
+      const firefoxExtensionBtn = document.getElementById("firefoxExtensionBtn");
+      if (firefoxExtensionBtn) firefoxExtensionBtn.textContent = translate("firefox_extension_download");
+      const extensionHelpText = document.getElementById("extensionHelpText");
+      if (extensionHelpText) extensionHelpText.textContent = translate("extension_help");
+
+      const mobileHelpText = document.getElementById("mobileHelpText");
+      if (mobileHelpText) {
+        mobileHelpText.textContent = isDesktopMode()
+          ? translate("desktop_mode_hint")
+          : translate("mobile_mode_hint");
+      }
+
+      const desktopModeBox = document.getElementById("desktopModeBox");
+      if (desktopModeBox) {
+        desktopModeBox.textContent = translate("desktop_mode_hint");
+      }
+
+      const healthBox = document.getElementById("healthBox");
+      if (healthBox && (!healthBox.dataset.state || healthBox.dataset.state === "idle")) {
+        healthBox.textContent = translate("health_idle");
+      }
+      if (healthBox && !healthBox.dataset.state) {
+        healthBox.dataset.state = "idle";
+      }
+
+      const historyMeta = document.getElementById("historyMeta");
+      if (historyMeta && (!historyMeta.dataset.state || historyMeta.dataset.state === "idle")) {
+        historyMeta.textContent = translate("history_recent");
+      }
+      if (historyMeta && !historyMeta.dataset.state) {
+        historyMeta.dataset.state = "idle";
+      }
+
+      setupPlatformButtons();
+      applyDesktopWrapperUi();
+      renderSyncInfo();
+      renderResults(searchResults);
+      renderPicker();
+      loadTelegramButtons();
+    }
+
+    function renderSyncInfo() {
+      const box = document.getElementById("syncBox");
+      if (!box) return;
+      box.textContent = translate("sync_label", { key: syncKey, lang: currentLang.toUpperCase() });
+    }
+
+    function isIosDevice() {
+      return /iphone|ipad|ipod/i.test(navigator.userAgent || "");
+    }
+
+    function isStandaloneMode() {
+      return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    }
+
+    function applyDesktopWrapperUi() {
+      const desktop = isDesktopMode();
+      document.body.classList.toggle("desktop-wrapper", desktop);
+
+      const desktopModeBox = document.getElementById("desktopModeBox");
+      if (desktopModeBox) {
+        desktopModeBox.classList.toggle("hidden", !desktop);
+      }
+    }
+
+    function detectPlatform() {
+      const ua = (navigator.userAgent || "").toLowerCase();
+      if (ua.includes("windows")) return "windows";
+      if (ua.includes("android")) return "android";
+      if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod")) return "ios";
+      if (ua.includes("mac os") || ua.includes("macintosh")) return "macos";
+      return "other";
+    }
+
+    function buildSyncUrl(baseUrl) {
+      const url = new URL(baseUrl, window.location.origin);
+      if (syncKey) url.searchParams.set("sync", syncKey);
+      if (currentLang) url.searchParams.set("lang", currentLang);
+      return url.pathname + url.search;
+    }
+
+    async function copySyncLink() {
+      const absoluteUrl = new URL(buildSyncUrl("/"), window.location.origin).toString();
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          await navigator.clipboard.writeText(absoluteUrl);
+          alert(translate("sync_link_copied"));
+          return;
+        }
+      } catch {
+        // fallback below
+      }
+      prompt(translate("sync_link_copy_failed"), absoluteUrl);
+    }
+
+    function setupPlatformButtons() {
+      const platform = detectPlatform();
+      const desktopMode = isDesktopMode();
+      const primaryBtn = document.getElementById("primaryPlatformBtn");
+      const windowsBtn = document.getElementById("windowsDownloadBtn");
+      const macBtn = document.getElementById("macDownloadBtn");
+      const androidBtn = document.getElementById("androidInstallBtn");
+      const iosBtn = document.getElementById("iosInstallBtn");
+      const installBtn = document.getElementById("installAppBtn");
+      const quickExeBtn = document.getElementById("quickExeBtn");
+      const chromeExtensionBtn = document.getElementById("chromeExtensionBtn");
+      const firefoxExtensionBtn = document.getElementById("firefoxExtensionBtn");
+
+      if (windowsBtn) {
+        windowsBtn.textContent = translate("windows_download");
+        windowsBtn.href = WINDOWS_EXE_URL;
+      }
+      if (macBtn) {
+        macBtn.textContent = translate("mac_download");
+        macBtn.href = MACOS_ZIP_URL;
+      }
+      if (androidBtn) androidBtn.textContent = translate("install_android");
+      if (iosBtn) iosBtn.textContent = translate("install_ios");
+      if (quickExeBtn) {
+        quickExeBtn.textContent = translate("quick_windows_exe");
+        quickExeBtn.href = WINDOWS_EXE_URL;
+      }
+      if (chromeExtensionBtn) {
+        chromeExtensionBtn.textContent = translate("chrome_extension_download");
+        chromeExtensionBtn.href = CHROME_EXTENSION_ZIP_URL;
+      }
+      if (firefoxExtensionBtn) {
+        firefoxExtensionBtn.textContent = translate("firefox_extension_download");
+        firefoxExtensionBtn.href = FIREFOX_EXTENSION_ZIP_URL;
+      }
+      if (installBtn && desktopMode) installBtn.classList.add("hidden");
+
+      if (!primaryBtn) return;
+
+      primaryBtn.classList.remove("hidden");
+      primaryBtn.onclick = null;
+      if (desktopMode) {
+        primaryBtn.textContent = translate("desktop_open_web");
+        primaryBtn.href = buildSyncUrl("/");
+        primaryBtn.removeAttribute("download");
+        return;
+      }
+
+      if (platform === "windows") {
+        primaryBtn.textContent = translate("windows_download");
+        primaryBtn.href = WINDOWS_EXE_URL;
+        primaryBtn.setAttribute("download", "");
+      } else if (platform === "macos") {
+        primaryBtn.textContent = translate("mac_download");
+        primaryBtn.href = MACOS_ZIP_URL;
+        primaryBtn.setAttribute("download", "");
+      } else if (platform === "android") {
+        primaryBtn.textContent = translate("install_android");
+        primaryBtn.href = "#";
+        primaryBtn.removeAttribute("download");
+        primaryBtn.onclick = (event) => {
+          event.preventDefault();
+          installFromButton("android");
+        };
+      } else if (platform === "ios") {
+        primaryBtn.textContent = translate("install_ios");
+        primaryBtn.href = "#";
+        primaryBtn.removeAttribute("download");
+        primaryBtn.onclick = (event) => {
+          event.preventDefault();
+          installFromButton("ios");
+        };
+      } else {
+        primaryBtn.textContent = translate("install_mobile");
+        primaryBtn.href = buildSyncUrl("/");
+        primaryBtn.removeAttribute("download");
+      }
+    }
+
+    async function loadTelegramButtons() {
+      const botBtn = document.getElementById("telegramBotBtn");
+      const downloadBtn = document.getElementById("telegramDownloadBtn");
+      if (!botBtn || !downloadBtn) return;
+
+      botBtn.textContent = translate("telegram_open");
+      downloadBtn.textContent = translate("telegram_download");
+      botBtn.classList.add("hidden");
+      downloadBtn.classList.add("hidden");
+      botBtn.removeAttribute("href");
+      downloadBtn.removeAttribute("href");
+
+      try {
+        const info = await apiJson("/telegram/info");
+        if (!info || !info.available || !info.deepLink) return;
+
+        const syncParams = new URLSearchParams();
+        if (syncKey) syncParams.set("start", `sync_${syncKey.slice(0, 24)}_${currentLang}`);
+        const botUrl = syncParams.toString()
+          ? `${info.deepLink}?${syncParams.toString()}`
+          : info.deepLink;
+
+        botBtn.href = botUrl;
+        downloadBtn.href = info.downloadLink || info.deepLink;
+        botBtn.classList.remove("hidden");
+        downloadBtn.classList.remove("hidden");
+      } catch {
+        // Telegram link is optional in UI.
+      }
+    }
+
+    async function installFromButton(target) {
+      if (deferredInstallPrompt && (target === "android" || target === "mobile")) {
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice.catch(() => null);
+        deferredInstallPrompt = null;
+        if (installAppBtn) installAppBtn.classList.add("hidden");
+        return;
+      }
+
+      if (target === "ios" || (isIosDevice() && !isStandaloneMode())) {
+        alert(translate("mobile_help"));
+        return;
+      }
+
+      alert(translate("mobile_help_generic"));
+    }
+
+    function setupInstallPrompt() {
+      const androidBtn = document.getElementById("androidInstallBtn");
+      const iosBtn = document.getElementById("iosInstallBtn");
+
+      if (isDesktopMode()) {
+        if (installAppBtn) installAppBtn.classList.add("hidden");
+        if (androidBtn) androidBtn.classList.add("hidden");
+        if (iosBtn) iosBtn.classList.add("hidden");
+        return;
+      }
+
+      window.addEventListener("beforeinstallprompt", (event) => {
+        event.preventDefault();
+        deferredInstallPrompt = event;
+        if (installAppBtn) installAppBtn.classList.remove("hidden");
+      });
+
+      if (isIosDevice() && !isStandaloneMode() && installAppBtn) {
+        installAppBtn.classList.remove("hidden");
+      }
+
+      if (installAppBtn) {
+        installAppBtn.textContent = translate("install_mobile");
+        installAppBtn.addEventListener("click", () => installFromButton("mobile"));
+      }
+      if (androidBtn) {
+        androidBtn.addEventListener("click", () => installFromButton("android"));
+      }
+      if (iosBtn) {
+        iosBtn.addEventListener("click", () => installFromButton("ios"));
+      }
+    }
+
+    async function registerServiceWorker() {
+      if (!("serviceWorker" in navigator)) return;
+      try {
+        await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      } catch (error) {
+        console.warn("Service Worker registration failed", error);
+      }
+    }
+
+    function isDesktopMode() {
+      return Boolean(
+        window.pywebview
+        && window.pywebview.api
+        && typeof window.pywebview.api.download_track === "function"
+        && typeof window.pywebview.api.save_remote_file === "function"
+      );
+    }
+
+    function sanitizeFileComponent(value, fallback) {
+      const raw = String(value || "").trim();
+      const base = (raw && !isUrl(raw)) ? raw : fallback;
+      const cleaned = base
+        .replace(/[^a-zA-Z0-9\-_.\s]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      return cleaned || fallback;
+    }
+
+    function buildSuggestedFileName(title, artist, format) {
+      const safeArtist = sanitizeFileComponent(artist || "Unknown Artist", "Unknown Artist");
+      const safeTitle = sanitizeFileComponent(title || "Track", "Track");
+      const ext = String(format || "mp3").toLowerCase();
+      return `${safeArtist} - ${safeTitle}.${ext}`;
+    }
+
+    function downloadActionMarkup(downloadUrl, label, suggestedName) {
+      if (!downloadUrl) return "";
+      if (isDesktopMode()) {
+        return `<button class="item-link item-action" data-action="save-remote" data-url="${downloadUrl}" data-filename="${suggestedName}">${label}</button>`;
+      }
+      return `<a class="item-link" target="_blank" rel="noreferrer" href="${downloadUrl}">${label}</a>`;
+    }
+
+    async function saveRemoteFileWithDialog(downloadUrl, suggestedName) {
+      if (!isDesktopMode()) return;
+      try {
+        const result = await window.pywebview.api.save_remote_file(downloadUrl, suggestedName);
+        if (!result || result.cancelled) return;
+        if (!result.ok) throw new Error(result.error || "Desktop save failed");
+      } catch (error) {
+        alert(translate("save_failed", { message: error.message }));
+      }
+    }
+
+    function bindDesktopActionButtons(scope) {
+      if (!isDesktopMode()) return;
+      const root = scope || document;
+      root.querySelectorAll("[data-action='save-remote']").forEach((node) => {
+        if (node.dataset.bound === "1") return;
+        node.dataset.bound = "1";
+        node.addEventListener("click", async () => {
+          const url = node.dataset.url;
+          const filename = node.dataset.filename || "download.bin";
+          if (!url) return;
+          await saveRemoteFileWithDialog(url, filename);
+        });
+      });
+    }
+
+    function isUrl(value) {
+      try {
+        const u = new URL(value);
+        return u.protocol === "http:" || u.protocol === "https:";
+      } catch {
+        return false;
+      }
+    }
+
+    function detectSourceFromUrl(rawUrl) {
+      try {
+        const value = String(rawUrl || "").toLowerCase();
+        if (value.includes("youtube.com") || value.includes("youtu.be") || value.includes("music.youtube.com")) return "youtube";
+        if (value.includes("spotify.com")) return "spotify";
+        if (value.includes("soundcloud.com")) return "soundcloud";
+        if (value.includes("deezer.com")) return "deezer";
+        if (value.includes("music.apple.com") || value.includes("itunes.apple.com")) return "apple";
+      } catch {
+        // noop
+      }
+      return "unknown";
+    }
+
+    function isPlaylistUrl(value) {
+      if (!isUrl(value)) return false;
+      try {
+        const u = new URL(value);
+        const host = u.hostname.toLowerCase();
+        const path = u.pathname.toLowerCase();
+        if (host.endsWith("youtube.com") && u.searchParams.get("list")) return true;
+        if (path.includes("playlist")) return true;
+        if (path.includes("/sets/")) return true;
+      } catch {
+        return false;
+      }
+      return false;
+    }
+
+    function formatDuration(value) {
+      if (!value || Number.isNaN(value)) return "--:--";
+      const seconds = Number(value);
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${String(secs).padStart(2, "0")}`;
+    }
+
+    function sourceLabel(source) {
+      const map = {
+        youtube: translate("source_youtube"),
+        spotify: translate("source_spotify"),
+        soundcloud: translate("source_soundcloud"),
+        deezer: translate("source_deezer"),
+        apple: translate("source_apple"),
+        all: translate("source_all"),
+      };
+      return map[source] || source || translate("unknown_source");
+    }
+
+    function statusDot(status) {
+      return `<span class="status ${status}"></span>`;
+    }
+
+    function getErrorMessage(payload, fallback) {
+      return payload && payload.error && payload.error.message ? payload.error.message : fallback;
+    }
+
+    async function apiJson(path, init = {}) {
+      const response = await fetch(`${API_BASE}${path}`, init);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(getErrorMessage(payload, `HTTP ${response.status}`));
+      }
+      return payload;
+    }
+
+    function renderResults(results) {
+      const container = document.getElementById("resultsList");
+      if (!results.length) {
+        container.innerHTML = `
+          <div class="results-empty">
+            <div>
+              <span class="note">♪</span>
+              ${translate("empty_results")}
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = results.map((item) => {
+        const selectedClass = selectedTrack && selectedTrack.id === item.id ? " selected" : "";
+        const isPlaylist = Boolean(item.isPlaylist);
+        const rightMeta = isPlaylist ? translate("playlist_badge") : formatDuration(item.duration);
+        return `<div class="result-card${selectedClass}" data-id="${item.id}">
+          <div class="result-title">${item.artist} - ${item.title}</div>
+          <div class="result-meta">${sourceLabel(item.source)} | ${rightMeta}</div>
+        </div>`;
+      }).join("");
+
+      container.querySelectorAll(".result-card").forEach((node) => {
+        node.addEventListener("click", () => {
+          const id = node.dataset.id;
+          selectedTrack = searchResults.find((entry) => String(entry.id) === String(id));
+          renderResults(results);
+          renderPicker();
+        });
+      });
+    }
+
+    function renderPicker() {
+      const container = document.getElementById("pickerArea");
+      if (!selectedTrack) {
+        container.className = "picker-empty";
+        container.innerHTML = `
+          <div>
+            <span class="arrow">←</span>
+            ${translate("select_track_hint")}
+          </div>
+        `;
+        return;
+      }
+
+      const qualities = LOSSLESS.includes(selectedFormat) ? QUALITY_LOSSLESS : QUALITY_LOSSY;
+      if (!qualities.includes(selectedQuality)) selectedQuality = qualities[0];
+      const playlistMode = Boolean(selectedTrack.isPlaylist && isUrl(selectedTrack.url));
+      const trackMetaRight = playlistMode ? translate("playlist_badge") : formatDuration(selectedTrack.duration);
+      const queueLabel = playlistMode
+        ? (isDesktopMode() ? translate("save_playlist") : translate("queue_playlist"))
+        : (isDesktopMode() ? translate("save_to_folder") : translate("queue_download"));
+
+      container.className = "picker-content";
+      container.innerHTML = `
+        <div class="picked-track">
+          <div class="result-title">${selectedTrack.artist} - ${selectedTrack.title}</div>
+          <div class="result-meta">${sourceLabel(selectedTrack.source)} | ${trackMetaRight}</div>
+        </div>
+
+        <div class="label">${translate("format_label")}</div>
+        <div class="pill-grid" id="formatRow"></div>
+
+        <div class="label">${translate("quality_label")}</div>
+        <div class="pill-grid" id="qualityRow"></div>
+
+        <button id="queueBtn">${queueLabel} (${selectedFormat.toUpperCase()} ${selectedQuality})</button>
+
+        <div class="label">${translate("queue_label")}</div>
+        <div id="queueList" class="queue-list"></div>
+      `;
+
+      const formatRow = document.getElementById("formatRow");
+      formatRow.innerHTML = FORMATS.map((fmt) =>
+        `<button class="pill ${fmt === selectedFormat ? "active" : ""}" data-format="${fmt}">${fmt.toUpperCase()}</button>`
+      ).join("");
+
+      formatRow.querySelectorAll(".pill").forEach((node) => {
+        node.addEventListener("click", () => {
+          selectedFormat = node.dataset.format;
+          if (LOSSLESS.includes(selectedFormat) && !QUALITY_LOSSLESS.includes(selectedQuality)) selectedQuality = "lossless";
+          if (!LOSSLESS.includes(selectedFormat) && selectedQuality === "lossless") selectedQuality = "320";
+          renderPicker();
+        });
+      });
+
+      const qualityRow = document.getElementById("qualityRow");
+      qualityRow.innerHTML = qualities.map((quality) =>
+        `<button class="pill ${quality === selectedQuality ? "active" : ""}" data-quality="${quality}">${quality}</button>`
+      ).join("");
+
+      qualityRow.querySelectorAll(".pill").forEach((node) => {
+        node.addEventListener("click", () => {
+          selectedQuality = node.dataset.quality;
+          renderPicker();
+        });
+      });
+
+      document.getElementById("queueBtn").addEventListener("click", () => {
+        if (playlistMode) {
+          if (isDesktopMode()) {
+            queueDesktopPlaylistDownload();
+            return;
+          }
+          queuePlaylistDownload();
+          return;
+        }
+        if (isDesktopMode()) {
+          queueDesktopDownload();
+          return;
+        }
+        queueDownload();
+      });
+      renderQueue();
+    }
+
+    async function doSearch() {
+      const query = document.getElementById("searchInput").value.trim();
+      if (!query) return;
+
+      if (isUrl(query)) {
+        const guessedSource = detectSourceFromUrl(query);
+        const playlist = isPlaylistUrl(query);
+        selectedTrack = {
+          id: `url:${Date.now()}`,
+          title: playlist ? translate("direct_playlist_title") : query,
+          artist: playlist ? translate("direct_playlist_artist") : translate("direct_track_artist"),
+          duration: 0,
+          source: guessedSource === "unknown" ? currentSource : guessedSource,
+          url: query,
+          isPlaylist: playlist,
+        };
+        searchResults = [selectedTrack];
+        renderResults(searchResults);
+        renderPicker();
+        return;
+      }
+
+      try {
+        const payload = await apiJson("/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, source: currentSource }),
+        });
+
+        searchResults = payload.results || [];
+        selectedTrack = null;
+        renderResults(searchResults);
+        renderPicker();
+      } catch (error) {
+        searchResults = [];
+        selectedTrack = null;
+        renderResults(searchResults);
+        renderPicker();
+      }
+    }
+
+    async function queueDownload() {
+      if (!selectedTrack) return;
+
+      try {
+        const payload = await apiJson("/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: selectedTrack.url,
+            source: selectedTrack.source,
+            format: selectedFormat,
+            quality: selectedQuality,
+          }),
+        });
+
+        const entry = {
+          id: payload.jobId,
+          title: selectedTrack.title,
+          artist: selectedTrack.artist,
+          format: selectedFormat,
+          quality: selectedQuality,
+          status: payload.status || "queued",
+          downloadUrl: null,
+          error: null,
+          createdAt: Date.now(),
+        };
+
+        queueJobs.set(entry.id, entry);
+        renderQueue();
+        subscribeToJobStream(entry.id);
+      } catch (error) {
+        const localId = `job-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+        queueJobs.set(localId, {
+          id: localId,
+          title: selectedTrack.title || translate("unknown_track"),
+          artist: selectedTrack.artist || translate("unknown_artist"),
+          format: selectedFormat,
+          quality: selectedQuality,
+          status: "failed",
+          downloadUrl: null,
+          error: error.message || String(error),
+          createdAt: Date.now(),
+        });
+        renderQueue();
+      }
+    }
+
+    async function queueDesktopDownload() {
+      if (!selectedTrack || !isDesktopMode()) return;
+
+      const localId = `local-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+      const entry = {
+        id: localId,
+        title: selectedTrack.title,
+        artist: selectedTrack.artist,
+        format: selectedFormat,
+        quality: selectedQuality,
+        status: "processing",
+        downloadUrl: null,
+        localPath: null,
+        error: null,
+        createdAt: Date.now(),
+      };
+
+      queueJobs.set(entry.id, entry);
+      renderQueue();
+
+      try {
+        const result = await window.pywebview.api.download_track(
+          selectedTrack.url,
+          selectedFormat,
+          selectedQuality,
+          selectedTrack.source || currentSource,
+          selectedTrack.title || "Track",
+          selectedTrack.artist || "Unknown Artist"
+        );
+
+        if (!result || result.cancelled) {
+          queueJobs.delete(entry.id);
+          renderQueue();
+          return;
+        }
+
+        if (!result.ok) {
+          throw new Error(result.error || "Desktop download failed");
+        }
+
+        entry.status = "done";
+        entry.localPath = result.path || null;
+        entry.title = result.title || entry.title;
+        entry.artist = result.artist || entry.artist;
+        queueJobs.set(entry.id, entry);
+      } catch (error) {
+        entry.status = "failed";
+        entry.error = error.message || String(error);
+        queueJobs.set(entry.id, entry);
+      }
+
+      renderQueue();
+    }
+
+    async function queueDesktopPlaylistDownload() {
+      if (!selectedTrack || !isDesktopMode()) return;
+      if (!isPlaylistUrl(selectedTrack.url || "")) return;
+      if (typeof window.pywebview.api.download_playlist !== "function") {
+        alert(translate("desktop_playlist_requires_latest"));
+        return;
+      }
+
+      const localId = `playlist-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+      const entry = {
+        id: localId,
+        title: selectedTrack.title || "Playlist",
+        artist: selectedTrack.artist || "Playlist",
+        format: selectedFormat,
+        quality: selectedQuality,
+        status: "processing",
+        downloadUrl: null,
+        localPath: null,
+        error: null,
+        createdAt: Date.now(),
+      };
+
+      queueJobs.set(entry.id, entry);
+      renderQueue();
+
+      try {
+        const result = await window.pywebview.api.download_playlist(
+          selectedTrack.url,
+          selectedFormat,
+          selectedQuality,
+          selectedTrack.source || currentSource
+        );
+
+        if (!result || result.cancelled) {
+          queueJobs.delete(entry.id);
+          renderQueue();
+          return;
+        }
+
+        if (!result.ok && !result.partial) {
+          throw new Error(result.error || "Desktop playlist download failed");
+        }
+
+        entry.status = result.partial ? "failed" : "done";
+        entry.localPath = result.folder || null;
+        entry.title = result.playlist_title || entry.title;
+        entry.artist = translate("playlist_saved_meta", {
+          saved: result.saved || 0,
+          total: result.total || 0,
+        });
+        if (result.partial) {
+          entry.error = translate("playlist_failed_meta", { failed: result.failed || 0 });
+        }
+        queueJobs.set(entry.id, entry);
+      } catch (error) {
+        entry.status = "failed";
+        entry.error = error.message || String(error);
+        queueJobs.set(entry.id, entry);
+      }
+
+      renderQueue();
+    }
+
+    async function queuePlaylistDownload() {
+      if (!selectedTrack || !isPlaylistUrl(selectedTrack.url || "")) return;
+
+      try {
+        const payload = await apiJson("/playlist/queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: selectedTrack.url,
+            source: selectedTrack.source || currentSource,
+            format: selectedFormat,
+            quality: selectedQuality,
+          }),
+        });
+
+        const entry = {
+          id: `batch-${Date.now()}`,
+          title: payload.playlist_title || translate("playlist_badge"),
+          artist: translate("playlist_queued_meta", { queued: payload.accepted || 0, total: payload.total || 0 }),
+          format: selectedFormat,
+          quality: selectedQuality,
+          status: "queued",
+          downloadUrl: null,
+          error: null,
+          createdAt: Date.now(),
+        };
+        queueJobs.set(entry.id, entry);
+        renderQueue();
+      } catch (error) {
+        const localId = `batch-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+        queueJobs.set(localId, {
+          id: localId,
+          title: selectedTrack.title || "Playlist",
+          artist: selectedTrack.artist || "Playlist",
+          format: selectedFormat,
+          quality: selectedQuality,
+          status: "failed",
+          downloadUrl: null,
+          error: error.message || String(error),
+          createdAt: Date.now(),
+        });
+        renderQueue();
+      }
+    }
+
+    function renderQueue() {
+      const list = document.getElementById("queueList");
+      if (!list) return;
+
+      const entries = Array.from(queueJobs.values()).sort((a, b) => b.createdAt - a.createdAt);
+      if (!entries.length) {
+        list.innerHTML = `<div class="soft">${translate("queue_empty")}</div>`;
+        return;
+      }
+
+      list.innerHTML = entries.map((job) => `
+        <div class="queue-item">
+          ${statusDot(job.status)}
+          <div style="min-width:0; flex:1;">
+            <div class="item-title">${job.artist} - ${job.title}</div>
+            <div class="item-meta">#${job.id.slice(0, 8)} | ${job.format.toUpperCase()} ${job.quality} | ${job.status}</div>
+            ${job.downloadUrl ? downloadActionMarkup(job.downloadUrl, translate("download_file"), buildSuggestedFileName(job.title, job.artist, job.format)) : ""}
+            ${job.localPath ? `<div class="item-meta">${translate("saved_prefix")}: ${job.localPath}</div>` : ""}
+            ${job.error ? `<div class="item-error">${job.error}</div>` : ""}
+          </div>
+        </div>
+      `).join("");
+
+      bindDesktopActionButtons(list);
+    }
+
+    function updateJobFromServer(jobId, latest) {
+      const job = queueJobs.get(jobId);
+      if (!job || !latest) return;
+      job.status = latest.status || job.status;
+      job.downloadUrl = latest.download_url || job.downloadUrl;
+      job.error = latest.error_message || null;
+      queueJobs.set(jobId, job);
+      renderQueue();
+    }
+
+    function closeJobStream(jobId) {
+      const stream = jobStreams.get(jobId);
+      if (stream) {
+        stream.close();
+        jobStreams.delete(jobId);
+      }
+    }
+
+    function subscribeToJobStream(jobId) {
+      closeJobStream(jobId);
+      const stream = new EventSource(`${API_BASE}/job/${jobId}/events`);
+      jobStreams.set(jobId, stream);
+
+      stream.addEventListener("job", (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          updateJobFromServer(jobId, payload);
+          if (payload.status === "done" || payload.status === "failed") closeJobStream(jobId);
+        } catch {
+          // noop
+        }
+      });
+
+      stream.addEventListener("error", async () => {
+        closeJobStream(jobId);
+        try {
+          const payload = await apiJson(`/job/${jobId}`);
+          updateJobFromServer(jobId, payload.job);
+        } catch {
+          // noop
+        }
+      });
+    }
+
+    async function loadHistory() {
+      const meta = document.getElementById("historyMeta");
+      const list = document.getElementById("historyList");
+      if (!meta || !list) return;
+      try {
+        meta.dataset.state = "loading";
+        meta.textContent = translate("loading_history");
+        const payload = await apiJson("/history?limit=50&offset=0");
+        const rows = payload.history || [];
+        meta.dataset.state = "loaded";
+        meta.textContent = translate("loaded_history", { count: rows.length, total: payload.total });
+
+        if (!rows.length) {
+          list.innerHTML = `<div class="card soft">${translate("no_jobs")}</div>`;
+          return;
+        }
+
+        list.innerHTML = rows.map((row) => `
+          <div class="card">
+            <div class="item-title">${row.artist || translate("unknown_artist")} - ${row.title || row.id}</div>
+            <div class="item-meta">${sourceLabel(row.source)} | ${(row.format || "").toUpperCase()} ${row.quality || ""} | ${row.status}</div>
+            <div class="item-meta">${row.created_at || ""}</div>
+            ${row.download_url ? downloadActionMarkup(row.download_url, translate("download"), buildSuggestedFileName(row.title || translate("unknown_track"), row.artist || translate("unknown_artist"), row.format || "mp3")) : ""}
+          </div>
+        `).join("");
+
+        bindDesktopActionButtons(list);
+      } catch (error) {
+        meta.dataset.state = "error";
+        meta.textContent = translate("history_error", { message: error.message });
+        list.innerHTML = `<div class="card soft">${translate("failed_history")}</div>`;
+      }
+    }
+
+    async function checkHealth() {
+      const box = document.getElementById("healthBox");
+      if (!box) return;
+      box.dataset.state = "checking";
+      box.textContent = translate("health_checking");
+      try {
+        const payload = await apiJson("/health");
+        box.dataset.state = "ok";
+        box.textContent = translate("health_ok", { service: payload.service });
+      } catch (error) {
+        box.dataset.state = "failed";
+        box.textContent = translate("health_failed", { message: error.message });
+      }
+    }
+
+    function bindTabs() {
+      tabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const next = tab.dataset.tab || "download";
+          activateTab(next);
+        });
+      });
+    }
+
+    function activateTab(tabKey) {
+      const valid = Object.prototype.hasOwnProperty.call(tabPanels, tabKey) ? tabKey : "download";
+      activeTab = valid;
+      tabs.forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.tab === valid);
+      });
+      Object.entries(tabPanels).forEach(([key, panel]) => {
+        panel.classList.toggle("hidden", key !== valid);
+      });
+      if (valid === "history") loadHistory();
+    }
+
+    function resolveInitialTab() {
+      const requested = String(new URLSearchParams(window.location.search).get("tab") || "").toLowerCase();
+      if (requested === "download" || requested === "history" || requested === "settings") {
+        return requested;
+      }
+      return "download";
+    }
+
+    function bindSourcePills() {
+      document.querySelectorAll(".source-pill").forEach((pill) => {
+        pill.addEventListener("click", () => {
+          document.querySelectorAll(".source-pill").forEach((node) => node.classList.remove("active"));
+          pill.classList.add("active");
+          currentSource = pill.dataset.source || "all";
+        });
+      });
+    }
+
+    function bindLanguageSwitch() {
+      document.querySelectorAll(".lang-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const next = normalizeLang(btn.dataset.lang);
+          if (!next || next === currentLang) return;
+          currentLang = next;
+          localStorage.setItem("sd_lang", currentLang);
+          applyLanguage();
+          await saveLanguagePreference();
+        });
+      });
+    }
+
+    document.getElementById("searchBtn").addEventListener("click", doSearch);
+    document.getElementById("searchInput").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") doSearch();
+    });
+    document.getElementById("refreshHistoryBtn").addEventListener("click", loadHistory);
+    document.getElementById("checkHealthBtn").addEventListener("click", checkHealth);
+    document.getElementById("copySyncLinkBtn").addEventListener("click", copySyncLink);
+    window.addEventListener("pywebviewready", () => {
+      renderPicker();
+      renderQueue();
+      bindDesktopActionButtons(document);
+    });
+
+    async function initializeApp() {
+      bindTabs();
+      bindSourcePills();
+      bindLanguageSwitch();
+      setupInstallPrompt();
+      await loadLanguagePreference();
+      applyLanguage();
+      await registerServiceWorker();
+      renderResults([]);
+      renderPicker();
+      activateTab(resolveInitialTab());
+    }
+
+    initializeApp().catch((error) => {
+      console.error("Initialization failed", error);
+      renderResults([]);
+      renderPicker();
+    });
+  </script>
+</body>
+</html>
