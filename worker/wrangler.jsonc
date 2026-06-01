@@ -1,0 +1,132 @@
+// SoundDrop v7 Cloudflare Worker configuration
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "sounddrop",
+  "main": "src/index.ts",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "dyrakarmy.online",
+      "zone_name": "dyrakarmy.online",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.dyrakarmy.online",
+      "zone_name": "dyrakarmy.online",
+      "custom_domain": true
+    }
+  ],
+  "compatibility_date": "2026-05-27",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": "./public/",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/telegram/*"]
+  },
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+
+  // Custom-domain routes are enabled after the Cloudflare account has an active
+  // `dyrakarmy.online` zone. Keep workers.dev active in the meantime.
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sounddrop-db",
+      "database_id": "9691110a-611b-452b-85a6-858f36fd32a9"
+    }
+  ],
+
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "27a7520824504c91aac1339913185ebe",
+      "preview_id": "f651624329ca4861bb2ecd19b2f185d5"
+    }
+  ],
+
+  "queues": {
+    "producers": [
+      {
+        "binding": "DOWNLOAD_QUEUE",
+        "queue": "sounddrop-downloads"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "sounddrop-downloads",
+        "max_batch_size": 5,
+        "max_batch_timeout": 10,
+        "max_retries": 5,
+        "retry_delay": 20,
+        "dead_letter_queue": "sounddrop-downloads-dlq"
+      }
+    ]
+  },
+
+  "vars": {
+    "DOWNLOADER_API_URL": "https://heritage-bra-chocolate-document.trycloudflare.com",
+    "DOWNLOADER_ORIGINS_JSON": "[{\"base_url\":\"https://heritage-bra-chocolate-document.trycloudflare.com\",\"priority\":0,\"id\":\"primary\"},{\"base_url\":\"https://sounddrop-downloader-primary.onrender.com\",\"priority\":1,\"id\":\"backup\"}]",
+    "DOWNLOADER_BACKUP_API_URL": "https://sounddrop-downloader-primary.onrender.com",
+    "DOWNLOADER_TERTIARY_API_URL": "https://cake-increasingly-accordingly-jpg.trycloudflare.com",
+    "TELEGRAM_BOT_USERNAME": "dyrakarmy_bot",
+    "CORS_ORIGINS": "https://dyrakarmy.online,https://www.dyrakarmy.online,https://sounddrop.biramentv.workers.dev,http://localhost:8787,http://localhost:3000",
+    "DOWNLOAD_TOKEN_TTL_SECONDS": "3600",
+    "SEARCH_CACHE_TTL_SECONDS": "180",
+    "DOWNLOAD_DEDUPE_TTL_SECONDS": "120",
+    "PUBLIC_BASE_URL": "https://dyrakarmy.online",
+    "INVIDIOUS_BASE_URL": "https://invidious.f5.si",
+    "ORIGIN_HEALTH_TIMEOUT_MS": "60000",
+    "ORIGIN_FAIL_THRESHOLD": "3",
+    "ORIGIN_RECOVERY_SECONDS": "45",
+    "OPS_QUEUE_BACKLOG_THRESHOLD": "250",
+    "SMOKE_TEST_YOUTUBE_URL": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "SMOKE_TEST_SPOTIFY_URL": "https://open.spotify.com/track/5msPBVPfpNMt36L9hsPD0B",
+    "SMOKE_TEST_FORMAT": "mp3",
+    "SMOKE_TEST_QUALITY": "best",
+    "OPS_SMOKE_ALERT_COOLDOWN_SECONDS": "300",
+    "OPS_SMOKE_CONSECUTIVE_ALERT_THRESHOLD": "2",
+    "OPS_SMOKE_FAILURES_1H_ALERT_THRESHOLD": "2",
+    "OPS_REPLAY_RATE_LIMIT_PER_MINUTE": "12",
+    "OPS_REPLAY_RATE_LIMIT_OPERATOR_PER_MINUTE": "12",
+    "OPS_REPLAY_RATE_LIMIT_ADMIN_PER_MINUTE": "30",
+    "OPS_REPLAY_RATE_LIMIT_IP_PER_MINUTE": "30",
+    "OPS_REPLAY_MAX_TARGETS_OPERATOR": "60",
+    "OPS_REPLAY_MAX_TARGETS_ADMIN": "200",
+    "MIN_CLIENT_WEB": "8.0.0",
+    "MIN_CLIENT_DESKTOP_WINDOWS": "7.2.0",
+    "MIN_CLIENT_DESKTOP_MACOS": "7.2.0",
+    "MIN_CLIENT_MOBILE_EXPO": "1.0.0",
+    "MIN_CLIENT_EXTENSION": "1.0.0",
+    "LATEST_DESKTOP_WINDOWS_VERSION": "7.2.0",
+    "LATEST_DESKTOP_MACOS_VERSION": "7.2.0",
+    "LATEST_MOBILE_EXPO_VERSION": "1.0.0",
+    "LATEST_EXTENSION_VERSION": "1.0.0",
+    "RELEASE_CHANNEL": "stable",
+    "RELEASE_SIGNING_KEY_ID": "stable-main",
+    "RELEASE_MANIFEST_CACHE_TTL_SECONDS": "600"
+  }
+
+  // secrets (wrangler secret put):
+  // TELEGRAM_BOT_TOKEN
+  // TELEGRAM_SECRET_TOKEN
+  // DOWNLOADER_API_KEY
+  // DOWNLOAD_TOKEN_SECRET
+  // OPS_READ_TOKEN
+  // OPS_OPERATOR_TOKEN
+  // OPS_ADMIN_TOKEN
+  // RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64
+}
+
+
+
+

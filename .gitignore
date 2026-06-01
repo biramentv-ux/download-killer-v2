@@ -1,2 +1,25 @@
-# Google App Engine generated folder
-appengine-generated/
+﻿# Node
+worker/node_modules/
+mobile_expo/node_modules/
+mobile_expo/.expo/
+
+# Python
+**/__pycache__/
+**/.pytest_cache/
+downloader/.venv/
+desktop_launcher/.venv/
+
+# Local runtime data
+.data/
+desktop_launcher/build/
+worker/.wrangler/
+.playwright-mcp/
+.tmp_ext/
+worker/tmp-dev.log
+worker/tail.log
+.runtime/
+
+# Secrets
+worker/.dev.vars
+.env
+

@@ -1,0 +1,75 @@
+services:
+  - type: web
+    name: sounddrop-downloader-primary
+    env: docker
+    plan: free
+    dockerContext: ./downloader
+    dockerfilePath: ./downloader/Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DOWNLOADER_API_KEY
+        sync: false
+      - key: DOWNLOADER_PUBLIC_BASE_URL
+        sync: false
+      - key: DOWNLOADER_STORAGE_DIR
+        value: /data/files
+      - key: DOWNLOADER_WORK_DIR
+        value: /data/work
+      - key: SPOTIFY_CLIENT_ID
+        sync: false
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+      - key: PLAYLIST_WORKFLOW_BATCH_SIZE
+        value: "50"
+      - key: PLAYLIST_WORKFLOW_RETENTION_SECONDS
+        value: "86400"
+      - key: PLAYLIST_ZIP_MAX_FILES
+        value: "5000"
+      - key: TEMPORAL_NAMESPACE
+        sync: false
+      - key: TEMPORAL_ADDRESS
+        sync: false
+      - key: TEMPORAL_API_KEY
+        sync: false
+    disk:
+      name: sounddrop-downloader-disk
+      mountPath: /data
+      sizeGB: 5
+  - type: web
+    name: sounddrop-downloader-backup
+    env: docker
+    plan: free
+    dockerContext: ./downloader
+    dockerfilePath: ./downloader/Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DOWNLOADER_API_KEY
+        sync: false
+      - key: DOWNLOADER_PUBLIC_BASE_URL
+        sync: false
+      - key: DOWNLOADER_STORAGE_DIR
+        value: /data/files
+      - key: DOWNLOADER_WORK_DIR
+        value: /data/work
+      - key: SPOTIFY_CLIENT_ID
+        sync: false
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+      - key: PLAYLIST_WORKFLOW_BATCH_SIZE
+        value: "50"
+      - key: PLAYLIST_WORKFLOW_RETENTION_SECONDS
+        value: "86400"
+      - key: PLAYLIST_ZIP_MAX_FILES
+        value: "5000"
+      - key: TEMPORAL_NAMESPACE
+        sync: false
+      - key: TEMPORAL_ADDRESS
+        sync: false
+      - key: TEMPORAL_API_KEY
+        sync: false
+    disk:
+      name: sounddrop-downloader-backup-disk
+      mountPath: /data
+      sizeGB: 5
