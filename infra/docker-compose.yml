@@ -1,0 +1,24 @@
+services:
+  downloader:
+    build:
+      context: ../downloader
+      dockerfile: Dockerfile
+    container_name: sounddrop-downloader
+    ports:
+      - "8081:8081"
+    environment:
+      DOWNLOADER_API_KEY: ${DOWNLOADER_API_KEY:-change-me}
+      DOWNLOADER_PUBLIC_BASE_URL: ${DOWNLOADER_PUBLIC_BASE_URL:-http://localhost:8081}
+      DOWNLOADER_STORAGE_DIR: /data/files
+      DOWNLOADER_WORK_DIR: /data/work
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
+      PLAYLIST_WORKFLOW_BATCH_SIZE: ${PLAYLIST_WORKFLOW_BATCH_SIZE:-50}
+      PLAYLIST_WORKFLOW_RETENTION_SECONDS: ${PLAYLIST_WORKFLOW_RETENTION_SECONDS:-86400}
+      PLAYLIST_ZIP_MAX_FILES: ${PLAYLIST_ZIP_MAX_FILES:-5000}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-}
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-}
+      TEMPORAL_API_KEY: ${TEMPORAL_API_KEY:-}
+    volumes:
+      - ../.data/downloader:/data/files
+    restart: unless-stopped
