@@ -2044,8 +2044,10 @@
             <button class="action-btn" id="archiveBackBtn">Back</button>
             <div class="archive-path-pill" id="archivePathLabel">/</div>
             <input id="archiveSearchInput" class="ops-input" type="text" autocomplete="off" placeholder="Search local archive...">
+            <button class="action-btn" id="archiveLocalFolderBtn">Choose Telegram folder</button>
             <button class="action-btn" id="archiveSearchBtn">Search</button>
             <button class="action-btn" id="archiveRefreshBtn">Refresh</button>
+            <input id="archiveFolderInput" class="hidden" type="file" webkitdirectory directory multiple accept="audio/*,image/*,.mp3,.flac,.wav,.m4a,.ogg,.opus,.aac,.alac,.jpg,.jpeg,.png,.webp,.gif,.bmp">
           </div>
           <div id="archiveMeta" class="soft">Archive not loaded.</div>
           <div id="archiveList"></div>
@@ -2469,6 +2471,11 @@
         archive_search_placeholder: "Search local archive...",
         archive_search: "Search",
         archive_refresh: "Refresh",
+        archive_choose_folder: "Choose Telegram folder",
+        archive_local_loaded: "Local folder loaded {count} / total {total}",
+        archive_local_hint: "Choose your Telegram Desktop download folder to browse local audio, images and subfolders.",
+        archive_local_unsupported: "This browser cannot open a folder directly. Use Chrome/Edge or select files with the fallback picker.",
+        archive_remote_error: "Cloud archive unavailable",
         archive_back: "Back",
         archive_path_root: "Root",
         archive_not_loaded: "Archive not loaded.",
@@ -2705,6 +2712,11 @@
         archive_search_placeholder: "Търси в локалния архив...",
         archive_search: "Търси",
         archive_refresh: "Обнови",
+        archive_choose_folder: "Избери Telegram папка",
+        archive_local_loaded: "Локална папка: заредени {count} / общо {total}",
+        archive_local_hint: "Избери Telegram Desktop download папката, за да разглеждаш локални песни, снимки и подпапки.",
+        archive_local_unsupported: "Този браузър не може да отвори папка директно. Използвай Chrome/Edge или избери файлове чрез fallback прозореца.",
+        archive_remote_error: "Cloud архивът е недостъпен",
         archive_back: "Назад",
         archive_path_root: "Начало",
         archive_not_loaded: "Архивът не е зареден.",
@@ -2838,11 +2850,22 @@
       archive_search_placeholder: "Buscar en el archivo local...",
       archive_search: "Buscar",
       archive_refresh: "Actualizar",
+      archive_choose_folder: "Elegir carpeta de Telegram",
+      archive_local_loaded: "Carpeta local cargada {count} / total {total}",
+      archive_local_hint: "Elige la carpeta de descargas de Telegram Desktop para ver audio, imágenes y subcarpetas.",
+      archive_local_unsupported: "Este navegador no puede abrir carpetas directamente. Usa Chrome/Edge o selecciona archivos.",
+      archive_remote_error: "Archivo cloud no disponible",
+      archive_back: "Atrás",
+      archive_path_root: "Raíz",
       archive_not_loaded: "Archivo no cargado.",
       archive_loading: "Cargando archivo...",
       archive_loaded: "Cargados {count} / total {total}",
       archive_empty: "No se encontraron canciones en el archivo.",
       archive_play: "Reproducir",
+      archive_open: "Abrir",
+      archive_view: "Ver",
+      archive_folder: "Carpeta",
+      archive_image: "Imagen",
       archive_player_label: "REPRODUCTOR ONLINE",
       archive_select_track: "Selecciona una canción",
       archive_player_hint: "Escucha online sin descargar.",
@@ -2945,11 +2968,22 @@
       archive_search_placeholder: "Поиск в локальном архиве...",
       archive_search: "Поиск",
       archive_refresh: "Обновить",
+      archive_choose_folder: "Выбрать папку Telegram",
+      archive_local_loaded: "Локальная папка: загружено {count} / всего {total}",
+      archive_local_hint: "Выберите папку загрузок Telegram Desktop для просмотра аудио, изображений и подпапок.",
+      archive_local_unsupported: "Этот браузер не может открыть папку напрямую. Используйте Chrome/Edge или выберите файлы.",
+      archive_remote_error: "Cloud-архив недоступен",
+      archive_back: "Назад",
+      archive_path_root: "Корень",
       archive_not_loaded: "Архив не загружен.",
       archive_loading: "Загрузка архива...",
       archive_loaded: "Загружено {count} / всего {total}",
       archive_empty: "Песни в архиве не найдены.",
       archive_play: "Воспроизвести",
+      archive_open: "Открыть",
+      archive_view: "Посмотреть",
+      archive_folder: "Папка",
+      archive_image: "Изображение",
       archive_player_label: "ОНЛАЙН-ПЛЕЕР",
       archive_select_track: "Выберите трек",
       archive_player_hint: "Слушайте онлайн без скачивания.",
@@ -3052,11 +3086,22 @@
       archive_search_placeholder: "Lokales Archiv durchsuchen...",
       archive_search: "Suchen",
       archive_refresh: "Aktualisieren",
+      archive_choose_folder: "Telegram-Ordner wählen",
+      archive_local_loaded: "Lokaler Ordner geladen {count} / gesamt {total}",
+      archive_local_hint: "Wähle den Telegram Desktop Download-Ordner, um Audio, Bilder und Unterordner zu öffnen.",
+      archive_local_unsupported: "Dieser Browser kann Ordner nicht direkt öffnen. Nutze Chrome/Edge oder wähle Dateien aus.",
+      archive_remote_error: "Cloud-Archiv nicht verfügbar",
+      archive_back: "Zurück",
+      archive_path_root: "Root",
       archive_not_loaded: "Archiv nicht geladen.",
       archive_loading: "Archiv wird geladen...",
       archive_loaded: "{count} / gesamt {total} geladen",
       archive_empty: "Keine Titel im Archiv gefunden.",
       archive_play: "Abspielen",
+      archive_open: "Öffnen",
+      archive_view: "Ansehen",
+      archive_folder: "Ordner",
+      archive_image: "Bild",
       archive_player_label: "ONLINE-PLAYER",
       archive_select_track: "Titel auswählen",
       archive_player_hint: "Online ohne Download anhören.",
@@ -3100,6 +3145,14 @@
     let archiveTracksCache = [];
     let archiveTotalRows = 0;
     let archiveBrowsePath = "";
+    let archiveLocalMode = false;
+    let archiveDirectoryHandle = null;
+    let archiveLocalEntries = [];
+    const archiveObjectUrls = new Map();
+    const ARCHIVE_SCAN_LIMIT = 800;
+    const ARCHIVE_MAX_DEPTH = 8;
+    const ARCHIVE_AUDIO_EXTENSIONS = new Set(["mp3", "flac", "wav", "m4a", "ogg", "opus", "aac", "alac", "aiff", "aif", "wma"]);
+    const ARCHIVE_IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"]);
     let sharedQueuePoller = null;
     let deferredInstallPrompt = null;
 
@@ -3508,6 +3561,8 @@
       if (archiveSearchInput) archiveSearchInput.placeholder = translate("archive_search_placeholder");
       const archiveSearchBtn = document.getElementById("archiveSearchBtn");
       if (archiveSearchBtn) archiveSearchBtn.textContent = translate("archive_search");
+      const archiveLocalFolderBtn = document.getElementById("archiveLocalFolderBtn");
+      if (archiveLocalFolderBtn) archiveLocalFolderBtn.textContent = translate("archive_choose_folder");
       const archiveRefreshBtn = document.getElementById("archiveRefreshBtn");
       if (archiveRefreshBtn) archiveRefreshBtn.textContent = translate("archive_refresh");
       const archiveBackBtn = document.getElementById("archiveBackBtn");
@@ -3925,6 +3980,251 @@
       return item.title || item.filename || item.name || "Track";
     }
 
+    function archiveFileExtension(name) {
+      const match = String(name || "").toLowerCase().match(/\.([a-z0-9]+)$/);
+      return match ? match[1] : "";
+    }
+
+    function archiveKindFromFile(file) {
+      const ext = archiveFileExtension(file && file.name);
+      const mime = String(file && file.type ? file.type : "").toLowerCase();
+      if (ARCHIVE_AUDIO_EXTENSIONS.has(ext) || mime.startsWith("audio/")) return "audio";
+      if (ARCHIVE_IMAGE_EXTENSIONS.has(ext) || mime.startsWith("image/")) return "image";
+      return "";
+    }
+
+    function normalizeArchiveLocalPath(value) {
+      return String(value || "")
+        .replace(/\\/g, "/")
+        .split("/")
+        .map((part) => part.trim())
+        .filter((part) => part && part !== "." && part !== "..")
+        .join("/");
+    }
+
+    function parseArchiveLocalName(name) {
+      const clean = String(name || "Track").replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").trim();
+      const parts = clean.split(/\s+-\s+/).map((part) => part.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        return { artist: parts.shift(), title: parts.join(" - ") };
+      }
+      return { artist: "", title: clean || String(name || "Track") };
+    }
+
+    function archiveQualityFromExtension(ext) {
+      if (["flac", "wav", "alac", "aiff", "aif"].includes(ext)) return "lossless";
+      if (["mp3", "m4a", "ogg", "opus", "aac"].includes(ext)) return "best";
+      return "--";
+    }
+
+    function createArchiveLocalItem(file, relativePath) {
+      const kind = archiveKindFromFile(file);
+      if (!kind) return null;
+      const safePath = normalizeArchiveLocalPath(relativePath || (file && file.name));
+      const name = safePath.split("/").pop() || (file && file.name) || "file";
+      const ext = archiveFileExtension(name);
+      const parsed = parseArchiveLocalName(name);
+      return {
+        id: `local:${safePath}`,
+        kind,
+        source: "local",
+        name,
+        filename: name,
+        title: parsed.title,
+        artist: parsed.artist,
+        relative_path: safePath,
+        format: ext ? ext.toUpperCase() : archiveValue(file && file.type),
+        quality: archiveQualityFromExtension(ext),
+        size_bytes: file && Number.isFinite(file.size) ? file.size : 0,
+        released_year: "",
+        duration: 0,
+        file,
+      };
+    }
+
+    function clearArchiveObjectUrls() {
+      archiveObjectUrls.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // Ignore stale object URLs.
+        }
+      });
+      archiveObjectUrls.clear();
+    }
+
+    function archiveStreamUrlForItem(item) {
+      if (!item) return "";
+      const direct = String(item.stream_url || "");
+      if (direct) return direct;
+      if (item.file instanceof File) {
+        const key = String(item.id || item.relative_path || item.file.name || Math.random());
+        if (!archiveObjectUrls.has(key)) {
+          archiveObjectUrls.set(key, URL.createObjectURL(item.file));
+        }
+        return archiveObjectUrls.get(key) || "";
+      }
+      return "";
+    }
+
+    function archiveAbsoluteStreamUrl(item) {
+      const streamUrl = archiveStreamUrlForItem(item);
+      if (!streamUrl) return "";
+      if (/^(blob:|data:|https?:)/i.test(streamUrl)) return streamUrl;
+      return new URL(String(streamUrl), window.location.origin).toString();
+    }
+
+    async function scanArchiveDirectory(handle, basePath = "", depth = 0, entries = []) {
+      if (!handle || depth > ARCHIVE_MAX_DEPTH || entries.length >= ARCHIVE_SCAN_LIMIT) return entries;
+      for await (const [name, child] of handle.entries()) {
+        if (entries.length >= ARCHIVE_SCAN_LIMIT) break;
+        const childPath = normalizeArchiveLocalPath(`${basePath}/${name}`);
+        if (child.kind === "directory") {
+          await scanArchiveDirectory(child, childPath, depth + 1, entries);
+        } else if (child.kind === "file") {
+          const file = await child.getFile();
+          const item = createArchiveLocalItem(file, childPath);
+          if (item) entries.push(item);
+        }
+      }
+      return entries;
+    }
+
+    function buildLocalArchiveRows(query) {
+      const q = String(query || "").toLowerCase().trim();
+      const prefix = archiveBrowsePath ? `${archiveBrowsePath}/` : "";
+      const folders = new Map();
+      const files = [];
+      const recursiveSearch = Boolean(q);
+
+      archiveLocalEntries.forEach((entry) => {
+        const rel = normalizeArchiveLocalPath(entry.relative_path || entry.name);
+        if (prefix && !rel.startsWith(prefix)) return;
+        const rest = prefix ? rel.slice(prefix.length) : rel;
+        if (!rest) return;
+        const parts = rest.split("/");
+        const haystack = `${entry.title || ""} ${entry.artist || ""} ${entry.filename || ""} ${rel}`.toLowerCase();
+
+        if (!recursiveSearch && parts.length > 1) {
+          const folderName = parts[0];
+          const folderPath = normalizeArchiveLocalPath(`${archiveBrowsePath}/${folderName}`);
+          if (!folders.has(folderPath)) {
+            folders.set(folderPath, {
+              id: `folder:${folderPath}`,
+              kind: "folder",
+              name: folderName,
+              relative_path: folderPath,
+            });
+          }
+          return;
+        }
+
+        if (q && !haystack.includes(q)) return;
+        files.push(entry);
+      });
+
+      const folderRows = q ? [] : Array.from(folders.values()).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      const fileRows = files.sort((a, b) => String(a.title || a.filename).localeCompare(String(b.title || b.filename)));
+      return {
+        items: folderRows.concat(fileRows).slice(0, 160),
+        total: folderRows.length + fileRows.length,
+      };
+    }
+
+    async function loadLocalArchive(refresh = false) {
+      const input = document.getElementById("archiveSearchInput");
+      const meta = document.getElementById("archiveMeta");
+      const list = document.getElementById("archiveList");
+      if (!meta || !list) return;
+
+      const query = String(input && input.value ? input.value : "").trim();
+      meta.dataset.state = "loading";
+      meta.textContent = translate("archive_loading");
+      list.innerHTML = "";
+
+      try {
+        if (archiveDirectoryHandle && (refresh || archiveLocalEntries.length === 0)) {
+          clearArchiveObjectUrls();
+          archiveLocalEntries = await scanArchiveDirectory(archiveDirectoryHandle);
+        }
+
+        const result = buildLocalArchiveRows(query);
+        archiveTracksCache = result.items;
+        archiveTotalRows = result.total;
+        meta.dataset.state = "loaded";
+        meta.textContent = translate("archive_local_loaded", { count: archiveTracksCache.length, total: archiveTotalRows });
+        renderArchiveTracks();
+      } catch (error) {
+        archiveTracksCache = [];
+        archiveTotalRows = 0;
+        meta.dataset.state = "error";
+        meta.textContent = `${translate("archive_local_unsupported")} ${error.message || String(error)}`;
+        list.innerHTML = `<div class="card soft">${escapeHtml(meta.textContent)}</div>`;
+      }
+    }
+
+    async function chooseLocalArchiveFolder() {
+      const meta = document.getElementById("archiveMeta");
+      try {
+        if ("showDirectoryPicker" in window) {
+          let handle;
+          try {
+            handle = await window.showDirectoryPicker({ mode: "read", startIn: "downloads" });
+          } catch (error) {
+            if (error && error.name !== "TypeError") throw error;
+            handle = await window.showDirectoryPicker({ mode: "read" });
+          }
+          archiveDirectoryHandle = handle;
+          archiveLocalMode = true;
+          archiveBrowsePath = "";
+          archiveLocalEntries = [];
+          clearArchiveObjectUrls();
+          await loadArchive(true);
+          return;
+        }
+
+        const input = document.getElementById("archiveFolderInput");
+        if (input) {
+          input.value = "";
+          input.click();
+          return;
+        }
+
+        if (meta) {
+          meta.dataset.state = "error";
+          meta.textContent = translate("archive_local_unsupported");
+        }
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        if (meta) {
+          meta.dataset.state = "error";
+          meta.textContent = `${translate("archive_local_unsupported")} ${error.message || String(error)}`;
+        }
+      }
+    }
+
+    function handleArchiveFolderInput(fileList) {
+      const files = Array.from(fileList || []);
+      if (!files.length) return;
+      const rawPaths = files.map((file) => normalizeArchiveLocalPath(file.webkitRelativePath || file.name));
+      const firstSegment = rawPaths[0] && rawPaths[0].includes("/") ? rawPaths[0].split("/")[0] : "";
+      const stripRoot = firstSegment && rawPaths.every((path) => path.startsWith(`${firstSegment}/`));
+
+      archiveDirectoryHandle = null;
+      archiveLocalMode = true;
+      archiveBrowsePath = "";
+      archiveLocalEntries = files
+        .map((file, index) => {
+          const rawPath = rawPaths[index] || file.name;
+          const relPath = stripRoot ? rawPath.slice(firstSegment.length + 1) : rawPath;
+          return createArchiveLocalItem(file, relPath);
+        })
+        .filter(Boolean)
+        .slice(0, ARCHIVE_SCAN_LIMIT);
+      clearArchiveObjectUrls();
+      void loadArchive(true);
+    }
+
     function renderArchiveTracks() {
       const list = document.getElementById("archiveList");
       const meta = document.getElementById("archiveMeta");
@@ -3956,9 +4256,10 @@
         }
 
         if (kind === "image") {
+          const imageSrc = archiveAbsoluteStreamUrl(item);
           return `
             <article class="archive-track" data-kind="image" data-archive-id="${escapeHtml(item.id)}">
-              <img class="archive-thumb" src="${escapeHtml(item.stream_url || "")}" alt="${escapeHtml(item.title || item.name || translate("archive_image"))}">
+              <img class="archive-thumb" src="${escapeHtml(imageSrc)}" alt="${escapeHtml(item.title || item.name || translate("archive_image"))}">
               <div>
                 <div class="archive-track-head">
                   <div>
@@ -4028,6 +4329,11 @@
       const list = document.getElementById("archiveList");
       if (!meta || !list) return;
 
+      if (archiveLocalMode) {
+        await loadLocalArchive(refresh);
+        return;
+      }
+
       const query = String(input && input.value ? input.value : "").trim();
       meta.dataset.state = "loading";
       meta.textContent = translate("archive_loading");
@@ -4047,8 +4353,11 @@
         archiveTracksCache = [];
         archiveTotalRows = 0;
         meta.dataset.state = "error";
-        meta.textContent = `Archive error: ${error.message || String(error)}`;
-        list.innerHTML = `<div class="card soft">${escapeHtml(error.message || String(error))}</div>`;
+        meta.textContent = `${translate("archive_remote_error")}: ${error.message || String(error)}`;
+        list.innerHTML = `
+          <div class="card soft">${escapeHtml(error.message || String(error))}</div>
+          <div class="card soft">${escapeHtml(translate("archive_local_hint"))}</div>
+        `;
       }
     }
 
@@ -4070,8 +4379,8 @@
       const player = document.getElementById("archivePlayer");
       const title = document.getElementById("archiveNowTitle");
       const meta = document.getElementById("archiveNowMeta");
-      if (!image || !item || !item.stream_url) return;
-      const url = new URL(String(item.stream_url), window.location.origin).toString();
+      const url = archiveAbsoluteStreamUrl(item);
+      if (!image || !item || !url) return;
       image.src = url;
       image.classList.remove("hidden");
       if (player) {
@@ -4095,13 +4404,13 @@
       const image = document.getElementById("archiveImagePreview");
       const title = document.getElementById("archiveNowTitle");
       const meta = document.getElementById("archiveNowMeta");
-      if (!player || !track || !track.stream_url) return;
+      const url = archiveAbsoluteStreamUrl(track);
+      if (!player || !track || !url) return;
       if (image) {
         image.classList.add("hidden");
         image.removeAttribute("src");
       }
       player.classList.remove("hidden");
-      const url = new URL(String(track.stream_url), window.location.origin).toString();
       player.src = url;
       player.load();
       void player.play().catch(() => null);
@@ -6379,6 +6688,18 @@
       if (archiveRefreshBtn) {
         archiveRefreshBtn.addEventListener("click", () => {
           void loadArchive(true);
+        });
+      }
+      const archiveLocalFolderBtn = document.getElementById("archiveLocalFolderBtn");
+      if (archiveLocalFolderBtn) {
+        archiveLocalFolderBtn.addEventListener("click", () => {
+          void chooseLocalArchiveFolder();
+        });
+      }
+      const archiveFolderInput = document.getElementById("archiveFolderInput");
+      if (archiveFolderInput) {
+        archiveFolderInput.addEventListener("change", () => {
+          handleArchiveFolderInput(archiveFolderInput.files);
         });
       }
       const archiveBackBtn = document.getElementById("archiveBackBtn");
