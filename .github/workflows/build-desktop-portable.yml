@@ -1,0 +1,77 @@
+name: Build Desktop Portable
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - desktop_launcher/**
+      - .github/workflows/build-desktop-portable.yml
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: desktop_launcher
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build Windows EXE
+        run: |
+          pyinstaller --noconfirm --clean --onefile --noconsole --name SoundDropDesktop sounddrop_desktop.py
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundDropDesktop-windows
+          path: desktop_launcher/dist/SoundDropDesktop.exe
+
+  build-macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: desktop_launcher
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyobjc-framework-Cocoa
+
+      - name: Build macOS app bundle
+        run: |
+          pyinstaller --noconfirm --clean --windowed --name SoundDropDesktop sounddrop_desktop.py
+
+      - name: Archive macOS app
+        run: |
+          cd dist
+          ditto -c -k --sequesterRsrc --keepParent "SoundDropDesktop.app" "SoundDropDesktop-macOS.zip"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundDropDesktop-macos
+          path: desktop_launcher/dist/SoundDropDesktop-macOS.zip

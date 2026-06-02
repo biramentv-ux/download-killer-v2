@@ -1,0 +1,187 @@
+name: Release Assets Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (example: v8.1.0). If empty, an auto tag is generated.'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark this release as prerelease'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-desktop-and-extensions:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build Windows EXE
+        working-directory: desktop_launcher
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pyinstaller --noconfirm --clean --onefile --noconsole --name SoundDropDesktop sounddrop_desktop.py
+
+      - name: Build Browser Extension ZIPs
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\browser_extensions\sounddrop_webext\build.ps1 -OutputDir "$env:GITHUB_WORKSPACE\release_assets\extensions"
+
+      - name: Collect Windows artifacts
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\release_assets\windows" | Out-Null
+          Copy-Item -Force ".\desktop_launcher\dist\SoundDropDesktop.exe" "$env:GITHUB_WORKSPACE\release_assets\windows\SoundDropDesktop.exe"
+          Copy-Item -Force "$env:GITHUB_WORKSPACE\release_assets\extensions\SoundDrop-Extension-Chrome.zip" "$env:GITHUB_WORKSPACE\release_assets\windows\SoundDrop-Extension-Chrome.zip"
+          Copy-Item -Force "$env:GITHUB_WORKSPACE\release_assets\extensions\SoundDrop-Extension-Firefox.zip" "$env:GITHUB_WORKSPACE\release_assets\windows\SoundDrop-Extension-Firefox.zip"
+
+      - name: Upload Windows + Extensions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-extensions
+          path: release_assets/windows/*
+
+  build-macos-desktop:
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build macOS portable ZIP
+        working-directory: desktop_launcher
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyobjc-framework-Cocoa
+          pyinstaller --noconfirm --clean --windowed --name SoundDropDesktop sounddrop_desktop.py
+          cd dist
+          ditto -c -k --sequesterRsrc --keepParent "SoundDropDesktop.app" "SoundDropDesktop-macOS.zip"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: desktop_launcher/dist/SoundDropDesktop-macOS.zip
+
+  build-expo-artifacts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: mobile_expo/package-lock.json
+
+      - name: Install mobile dependencies
+        working-directory: mobile_expo
+        run: npm ci
+
+      - name: Export Expo web and native update bundles
+        working-directory: mobile_expo
+        run: |
+          mkdir -p dist
+          npx expo export --platform web --output-dir dist/web
+          npx expo export --platform ios,android --output-dir dist/native
+          cd dist
+          zip -r SoundDrop-Expo-Web.zip web
+          zip -r SoundDrop-Expo-Native-Update.zip native
+
+      - name: Upload Expo artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-expo
+          path: |
+            mobile_expo/dist/SoundDrop-Expo-Web.zip
+            mobile_expo/dist/SoundDrop-Expo-Native-Update.zip
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs:
+      - build-windows-desktop-and-extensions
+      - build-macos-desktop
+      - build-expo-artifacts
+    steps:
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release_assets
+          merge-multiple: true
+
+      - name: Compute release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            TAG_INPUT="${{ inputs.tag }}"
+            if [ -n "$TAG_INPUT" ]; then
+              TAG="$TAG_INPUT"
+            else
+              TAG="v$(date -u +%Y.%m.%d)-run${GITHUB_RUN_NUMBER}"
+            fi
+            PRERELEASE="${{ inputs.prerelease }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+            PRERELEASE="false"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          RELEASE_PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        shell: bash
+        run: |
+          mapfile -t files < <(find release_assets -type f | sort)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No release assets found."
+            exit 1
+          fi
+
+          title="SoundDrop ${RELEASE_TAG}"
+          notes="Automated CI/CD release pipeline artifacts: Windows EXE, macOS ZIP, browser extensions, Expo bundles."
+          prerelease_flag=""
+          if [ "$RELEASE_PRERELEASE" = "true" ]; then
+            prerelease_flag="--prerelease"
+          fi
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
+            gh release edit "$RELEASE_TAG" --title "$title"
+          else
+            gh release create "$RELEASE_TAG" "${files[@]}" --title "$title" --notes "$notes" $prerelease_flag
+          fi

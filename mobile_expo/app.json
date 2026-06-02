@@ -1,0 +1,39 @@
+﻿{
+  "expo": {
+    "name": "DyrakArmy Mobile",
+    "slug": "dyrakarmy-mobile",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "dyrakarmy",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1d2630"
+    },
+    "ios": {
+      "bundleIdentifier": "online.dyrakarmy.mobile",
+      "buildNumber": "2",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "online.dyrakarmy.mobile",
+      "versionCode": 2,
+      "adaptiveIcon": {
+        "backgroundColor": "#1d2630",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": []
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

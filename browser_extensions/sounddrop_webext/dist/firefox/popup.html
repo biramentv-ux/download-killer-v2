@@ -1,0 +1,105 @@
+﻿<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DyrakArmy</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="head">
+      <img src="icons/icon48.png" alt="DyrakArmy" class="logo">
+      <div>
+        <h1>DyrakArmy</h1>
+        <p>Бързо сваляне за Chrome / Firefox</p>
+      </div>
+    </header>
+
+    <section class="card">
+      <label for="trackUrl">Линк (песен/клип/плейлист)</label>
+      <textarea id="trackUrl" rows="3" placeholder="Постави URL..."></textarea>
+      <div class="inline-row">
+        <button id="useTabBtn" class="btn secondary">Вземи от текущия таб</button>
+        <button id="openWebBtn" class="btn secondary">Отвори Web App</button>
+      </div>
+    </section>
+
+    <section class="card grid-2">
+      <div>
+        <label for="formatSelect">Формат</label>
+        <select id="formatSelect">
+          <option value="mp3">MP3</option>
+          <option value="m4a">M4A</option>
+          <option value="ogg">OGG</option>
+          <option value="opus">OPUS</option>
+          <option value="flac">FLAC</option>
+          <option value="wav">WAV</option>
+        </select>
+      </div>
+      <div>
+        <label for="qualitySelect">Качество</label>
+        <select id="qualitySelect"></select>
+      </div>
+      <div>
+        <label for="sourceSelect">Source</label>
+        <select id="sourceSelect">
+          <option value="all">All</option>
+          <option value="youtube">YouTube</option>
+          <option value="spotify">Spotify</option>
+          <option value="soundcloud">SoundCloud</option>
+          <option value="deezer">Deezer</option>
+          <option value="apple">Apple Music</option>
+          <option value="podcast">Podcast/RSS</option>
+        </select>
+      </div>
+      <div>
+        <label for="langSelect">Език</label>
+        <select id="langSelect">
+          <option value="bg">🇧🇬 Български</option>
+          <option value="en">🇬🇧 English</option>
+          <option value="es">🇪🇸 Español</option>
+          <option value="ru">🇷🇺 Русский</option>
+          <option value="de">🇩🇪 Deutsch</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="card grid-2">
+      <div>
+        <label for="apiBaseInput">API URL</label>
+        <input id="apiBaseInput" type="text" placeholder="https://dyrakarmy.online">
+      </div>
+      <div>
+        <label for="syncKeyInput">Sync ключ</label>
+        <input id="syncKeyInput" type="text" placeholder="auto-generated">
+      </div>
+      <label class="check-row">
+        <input id="autoDownloadToggle" type="checkbox" checked>
+        <span>Автоматично отвори Save диалог при готов файл</span>
+      </label>
+      <div>
+        <label for="downloadDirectoryInput">Папка (sync)</label>
+        <input id="downloadDirectoryInput" type="text" placeholder="C:\Music">
+      </div>
+      <div>
+        <label for="telegramModeSelect">Telegram mode</label>
+        <select id="telegramModeSelect">
+          <option value="bot">Open bot chat</option>
+          <option value="download">Open direct download flow</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="inline-row">
+        <button id="saveConfigBtn" class="btn secondary">Запази настройки</button>
+        <button id="downloadBtn" class="btn primary">Свали сега</button>
+      </div>
+      <pre id="statusBox" class="status">Готово.</pre>
+    </section>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>
