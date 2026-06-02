@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { handleTelegramUpdate } from '../src/telegram';
-import type { Env } from '../src/types';
+import { handleTelegramUpdate, publishTelegramChannelDownload } from '../src/telegram';
+import type { DownloadJob, DownloaderDownloadResult, Env } from '../src/types';
 
 interface TelegramCall {
   method: string;
@@ -19,6 +19,10 @@ class MemoryKv {
 
   async put(key: string, value: string): Promise<void> {
     this.store.set(key, value);
+  }
+
+  async delete(key: string): Promise<void> {
+    this.store.delete(key);
   }
 }
 
@@ -133,6 +137,108 @@ describe('Telegram callback format flow', () => {
   });
 });
 
+describe('Telegram channel publishing', () => {
+  it('captures a channel id from channel posts and publishes completed downloads there', async () => {
+    const { env, calls, kv } = createTelegramTestContext();
+
+    await handleTelegramUpdate(telegramRequest({
+      update_id: 10,
+      channel_post: {
+        message_id: 501,
+        chat: { id: -1001234567890, type: 'channel', title: 'DyrakArmy Downloads' },
+        text: 'channel probe',
+      },
+    }), env);
+
+    expect(kv.store.get('tg:download_channel_id')).toBe('-1001234567890');
+    expect(kv.store.get('tg:download_channel_title')).toBe('DyrakArmy Downloads');
+
+    const result = await publishTelegramChannelDownload(createDownloadJob(), createDownloadResult(), env);
+
+    expect(result.ok).toBe(true);
+    expect(result.method).toBe('sendAudio');
+    const audio = calls.find((call) => call.method === 'sendAudio');
+    expect(audio?.body.chat_id).toBe('-1001234567890');
+    expect(kv.store.has('tg:last_channel_publish')).toBe(true);
+  });
+
+  it('captures a private channel from a forwarded post and shows channel status instead of treating it as a search', async () => {
+    const { env, calls, kv } = createTelegramTestContext();
+
+    await handleTelegramUpdate(telegramRequest({
+      update_id: 11,
+      message: {
+        message_id: 77,
+        chat: { id: 123, type: 'private' },
+        text: 'forwarded post text',
+        forward_origin: {
+          type: 'channel',
+          chat: { id: -1009876543210, type: 'channel', title: 'Private Downloads' },
+          message_id: 9,
+          date: 1710000000,
+        },
+      },
+    }), env);
+
+    expect(kv.store.get('tg:download_channel_id')).toBe('-1009876543210');
+    expect(kv.store.get('tg:download_channel_title')).toBe('Private Downloads');
+    expect(calls.some((call) => call.method === 'sendMessage' && String(call.body.text ?? '').includes('Telegram канал'))).toBe(true);
+    expect(calls.some((call) => call.method === 'sendMessage' && String(call.body.text ?? '').includes('Търся:'))).toBe(false);
+  });
+
+  it('sends a manual test post from the channel settings callback', async () => {
+    const { env, calls, kv } = createTelegramTestContext();
+    await kv.put('tg:download_channel_id', '-1001234567890');
+
+    await handleTelegramUpdate(telegramRequest({
+      update_id: 12,
+      callback_query: {
+        id: 'cb-channel-test',
+        from: { id: 123, first_name: 'Tester' },
+        message: { message_id: 77, chat: { id: 123, type: 'private' } },
+        data: 's:channel:test',
+      },
+    }), env);
+
+    const channelMessage = calls.find((call) => call.method === 'sendMessage' && call.body.chat_id === '-1001234567890');
+    expect(channelMessage?.body.text).toContain('DyrakArmy test publish');
+    expect(kv.store.has('tg:last_channel_publish')).toBe(true);
+  });
+
+  it('normalizes a Telegram boost URL channel id from config', async () => {
+    const { env, calls } = createTelegramTestContext();
+    env.TELEGRAM_DOWNLOAD_CHANNEL_ID = 'https://t.me/boost?c=3904304047';
+
+    const result = await publishTelegramChannelDownload(createDownloadJob(), createDownloadResult(), env);
+
+    expect(result.ok).toBe(true);
+    const audio = calls.find((call) => call.method === 'sendAudio');
+    expect(audio?.body.chat_id).toBe('-1003904304047');
+  });
+
+  it('captures forwarded channel media posts even when they have no text', async () => {
+    const { env, calls, kv } = createTelegramTestContext();
+
+    await handleTelegramUpdate(telegramRequest({
+      update_id: 13,
+      message: {
+        message_id: 88,
+        chat: { id: 123, type: 'private' },
+        forward_origin: {
+          type: 'channel',
+          chat: { id: -1007778889990, type: 'channel', title: 'Media Channel' },
+          message_id: 10,
+          date: 1710000000,
+        },
+      },
+    }), env);
+
+    expect(kv.store.get('tg:download_channel_id')).toBe('-1007778889990');
+    expect(kv.store.get('tg:download_channel_title')).toBe('Media Channel');
+    expect(calls.some((call) => call.method === 'sendMessage' && String(call.body.text ?? '').includes('Telegram канал'))).toBe(true);
+  });
+});
+
 function createTelegramTestContext(): { env: Env; calls: TelegramCall[]; kv: MemoryKv } {
   const kv = new MemoryKv();
   const db = new FakeD1();
@@ -158,6 +264,31 @@ function createTelegramTestContext(): { env: Env; calls: TelegramCall[]; kv: Mem
   } as unknown as Env;
 
   return { env, calls, kv };
+}
+
+function createDownloadJob(): DownloadJob {
+  return {
+    id: '00000000-0000-4000-8000-000000000001',
+    url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    source: 'youtube',
+    format: 'mp3',
+    quality: '320',
+    fingerprint: 'fp-channel-test',
+    chatId: 123,
+    messageId: 77,
+    requestedAt: new Date().toISOString(),
+  };
+}
+
+function createDownloadResult(): DownloaderDownloadResult {
+  return {
+    download_url: 'https://files.example/track.mp3',
+    title: 'Track',
+    artist: 'Artist',
+    duration: 180,
+    file_size: 1234567,
+    source: 'youtube',
+  };
 }
 
 function telegramRequest(payload: Record<string, unknown>): Request {

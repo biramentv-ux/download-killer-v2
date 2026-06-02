@@ -89,7 +89,7 @@
     "DOWNLOADER_ORIGINS_JSON": "[{\"base_url\":\"https://dyrakarmy-downloader-primary.onrender.com\",\"priority\":0,\"id\":\"render-primary\"},{\"base_url\":\"https://heritage-bra-chocolate-document.trycloudflare.com\",\"priority\":1,\"id\":\"trycloudflare-backup\"}]",
     "DOWNLOADER_BACKUP_API_URL": "https://heritage-bra-chocolate-document.trycloudflare.com",
     "TELEGRAM_BOT_USERNAME": "dyrakarmy_bot",
-    "TELEGRAM_DOWNLOAD_CHANNEL_ID": "",
+    "TELEGRAM_DOWNLOAD_CHANNEL_ID": "-1003904304047",
     "TELEGRAM_CHANNEL_PUBLISH_ENABLED": "1",
     "TELEGRAM_CHANNEL_SEND_AUDIO": "1",
     "DOWNLOAD_URL_ALLOWLIST": "youtube.com,*.youtube.com,youtu.be,spotify.com,*.spotify.com,spotify.link,soundcloud.com,*.soundcloud.com,deezer.com,*.deezer.com,music.apple.com,*.music.apple.com,podcasts.apple.com,*.podcasts.apple.com,itunes.apple.com,*.itunes.apple.com,rss.com,*.rss.com,anchor.fm,*.anchor.fm,simplecast.com,*.simplecast.com,buzzsprout.com,*.buzzsprout.com,podbean.com,*.podbean.com,libsyn.com,*.libsyn.com,megaphone.fm,*.megaphone.fm,omny.fm,*.omny.fm,transistor.fm,*.transistor.fm",

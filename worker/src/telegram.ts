@@ -32,6 +32,14 @@ interface TelegramMessage {
   chat: TelegramChat;
   from?: { id: number; first_name?: string; username?: string };
   text?: string;
+  sender_chat?: TelegramChat;
+  forward_from_chat?: TelegramChat;
+  forward_origin?: {
+    type?: string;
+    chat?: TelegramChat;
+    message_id?: number;
+    date?: number;
+  };
 }
 
 interface TelegramChatMemberUpdate {
@@ -51,6 +59,13 @@ interface TelegramRequestResult {
   ok: boolean;
   description?: string;
   result?: { message_id?: number };
+}
+
+interface TelegramChannelPublishResult {
+  ok: boolean;
+  method?: 'sendAudio' | 'sendDocument' | 'sendMessage' | 'skipped';
+  channelId?: string;
+  description?: string;
 }
 
 interface SearchResultPayload {
@@ -214,10 +229,13 @@ export async function handleTelegramUpdate(request: Request, env: Env): Promise<
 }
 
 async function captureTelegramChannelBinding(update: TelegramUpdate, env: Env): Promise<void> {
-  const chat = update.channel_post?.chat ?? update.my_chat_member?.chat;
+  const chat = getChannelChatFromUpdate(update);
   if (!chat || chat.type !== 'channel') return;
+  await storeTelegramDownloadChannel(chat, env);
+}
 
-  const configured = String(env.TELEGRAM_DOWNLOAD_CHANNEL_ID ?? '').trim();
+async function storeTelegramDownloadChannel(chat: TelegramChat, env: Env): Promise<void> {
+  const configured = normalizeTelegramChannelTarget(env.TELEGRAM_DOWNLOAD_CHANNEL_ID);
   const channelId = configured || String(chat.id);
   await env.CACHE.put('tg:download_channel_id', channelId);
   if (chat.username) {
@@ -226,27 +244,51 @@ async function captureTelegramChannelBinding(update: TelegramUpdate, env: Env): 
   if (chat.title) {
     await env.CACHE.put('tg:download_channel_title', chat.title);
   }
+  await env.CACHE.put('tg:download_channel_bound_at', new Date().toISOString());
+}
+
+function getChannelChatFromUpdate(update: TelegramUpdate): TelegramChat | null {
+  if (update.channel_post?.chat?.type === 'channel') return update.channel_post.chat;
+  if (update.my_chat_member?.chat?.type === 'channel') return update.my_chat_member.chat;
+  return update.message ? getChannelChatFromMessage(update.message) : null;
+}
+
+function getChannelChatFromMessage(msg: TelegramMessage): TelegramChat | null {
+  if (msg.chat?.type === 'channel') return msg.chat;
+  if (msg.sender_chat?.type === 'channel') return msg.sender_chat;
+  if (msg.forward_from_chat?.type === 'channel') return msg.forward_from_chat;
+  if (msg.forward_origin?.type === 'channel' && msg.forward_origin.chat?.type === 'channel') return msg.forward_origin.chat;
+  return null;
 }
 
 async function handleChannelPost(msg: TelegramMessage, env: Env): Promise<void> {
   if (msg.chat.type !== 'channel') return;
-  await env.CACHE.put('tg:download_channel_id', String(msg.chat.id));
+  await storeTelegramDownloadChannel(msg.chat, env);
 }
 
 async function handleMessage(msg: TelegramMessage, env: Env): Promise<void> {
   const chatId = msg.chat.id;
   const text = msg.text?.trim() ?? '';
-  if (!text) return;
 
   const rl = await rateLimit(env.CACHE, `tgmsg:${chatId}`, 25, 60);
   if (rl.limited) {
-    await sendMessage(chatId, env, 'Прекалено много заявки. Изчакай 1 минута и опитай отново.');
+    await sendMessage(chatId, env, '\u041f\u0440\u0435\u043a\u0430\u043b\u0435\u043d\u043e \u043c\u043d\u043e\u0433\u043e \u0437\u0430\u044f\u0432\u043a\u0438. \u0418\u0437\u0447\u0430\u043a\u0430\u0439 1 \u043c\u0438\u043d\u0443\u0442\u0430 \u0438 \u043e\u043f\u0438\u0442\u0430\u0439 \u043e\u0442\u043d\u043e\u0432\u043e.');
     return;
   }
 
   await ensureTelegramCommands(env);
 
+  const forwardedChannel = getChannelChatFromMessage(msg);
+  if (forwardedChannel && msg.chat.type !== 'channel' && !isBotCommand(text)) {
+    await storeTelegramDownloadChannel(forwardedChannel, env);
+    await sendChannelStatusPanel(chatId, env, '\u2705 \u041a\u0430\u043d\u0430\u043b\u044a\u0442 \u0435 \u0437\u0430\u0441\u0435\u0447\u0435\u043d \u043e\u0442 \u043f\u0440\u0435\u043f\u0440\u0430\u0442\u0435\u043d\u043e \u0441\u044a\u043e\u0431\u0449\u0435\u043d\u0438\u0435.');
+    return;
+  }
+
+  if (!text) return;
+
   const lowered = text.toLowerCase();
+
   if (isStartCommand(text) || lowered === '/menu') {
     await sendWelcomeMenu(chatId, env);
     return;
@@ -264,6 +306,11 @@ async function handleMessage(msg: TelegramMessage, env: Env): Promise<void> {
 
   if (isArchiveCommand(text) || text === MENU_LABELS.archive) {
     await sendArchivePanel(chatId, env);
+    return;
+  }
+
+  if (isChannelCommand(text)) {
+    await sendChannelStatusPanel(chatId, env);
     return;
   }
 
@@ -579,6 +626,11 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
 
   if (data === 's:channel') {
     await editSettingsChannelPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data === 's:channel:test') {
+    await sendTelegramChannelTest(chatId, messageId, env);
     return;
   }
 
@@ -1228,24 +1280,96 @@ async function editSettingsFileNamingPanel(chatId: number, messageId: number, en
 
 async function editSettingsChannelPanel(chatId: number, messageId: number, env: Env): Promise<void> {
   const settings = await getTelegramSettings(chatId, env);
-  const channelId = await resolveTelegramDownloadChannelId(env);
-  const channelName = await env.CACHE.get('tg:download_channel_username') ?? await env.CACHE.get('tg:download_channel_title');
-  await editOrSend(chatId, messageId, env, [
-    '📣 Telegram канал',
-    `Статус: ${settings.channelAutoPublish ? 'автоматично публикуване ВКЛ' : 'автоматично публикуване ИЗКЛ'}`,
-    `Канал: ${channelName || channelId || 'няма засечен channel id'}`,
-    '',
-    'При готов файл ботът ще публикува audio/document и бутон за сваляне в канала.',
-    'Ако каналът е частен, изпрати едно тестово съобщение в него след добавяне на бота като администратор, за да се засече chat id.',
-  ].join('\n'), {
+  await editOrSend(chatId, messageId, env, await buildChannelStatusText(settings, env), {
     reply_markup: {
       inline_keyboard: [
-        [{ text: toggleLabel('📣 Auto publish new downloads', settings.channelAutoPublish), callback_data: 's:tog:channelAutoPublish' }],
-        [{ text: '🤖 Отвори бота', url: 'https://t.me/dyrakarmy_bot' }],
-        [{ text: '⬅️ Назад', callback_data: 's:back' }],
+        [{ text: toggleLabel('\u{1F4E3} Auto publish new downloads', settings.channelAutoPublish), callback_data: 's:tog:channelAutoPublish' }],
+        [{ text: '\u{1F9EA} \u0422\u0435\u0441\u0442 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u044f \u0432 \u043a\u0430\u043d\u0430\u043b\u0430', callback_data: 's:channel:test' }],
+        [{ text: '\u{1F916} \u041e\u0442\u0432\u043e\u0440\u0438 \u0431\u043e\u0442\u0430', url: 'https://t.me/dyrakarmy_bot' }],
+        [{ text: '\u2B05\uFE0F \u041d\u0430\u0437\u0430\u0434', callback_data: 's:back' }],
       ],
     },
   });
+}
+
+async function sendChannelStatusPanel(chatId: number, env: Env, prefix = ''): Promise<void> {
+  const settings = await getTelegramSettings(chatId, env);
+  const text = [prefix, await buildChannelStatusText(settings, env)].filter(Boolean).join('\n\n');
+  await sendMessage(chatId, env, text, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: toggleLabel('\u{1F4E3} Auto publish new downloads', settings.channelAutoPublish), callback_data: 's:tog:channelAutoPublish' }],
+        [{ text: '\u{1F9EA} \u0422\u0435\u0441\u0442 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u044f \u0432 \u043a\u0430\u043d\u0430\u043b\u0430', callback_data: 's:channel:test' }],
+        [{ text: '\u2699\uFE0F \u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438', callback_data: 's:open' }],
+      ],
+    },
+  });
+}
+
+async function buildChannelStatusText(settings: TelegramSettings, env: Env): Promise<string> {
+  const channelId = await resolveTelegramDownloadChannelId(env);
+  const channelName = await env.CACHE.get('tg:download_channel_username') ?? await env.CACHE.get('tg:download_channel_title');
+  const boundAt = await env.CACHE.get('tg:download_channel_bound_at');
+  const lastPublish = await env.CACHE.get('tg:last_channel_publish', { type: 'json' }) as Record<string, unknown> | null;
+  const lastError = await env.CACHE.get('tg:last_channel_publish_error');
+
+  return [
+    '\u{1F4E3} Telegram \u043a\u0430\u043d\u0430\u043b',
+    `\u0421\u0442\u0430\u0442\u0443\u0441: ${settings.channelAutoPublish ? '\u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u043d\u043e \u043f\u0443\u0431\u043b\u0438\u043a\u0443\u0432\u0430\u043d\u0435 \u0412\u041a\u041b' : '\u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u043d\u043e \u043f\u0443\u0431\u043b\u0438\u043a\u0443\u0432\u0430\u043d\u0435 \u0418\u0417\u041a\u041b'}`,
+    `\u041a\u0430\u043d\u0430\u043b: ${channelName || channelId || '\u043d\u044f\u043c\u0430 \u0437\u0430\u0441\u0435\u0447\u0435\u043d channel id'}`,
+    boundAt ? `\u0417\u0430\u0441\u0435\u0447\u0435\u043d: ${boundAt}` : '\u0417\u0430\u0441\u0435\u0447\u0435\u043d: \u043e\u0449\u0435 \u043d\u0435',
+    lastPublish ? `\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u043e \u043f\u0443\u0431\u043b\u0438\u043a\u0443\u0432\u0430\u043d\u0435: ${String(lastPublish.at || '--')} (${String(lastPublish.method || '--')})` : '\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u043e \u043f\u0443\u0431\u043b\u0438\u043a\u0443\u0432\u0430\u043d\u0435: \u043d\u044f\u043c\u0430',
+    lastError ? `\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0430 \u0433\u0440\u0435\u0448\u043a\u0430: ${lastError.slice(0, 180)}` : '\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0430 \u0433\u0440\u0435\u0448\u043a\u0430: \u043d\u044f\u043c\u0430',
+    '',
+    '\u041a\u0430\u043a \u0434\u0430 \u0432\u044a\u0440\u0436\u0435\u0448 \u0447\u0430\u0441\u0442\u0435\u043d \u043a\u0430\u043d\u0430\u043b:',
+    '1. \u0411\u043e\u0442\u044a\u0442 \u0442\u0440\u044f\u0431\u0432\u0430 \u0434\u0430 \u0435 \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440 \u0432 \u043a\u0430\u043d\u0430\u043b\u0430.',
+    '2. \u041f\u0443\u0441\u043d\u0438 \u0435\u0434\u043d\u043e \u0441\u044a\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u0432 \u043a\u0430\u043d\u0430\u043b\u0430 \u0438\u043b\u0438 \u043f\u0440\u0435\u043f\u0440\u0430\u0442\u0438 \u043f\u043e\u0441\u0442 \u043e\u0442 \u043a\u0430\u043d\u0430\u043b\u0430 \u043a\u044a\u043c \u0431\u043e\u0442\u0430.',
+    '3. \u041d\u0430\u0442\u0438\u0441\u043d\u0438 \u201e\u0422\u0435\u0441\u0442 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u044f \u0432 \u043a\u0430\u043d\u0430\u043b\u0430\u201c.',
+  ].join('\n');
+}
+
+async function sendTelegramChannelTest(chatId: number, messageId: number, env: Env): Promise<void> {
+  const channelId = await resolveTelegramDownloadChannelId(env);
+  if (!channelId) {
+    await editOrSend(chatId, messageId, env, [
+      '\u274c \u041d\u044f\u043c\u0430 \u0437\u0430\u0441\u0435\u0447\u0435\u043d Telegram \u043a\u0430\u043d\u0430\u043b.',
+      '',
+      '\u0414\u043e\u0431\u0430\u0432\u0438 \u0431\u043e\u0442\u0430 \u043a\u0430\u0442\u043e \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440 \u0432 \u043a\u0430\u043d\u0430\u043b\u0430 \u0438 \u043f\u0440\u0435\u043f\u0440\u0430\u0442\u0438 \u0435\u0434\u0438\u043d \u043f\u043e\u0441\u0442 \u043e\u0442 \u043a\u0430\u043d\u0430\u043b\u0430 \u043a\u044a\u043c \u0442\u043e\u0437\u0438 \u0447\u0430\u0442, \u0438\u043b\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0443\u0432\u0430\u0439 \u0442\u0435\u0441\u0442\u043e\u0432\u043e \u0441\u044a\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u0432 \u043a\u0430\u043d\u0430\u043b\u0430.',
+    ].join('\n'));
+    await env.CACHE.put('tg:last_channel_publish_error', 'Missing Telegram channel id', { expirationTtl: 86400 });
+    return;
+  }
+
+  const result = await telegramRequest('sendMessage', {
+    chat_id: channelId,
+    text: [
+      '\u2705 DyrakArmy test publish',
+      '\u041a\u0430\u043d\u0430\u043b\u044a\u0442 \u0435 \u0441\u0432\u044a\u0440\u0437\u0430\u043d. \u041d\u043e\u0432\u0438\u0442\u0435 \u0433\u043e\u0442\u043e\u0432\u0438 \u043f\u0435\u0441\u043d\u0438 \u0449\u0435 \u0441\u0435 \u043f\u0443\u0431\u043b\u0438\u043a\u0443\u0432\u0430\u0442 \u0442\u0443\u043a \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u043d\u043e.',
+    ].join('\n'),
+    reply_markup: {
+      inline_keyboard: [[{ text: '\u{1F916} DyrakArmy BOT', url: 'https://t.me/dyrakarmy_bot' }]],
+    },
+  }, env);
+
+  if (result.ok) {
+    await recordTelegramChannelPublish(env, {
+      ok: true,
+      method: 'sendMessage',
+      channelId,
+      description: 'manual test',
+    });
+    const settings = await getTelegramSettings(chatId, env);
+    await editOrSend(chatId, messageId, env, `\u2705 \u0422\u0435\u0441\u0442 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u044f\u0442\u0430 \u0435 \u0438\u0437\u043f\u0440\u0430\u0442\u0435\u043d\u0430.\n\n${await buildChannelStatusText(settings, env)}`);
+    return;
+  }
+
+  await recordTelegramChannelPublish(env, {
+    ok: false,
+    method: 'sendMessage',
+    channelId,
+    description: result.description ?? 'Telegram sendMessage failed',
+  });
+  await editOrSend(chatId, messageId, env, `\u274c \u0422\u0435\u0441\u0442 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u044f\u0442\u0430 \u043d\u0435 \u043c\u0438\u043d\u0430:\n${result.description ?? 'Telegram sendMessage failed'}`);
 }
 
 async function sendWelcomeMenu(chatId: number, env: Env): Promise<void> {
@@ -1375,14 +1499,22 @@ export async function publishTelegramChannelDownload(
   job: DownloadJob,
   result: DownloaderDownloadResult,
   env: Env,
-): Promise<void> {
-  if (String(env.TELEGRAM_CHANNEL_PUBLISH_ENABLED ?? '1').trim() === '0') return;
+): Promise<TelegramChannelPublishResult> {
+  if (String(env.TELEGRAM_CHANNEL_PUBLISH_ENABLED ?? '1').trim() === '0') {
+    return { ok: true, method: 'skipped', description: 'Channel publishing disabled' };
+  }
 
   const channelId = await resolveTelegramDownloadChannelId(env);
-  if (!channelId) return;
+  if (!channelId) {
+    const skipped = { ok: false, method: 'skipped' as const, description: 'Missing Telegram channel id' };
+    await recordTelegramChannelPublish(env, skipped);
+    return skipped;
+  }
 
   const settings = job.chatId ? await getTelegramSettings(job.chatId, env) : DEFAULT_SETTINGS;
-  if (!settings.channelAutoPublish) return;
+  if (!settings.channelAutoPublish) {
+    return { ok: true, method: 'skipped', channelId, description: 'User disabled channel auto publish' };
+  }
 
   const link = await createJobDownloadLink(job.id, env);
   const title = result.title || 'Файл';
@@ -1402,13 +1534,21 @@ export async function publishTelegramChannelDownload(
     })
     : { ok: false, description: 'Audio publishing disabled' };
 
-  if (sent.ok) return;
+  if (sent.ok) {
+    const ok = { ok: true, method: 'sendAudio' as const, channelId, description: 'published audio' };
+    await recordTelegramChannelPublish(env, ok);
+    return ok;
+  }
 
   const document = await sendDocument(channelId, link, env, {
     caption: truncate(caption, 1000),
     reply_markup: replyMarkup,
   });
-  if (document.ok) return;
+  if (document.ok) {
+    const ok = { ok: true, method: 'sendDocument' as const, channelId, description: sent.description ?? 'published document' };
+    await recordTelegramChannelPublish(env, ok);
+    return ok;
+  }
 
   const fallback = await telegramRequest('sendMessage', {
     chat_id: channelId,
@@ -1420,6 +1560,14 @@ export async function publishTelegramChannelDownload(
   if (!fallback.ok) {
     console.warn('Telegram channel publish failed', fallback.description ?? document.description ?? sent.description);
   }
+  const status = {
+    ok: fallback.ok,
+    method: 'sendMessage' as const,
+    channelId,
+    description: fallback.description ?? document.description ?? sent.description ?? 'Telegram channel publish failed',
+  };
+  await recordTelegramChannelPublish(env, status);
+  return status;
 }
 
 export async function notifyTelegramFailure(job: DownloadJob, errorMessage: string, env: Env): Promise<void> {
@@ -1433,7 +1581,7 @@ export async function notifyTelegramFailure(job: DownloadJob, errorMessage: stri
 }
 
 async function ensureTelegramCommands(env: Env): Promise<void> {
-  const marker = await env.CACHE.get('tg:commands:bg:v4');
+  const marker = await env.CACHE.get('tg:commands:bg:v5');
   if (marker === '1') return;
 
   try {
@@ -1443,6 +1591,7 @@ async function ensureTelegramCommands(env: Env): Promise<void> {
         { command: 'menu', description: 'Покажи меню' },
         { command: 'settings', description: 'Настройки' },
         { command: 'archive', description: 'Архив' },
+        { command: 'channel', description: 'Telegram \u043a\u0430\u043d\u0430\u043b' },
         { command: 'help', description: 'Помощ' },
       ],
       language_code: 'bg',
@@ -1466,9 +1615,39 @@ async function ensureTelegramCommands(env: Env): Promise<void> {
       language_code: 'bg',
     }, env);
 
-    await env.CACHE.put('tg:commands:bg:v4', '1', { expirationTtl: 86400 });
+    await ensureTelegramWebhookAllowedUpdates(env);
+    await env.CACHE.put('tg:commands:bg:v5', '1', { expirationTtl: 86400 });
   } catch (error) {
     console.warn('Unable to set Telegram commands/menu', error);
+  }
+}
+
+async function ensureTelegramWebhookAllowedUpdates(env: Env): Promise<void> {
+  if (String(env.TELEGRAM_WEBHOOK_AUTO_CONFIG_ENABLED ?? '1').trim() === '0') return;
+
+  const marker = await env.CACHE.get('tg:webhook:allowed-updates:v2');
+  if (marker === '1') return;
+
+  const secretToken = env.TELEGRAM_SECRET_TOKEN?.trim();
+  const publicBaseUrl = getPublicBaseUrl(env);
+  if (!secretToken || !publicBaseUrl.startsWith('https://')) return;
+
+  const result = await telegramRequest('setWebhook', {
+    url: `${publicBaseUrl}/telegram/webhook`,
+    secret_token: secretToken,
+    drop_pending_updates: false,
+    allowed_updates: [
+      'message',
+      'callback_query',
+      'channel_post',
+      'my_chat_member',
+    ],
+  }, env);
+
+  if (result.ok) {
+    await env.CACHE.put('tg:webhook:allowed-updates:v2', '1', { expirationTtl: 86400 });
+  } else {
+    await env.CACHE.put('tg:webhook:last_error', result.description ?? 'setWebhook failed', { expirationTtl: 86400 });
   }
 }
 
@@ -1751,6 +1930,16 @@ function isSettingsCommand(text: string): boolean {
   return normalized === '/settings' || normalized === 'настройки';
 }
 
+
+function isChannelCommand(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  return normalized === '/channel' || normalized === '/channel_test' || normalized === 'channel' || normalized === '\u043a\u0430\u043d\u0430\u043b';
+}
+
+function isBotCommand(text: string): boolean {
+  return text.trim().startsWith('/');
+}
+
 function telegramSyncKey(chatId: number): string {
   return `tg_${Math.abs(chatId)}`;
 }
@@ -2014,10 +2203,63 @@ function nextCodecConversion(current: string): string {
 }
 
 async function resolveTelegramDownloadChannelId(env: Env): Promise<string | null> {
-  const configured = String(env.TELEGRAM_DOWNLOAD_CHANNEL_ID ?? '').trim();
+  const configured = normalizeTelegramChannelTarget(env.TELEGRAM_DOWNLOAD_CHANNEL_ID);
   if (configured) return configured;
   const cached = await env.CACHE.get('tg:download_channel_id');
-  return cached?.trim() || null;
+  const normalizedCached = normalizeTelegramChannelTarget(cached ?? undefined);
+  if (normalizedCached) return normalizedCached;
+  const username = await env.CACHE.get('tg:download_channel_username');
+  return normalizeTelegramChannelTarget(username ?? undefined);
+}
+
+function normalizeTelegramChannelTarget(raw: string | undefined): string {
+  const value = String(raw ?? '').trim();
+  if (!value) return '';
+  if (value.startsWith('@')) return value;
+
+  try {
+    if (/^https?:\/\//i.test(value)) {
+      const url = new URL(value);
+      const boostChannel = url.searchParams.get('c');
+      if (boostChannel && /^\d{5,}$/.test(boostChannel)) return `-100${boostChannel}`;
+      const username = url.pathname.replace(/^\/+/, '').split('/')[0] ?? '';
+      if (username && !username.startsWith('+') && username !== 'joinchat' && /^[a-zA-Z0-9_]{5,}$/.test(username)) {
+        return `@${username}`;
+      }
+      return '';
+    }
+  } catch {
+    return '';
+  }
+
+  const numeric = value.replace(/\s+/g, '');
+  if (/^-100\d{5,}$/.test(numeric)) return numeric;
+  if (/^\d{5,}$/.test(numeric)) return `-100${numeric}`;
+  if (/^-\d{5,}$/.test(numeric)) return `-100${numeric.slice(1)}`;
+  if (/^[a-zA-Z0-9_]{5,}$/.test(value)) return `@${value}`;
+  return '';
+}
+
+async function recordTelegramChannelPublish(env: Env, result: TelegramChannelPublishResult): Promise<void> {
+  const payload = {
+    ok: result.ok,
+    method: result.method ?? 'skipped',
+    channel_id: result.channelId ?? null,
+    description: result.description ?? null,
+    at: new Date().toISOString(),
+  };
+
+  if (result.ok) {
+    await env.CACHE.put('tg:last_channel_publish', JSON.stringify(payload), { expirationTtl: 604800 });
+    await env.CACHE.delete?.('tg:last_channel_publish_error').catch?.(() => undefined);
+    return;
+  }
+
+  await env.CACHE.put(
+    'tg:last_channel_publish_error',
+    `${payload.at}: ${result.description ?? 'Telegram channel publish failed'}`,
+    { expirationTtl: 604800 },
+  );
 }
 
 async function createJobDownloadLink(jobId: string, env: Env): Promise<string> {
