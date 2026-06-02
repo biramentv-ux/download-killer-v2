@@ -58,6 +58,7 @@ class FakeStatement {
   }
 
   async run(): Promise<{ success: boolean }> {
+    this.db.runs.push({ sql: this.sql, values: this.values });
     if (this.sql.includes('user_preferences')) {
       const key = String(this.values[0] ?? '');
       const payload = String(this.values[1] ?? '');
@@ -70,6 +71,7 @@ class FakeStatement {
 class FakeD1 {
   preferences = new Map<string, string>();
   completedJobs = new Map<string, Record<string, unknown>>();
+  runs: Array<{ sql: string; values: unknown[] }> = [];
 
   prepare(sql: string): FakeStatement {
     return new FakeStatement(this, sql);
@@ -279,13 +281,55 @@ describe('Telegram channel publishing', () => {
     expect(audioCalls.some((call) => call.body.chat_id === 123)).toBe(true);
     expect(audioCalls.some((call) => call.body.chat_id === '-1003904304047')).toBe(true);
     expect(kv.store.has('tg:last_channel_publish')).toBe(true);
+    const syncUpdate = db.runs.find((run) => run.sql.includes('UPDATE download_jobs') && run.sql.includes('sync_key'));
+    expect(syncUpdate?.values).toEqual(['tg_123', 'cached-job-1']);
+  });
+
+  it('queues new bot downloads with the Telegram sync key for cross-platform history', async () => {
+    const { env, kv, db, queueMessages } = createTelegramTestContext();
+    const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+    await kv.put('tg:url:ready', url);
+    await kv.put('tg:result:ready', JSON.stringify({
+      url,
+      title: 'Queued Track',
+      artist: 'Queued Artist',
+      source: 'youtube',
+      archive: false,
+    }));
+
+    await handleTelegramUpdate(telegramRequest({
+      update_id: 15,
+      callback_query: {
+        id: 'cb-new-download',
+        from: { id: 123, first_name: 'Tester' },
+        message: { message_id: 77, chat: { id: 123, type: 'private' } },
+        data: 'dl:ready:mp3:320',
+      },
+    }), env);
+
+    const insert = db.runs.find((run) => run.sql.includes('INSERT INTO download_jobs') && run.sql.includes('sync_key'));
+    expect(insert).toBeTruthy();
+    expect(insert?.values[6]).toBe(123);
+    expect(insert?.values[7]).toBe(77);
+    expect(insert?.values[8]).toBe('tg_123');
+    expect(queueMessages).toHaveLength(1);
+    expect(queueMessages[0]).toMatchObject({
+      url,
+      source: 'youtube',
+      format: 'mp3',
+      quality: '320',
+      syncKey: 'tg_123',
+      chatId: 123,
+      messageId: 77,
+    });
   });
 });
 
-function createTelegramTestContext(): { env: Env; calls: TelegramCall[]; kv: MemoryKv; db: FakeD1 } {
+function createTelegramTestContext(): { env: Env; calls: TelegramCall[]; kv: MemoryKv; db: FakeD1; queueMessages: DownloadJob[] } {
   const kv = new MemoryKv();
   const db = new FakeD1();
   const calls: TelegramCall[] = [];
+  const queueMessages: DownloadJob[] = [];
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const method = String(input).split('/').pop() ?? 'unknown';
     const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
@@ -304,9 +348,14 @@ function createTelegramTestContext(): { env: Env; calls: TelegramCall[]; kv: Mem
     DOWNLOADER_API_KEY: 'downloader-secret',
     DOWNLOADER_API_URL: 'https://downloader.example',
     PUBLIC_BASE_URL: 'https://dyrakarmy.online',
+    DOWNLOAD_QUEUE: {
+      send: vi.fn(async (job: DownloadJob) => {
+        queueMessages.push(job);
+      }),
+    },
   } as unknown as Env;
 
-  return { env, calls, kv, db };
+  return { env, calls, kv, db, queueMessages };
 }
 
 function createDownloadJob(): DownloadJob {

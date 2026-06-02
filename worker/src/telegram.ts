@@ -862,10 +862,17 @@ async function queueJobFromSelection(
   const cached = await env.CACHE.get(`tg:result:${cacheKey}`, { type: 'json' }) as CachedPickerResult | null;
   const source = normalizeSourceValue(cached?.source || detectSourceFromUrl(url));
   const fingerprint = await createJobFingerprint(url, format, quality);
+  const syncKey = telegramSyncKey(chatId);
   const existing = await findCompletedJobByFingerprint(fingerprint, env);
 
   if (existing) {
     await hashAndCachePrivateUrl(env, 'job', existing.id, url);
+    await env.DB.prepare(
+      `UPDATE download_jobs
+       SET sync_key = COALESCE(sync_key, ?),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    ).bind(syncKey, existing.id).run();
     const ttl = readEnvInt(env.DOWNLOAD_TOKEN_TTL_SECONDS, 3600);
     const token = await createDownloadToken(
       {
@@ -899,6 +906,7 @@ async function queueJobFromSelection(
         format,
         quality,
         fingerprint,
+        syncKey,
         chatId,
         messageId,
         requestedAt: new Date().toISOString(),
@@ -923,9 +931,9 @@ async function queueJobFromSelection(
 
   await env.DB.prepare(
     `INSERT INTO download_jobs (
-      id, url, source, format, quality, status, attempts, fingerprint, chat_id, message_id, title, artist, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-  ).bind(jobId, urlHash, source, format, quality, fingerprint, chatId, messageId, title, artist).run();
+      id, url, source, format, quality, status, attempts, fingerprint, chat_id, message_id, sync_key, title, artist, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+  ).bind(jobId, urlHash, source, format, quality, fingerprint, chatId, messageId, syncKey, title, artist).run();
 
   const job: DownloadJob = {
     id: jobId,
@@ -934,6 +942,7 @@ async function queueJobFromSelection(
     format,
     quality,
     fingerprint,
+    syncKey,
     chatId,
     messageId,
     requestedAt: new Date().toISOString(),
