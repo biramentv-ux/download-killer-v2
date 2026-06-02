@@ -271,8 +271,14 @@ export async function fetchDownloaderWithFailover(
         };
       }
 
+      const details = await readErrorPreview(response);
       const failedState = await markFailure(env, origin, latency, state);
-      lastError = `origin=${origin.baseUrl} status=${response.status} circuit=${failedState.circuit}`;
+      lastError = [
+        `origin=${origin.baseUrl}`,
+        `status=${response.status}`,
+        `circuit=${failedState.circuit}`,
+        details ? `detail=${details}` : '',
+      ].filter(Boolean).join(' ');
     } catch (error) {
       const latency = Date.now() - started;
       const failedState = await markFailure(env, origin, latency, state);
@@ -282,6 +288,14 @@ export async function fetchDownloaderWithFailover(
   }
 
   throw new Error(lastError ?? 'No downloader origin succeeded');
+}
+
+async function readErrorPreview(response: Response): Promise<string> {
+  try {
+    return (await response.clone().text()).replace(/\s+/g, ' ').trim().slice(0, 500);
+  } catch {
+    return '';
+  }
 }
 
 export async function probeDownloaderOrigins(env: Env): Promise<OriginProbeResult[]> {

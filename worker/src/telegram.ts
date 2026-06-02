@@ -1595,12 +1595,30 @@ export async function publishTelegramChannelDownload(
 
 export async function notifyTelegramFailure(job: DownloadJob, errorMessage: string, env: Env): Promise<void> {
   if (!job.chatId) return;
-  const text = `❌ Свалянето се провали\n${errorMessage.slice(0, 600)}`;
+  const text = formatTelegramFailureText(errorMessage);
   if (job.messageId) {
     await editOrSend(job.chatId, job.messageId, env, text);
   } else {
     await sendMessage(job.chatId, env, text);
   }
+}
+
+function formatTelegramFailureText(errorMessage: string): string {
+  const normalized = errorMessage.toLowerCase();
+  if (
+    normalized.includes('sign in to confirm') ||
+    normalized.includes('not a bot') ||
+    normalized.includes('cookies-from-browser') ||
+    normalized.includes('ytdlp_cookies')
+  ) {
+    return [
+      '\u274c \u0421\u0432\u0430\u043b\u044f\u043d\u0435\u0442\u043e \u0441\u0435 \u043f\u0440\u043e\u0432\u0430\u043b\u0438',
+      '\u041f\u0440\u0438\u0447\u0438\u043d\u0430: YouTube \u0431\u043b\u043e\u043a\u0438\u0440\u0430 Render origin-\u0430 \u0441 bot-check.',
+      '\u041d\u0443\u0436\u043d\u043e \u0435 \u0432 Render \u0434\u0430 \u0438\u043c\u0430 YTDLP_COOKIES_BASE64 \u0438\u043b\u0438 YTDLP_COOKIES_TEXT.',
+      '\u0421\u043b\u0435\u0434 \u0442\u043e\u0432\u0430 \u0431\u043e\u0442\u044a\u0442 \u0449\u0435 \u043f\u043e\u0434\u043d\u043e\u0432\u0438 \u0441\u0432\u0430\u043b\u044f\u043d\u0435\u0442\u043e.',
+    ].join('\n');
+  }
+  return `\u274c \u0421\u0432\u0430\u043b\u044f\u043d\u0435\u0442\u043e \u0441\u0435 \u043f\u0440\u043e\u0432\u0430\u043b\u0438\n${errorMessage.slice(0, 600)}`;
 }
 
 async function ensureTelegramCommands(env: Env): Promise<void> {
