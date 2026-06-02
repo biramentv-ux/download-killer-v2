@@ -890,6 +890,29 @@ async function queueJobFromSelection(
     if (!sent.ok) {
       await sendMessage(chatId, env, `Ако audio файлът не се отвори директно, използвай линка:\n${link}`);
     }
+
+    await publishTelegramChannelDownload(
+      {
+        id: existing.id,
+        url,
+        source,
+        format,
+        quality,
+        fingerprint,
+        chatId,
+        messageId,
+        requestedAt: new Date().toISOString(),
+      },
+      {
+        download_url: link,
+        title: readyTitle,
+        artist: readyArtist,
+        duration: existing.duration ?? 0,
+        file_size: existing.file_size ?? 0,
+        source,
+      },
+      env,
+    );
     return;
   }
 

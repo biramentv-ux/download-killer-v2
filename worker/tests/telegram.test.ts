@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { handleTelegramUpdate, publishTelegramChannelDownload } from '../src/telegram';
 import type { DownloadJob, DownloaderDownloadResult, Env } from '../src/types';
+import { createJobFingerprint } from '../src/utils';
 
 interface TelegramCall {
   method: string;
@@ -45,6 +46,10 @@ class FakeStatement {
       const payload = this.db.preferences.get(key);
       return payload ? { payload } as T : null;
     }
+    if (this.sql.includes('FROM download_jobs') && this.sql.includes('fingerprint')) {
+      const fingerprint = String(this.values[0] ?? '');
+      return (this.db.completedJobs.get(fingerprint) ?? null) as T | null;
+    }
     return null;
   }
 
@@ -64,6 +69,7 @@ class FakeStatement {
 
 class FakeD1 {
   preferences = new Map<string, string>();
+  completedJobs = new Map<string, Record<string, unknown>>();
 
   prepare(sql: string): FakeStatement {
     return new FakeStatement(this, sql);
@@ -237,9 +243,46 @@ describe('Telegram channel publishing', () => {
     expect(kv.store.get('tg:download_channel_title')).toBe('Media Channel');
     expect(calls.some((call) => call.method === 'sendMessage' && String(call.body.text ?? '').includes('Telegram канал'))).toBe(true);
   });
+
+  it('publishes to the channel when a bot download is served from an existing completed job', async () => {
+    const { env, calls, kv, db } = createTelegramTestContext();
+    await kv.put('tg:download_channel_id', '-1003904304047');
+    const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+    const fingerprint = await createJobFingerprint(url, 'mp3', '320');
+    db.completedJobs.set(fingerprint, {
+      id: 'cached-job-1',
+      title: 'Cached Track',
+      artist: 'Cached Artist',
+      duration: 181,
+      file_size: 123456,
+    });
+    await kv.put('tg:url:ready', url);
+    await kv.put('tg:result:ready', JSON.stringify({
+      url,
+      title: 'Cached Track',
+      artist: 'Cached Artist',
+      source: 'youtube',
+      archive: false,
+    }));
+
+    await handleTelegramUpdate(telegramRequest({
+      update_id: 14,
+      callback_query: {
+        id: 'cb-cached-download',
+        from: { id: 123, first_name: 'Tester' },
+        message: { message_id: 77, chat: { id: 123, type: 'private' } },
+        data: 'dl:ready:mp3:320',
+      },
+    }), env);
+
+    const audioCalls = calls.filter((call) => call.method === 'sendAudio');
+    expect(audioCalls.some((call) => call.body.chat_id === 123)).toBe(true);
+    expect(audioCalls.some((call) => call.body.chat_id === '-1003904304047')).toBe(true);
+    expect(kv.store.has('tg:last_channel_publish')).toBe(true);
+  });
 });
 
-function createTelegramTestContext(): { env: Env; calls: TelegramCall[]; kv: MemoryKv } {
+function createTelegramTestContext(): { env: Env; calls: TelegramCall[]; kv: MemoryKv; db: FakeD1 } {
   const kv = new MemoryKv();
   const db = new FakeD1();
   const calls: TelegramCall[] = [];
@@ -263,7 +306,7 @@ function createTelegramTestContext(): { env: Env; calls: TelegramCall[]; kv: Mem
     PUBLIC_BASE_URL: 'https://dyrakarmy.online',
   } as unknown as Env;
 
-  return { env, calls, kv };
+  return { env, calls, kv, db };
 }
 
 function createDownloadJob(): DownloadJob {
