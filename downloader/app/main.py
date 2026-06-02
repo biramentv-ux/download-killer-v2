@@ -60,6 +60,49 @@ WORKFLOW_LOCK = threading.Lock()
 ARCHIVE_CACHE: dict[str, Any] = {'items': [], 'created_at': 0.0}
 ARCHIVE_PATH_INDEX: dict[str, Path] = {}
 ARCHIVE_LOCK = threading.Lock()
+YTDLP_COOKIE_CACHE: dict[str, str] = {}
+
+
+def resolve_ytdlp_cookiefile() -> str | None:
+  explicit = os.getenv('YTDLP_COOKIES_FILE', '').strip()
+  if explicit:
+    candidate = Path(explicit).expanduser()
+    if candidate.exists() and candidate.is_file():
+      return str(candidate)
+
+  raw_text = os.getenv('YTDLP_COOKIES_TEXT', '')
+  raw_base64 = os.getenv('YTDLP_COOKIES_BASE64', '').strip()
+  if raw_base64:
+    try:
+      raw_text = base64.b64decode(raw_base64).decode('utf-8')
+    except Exception:
+      raw_text = ''
+
+  if not raw_text.strip():
+    return None
+
+  digest = hashlib.sha256(raw_text.encode('utf-8')).hexdigest()
+  cached = YTDLP_COOKIE_CACHE.get(digest)
+  if cached and Path(cached).exists():
+    return cached
+
+  target = WORK_DIR / f'yt-dlp-cookies-{digest[:16]}.txt'
+  target.parent.mkdir(parents=True, exist_ok=True)
+  target.write_text(raw_text.replace('\r\n', '\n'), encoding='utf-8')
+  try:
+    target.chmod(0o600)
+  except OSError:
+    pass
+  YTDLP_COOKIE_CACHE.clear()
+  YTDLP_COOKIE_CACHE[digest] = str(target)
+  return str(target)
+
+
+def apply_ytdlp_cookiefile(opts: dict[str, Any]) -> dict[str, Any]:
+  cookiefile = resolve_ytdlp_cookiefile()
+  if cookiefile:
+    opts['cookiefile'] = cookiefile
+  return opts
 
 
 class SearchRequest(BaseModel):
@@ -1415,6 +1458,7 @@ def make_ydl_search(query: str, limit: int) -> list[SearchItem]:
     'default_search': 'auto',
     'ignoreerrors': True,
   }
+  opts = apply_ytdlp_cookiefile(opts)
 
   with YoutubeDL(opts) as ydl:
     raw = ydl.extract_info(search_query, download=False)
@@ -1457,6 +1501,7 @@ def extract_preview_info(query: str, source: str = 'unknown') -> PreviewResponse
       },
     },
   }
+  opts = apply_ytdlp_cookiefile(opts)
 
   with YoutubeDL(opts) as ydl:
     raw = ydl.extract_info(search_target, download=False)
@@ -1641,6 +1686,7 @@ def run_download(job_id: str, url: str, audio_format: str, audio_quality: str) -
       },
     ],
   }
+  ydl_opts = apply_ytdlp_cookiefile(ydl_opts)
 
   try:
     with YoutubeDL(ydl_opts) as ydl:
@@ -1676,6 +1722,7 @@ def probe_download_metadata(url: str) -> dict[str, Any]:
       },
     },
   }
+  opts = apply_ytdlp_cookiefile(opts)
 
   with YoutubeDL(opts) as ydl:
     info = ydl.extract_info(url, download=False)
@@ -1714,6 +1761,7 @@ def extract_track_metadata(url: str) -> tuple[str, str]:
       },
     },
   }
+  opts = apply_ytdlp_cookiefile(opts)
 
   with YoutubeDL(opts) as ydl:
     info = ydl.extract_info(url, download=False)
@@ -1755,6 +1803,7 @@ def find_youtube_mirror_url(title: str, artist: str) -> str:
     'default_search': 'ytsearch',
     'ignoreerrors': True,
   }
+  opts = apply_ytdlp_cookiefile(opts)
 
   with YoutubeDL(opts) as ydl:
     for query in query_variants:
@@ -1804,6 +1853,7 @@ def resolve_playlist_with_ytdlp(url: str, source: str) -> PlaylistResolveRespons
     'extract_flat': 'in_playlist',
     'ignoreerrors': True,
   }
+  opts = apply_ytdlp_cookiefile(opts)
   with YoutubeDL(opts) as ydl:
     raw = ydl.extract_info(url, download=False)
 

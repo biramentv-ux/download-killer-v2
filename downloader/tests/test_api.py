@@ -14,6 +14,37 @@ def test_health_endpoint():
   assert body['service'] == 'sounddrop-downloader'
 
 
+def test_ytdlp_cookiefile_can_be_resolved_from_file(tmp_path, monkeypatch):
+  from app import main
+
+  cookie_file = tmp_path / 'cookies.txt'
+  cookie_file.write_text('# Netscape HTTP Cookie File\n', encoding='utf-8')
+  monkeypatch.setenv('YTDLP_COOKIES_FILE', str(cookie_file))
+  monkeypatch.delenv('YTDLP_COOKIES_TEXT', raising=False)
+  monkeypatch.delenv('YTDLP_COOKIES_BASE64', raising=False)
+  main.YTDLP_COOKIE_CACHE.clear()
+
+  opts = main.apply_ytdlp_cookiefile({})
+  assert opts['cookiefile'] == str(cookie_file)
+
+
+def test_ytdlp_cookiefile_can_be_materialized_from_base64(tmp_path, monkeypatch):
+  from app import main
+  import base64
+
+  cookie_text = '# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tFALSE\t0\tSOCS\tvalue\n'
+  monkeypatch.setattr(main, 'WORK_DIR', tmp_path)
+  monkeypatch.delenv('YTDLP_COOKIES_FILE', raising=False)
+  monkeypatch.delenv('YTDLP_COOKIES_TEXT', raising=False)
+  monkeypatch.setenv('YTDLP_COOKIES_BASE64', base64.b64encode(cookie_text.encode('utf-8')).decode('ascii'))
+  main.YTDLP_COOKIE_CACHE.clear()
+
+  opts = main.apply_ytdlp_cookiefile({})
+  cookie_path = Path(opts['cookiefile'])
+  assert cookie_path.exists()
+  assert cookie_path.read_text(encoding='utf-8') == cookie_text
+
+
 def test_auth_required_for_internal_routes():
   client = TestClient(app)
   search = client.post('/internal/search', json={'query': 'test'})

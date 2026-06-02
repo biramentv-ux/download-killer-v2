@@ -21,6 +21,10 @@ services:
         sync: false
       - key: SPOTIFY_CLIENT_SECRET
         sync: false
+      - key: YTDLP_COOKIES_BASE64
+        sync: false
+      - key: YTDLP_COOKIES_TEXT
+        sync: false
       - key: PLAYLIST_WORKFLOW_BATCH_SIZE
         value: "50"
       - key: PLAYLIST_WORKFLOW_RETENTION_SECONDS
@@ -60,6 +64,10 @@ services:
       - key: SPOTIFY_CLIENT_ID
         sync: false
       - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+      - key: YTDLP_COOKIES_BASE64
+        sync: false
+      - key: YTDLP_COOKIES_TEXT
         sync: false
       - key: PLAYLIST_WORKFLOW_BATCH_SIZE
         value: "50"
