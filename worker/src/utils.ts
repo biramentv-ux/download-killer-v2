@@ -11,6 +11,13 @@ export interface DownloadTokenPayload {
   exp: number;
 }
 
+export interface UrlPolicyResult {
+  allowed: boolean;
+  code?: string;
+  message?: string;
+  host?: string;
+}
+
 const encoder = new TextEncoder();
 
 export function readEnvInt(raw: string | undefined, fallback: number): number {
@@ -29,10 +36,15 @@ export function normalizeSource(input: string | undefined): string {
 export function detectSourceFromUrl(rawUrl: string): string {
   const lower = rawUrl.toLowerCase();
   if (lower.includes('youtube.com') || lower.includes('youtu.be') || lower.includes('music.youtube.com')) return 'youtube';
-  if (lower.includes('spotify.com')) return 'spotify';
+  if (lower.includes('spotify.com')) {
+    if (lower.includes('/show/') || lower.includes('/episode/')) return 'podcast';
+    return 'spotify';
+  }
+  if (lower.includes('podcasts.apple.com') || lower.includes('/podcast/') || lower.includes('/show/')) return 'podcast';
   if (lower.includes('soundcloud.com')) return 'soundcloud';
   if (lower.includes('deezer.com')) return 'deezer';
   if (lower.includes('music.apple.com') || lower.includes('itunes.apple.com')) return 'apple';
+  if (lower.includes('/feed') || lower.includes('rss') || lower.endsWith('.xml')) return 'podcast';
   return 'unknown';
 }
 
@@ -43,6 +55,99 @@ export function isValidUrl(raw: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function validateUrlPolicy(raw: string, env: Env): UrlPolicyResult {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return { allowed: false, code: 'INVALID_URL', message: 'URL is invalid' };
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { allowed: false, code: 'INVALID_URL', message: 'Only HTTP and HTTPS URLs are allowed' };
+  }
+
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host) {
+    return { allowed: false, code: 'INVALID_URL', message: 'URL host is required' };
+  }
+
+  if (isPrivateOrLocalHost(host)) {
+    return {
+      allowed: false,
+      code: 'URL_BLOCKED',
+      message: 'Local and private network URLs are blocked',
+      host,
+    };
+  }
+
+  const allowlist = parseDomainList(env.URL_ALLOWLIST);
+  if (allowlist.length > 0 && !allowlist.some((rule) => domainMatches(host, rule))) {
+    return {
+      allowed: false,
+      code: 'URL_NOT_ALLOWLISTED',
+      message: 'This URL is not on the allowed domain list',
+      host,
+    };
+  }
+
+  const blocklist = [
+    ...DEFAULT_BLOCKED_DOMAINS,
+    ...parseDomainList(env.URL_BLOCKLIST),
+  ];
+  if (blocklist.some((rule) => domainMatches(host, rule))) {
+    return {
+      allowed: false,
+      code: 'URL_BLOCKED',
+      message: 'This URL is blocked by domain policy',
+      host,
+    };
+  }
+
+  return { allowed: true, host };
+}
+
+const DEFAULT_BLOCKED_DOMAINS = [
+  'localhost',
+  'local',
+  '*.local',
+  '*.localhost',
+  '*.onion',
+];
+
+function parseDomainList(raw: string | undefined): string[] {
+  return (raw ?? '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function domainMatches(host: string, rule: string): boolean {
+  const normalized = rule.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === '*') return true;
+  if (normalized.startsWith('*.')) {
+    const suffix = normalized.slice(2);
+    return host === suffix || host.endsWith(`.${suffix}`);
+  }
+  return host === normalized || host.endsWith(`.${normalized}`);
+}
+
+function isPrivateOrLocalHost(host: string): boolean {
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
+  if (host === '::1') return true;
+  if (/^127(?:\.\d{1,3}){3}$/.test(host)) return true;
+  if (/^10(?:\.\d{1,3}){3}$/.test(host)) return true;
+  if (/^192\.168(?:\.\d{1,3}){2}$/.test(host)) return true;
+  if (/^169\.254(?:\.\d{1,3}){2}$/.test(host)) return true;
+  const private172 = host.match(/^172\.(\d{1,3})(?:\.\d{1,3}){2}$/);
+  if (private172) {
+    const second = Number(private172[1]);
+    return second >= 16 && second <= 31;
+  }
+  return false;
 }
 
 function getAllowedOrigin(request: Request, env: Env): string {

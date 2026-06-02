@@ -7,6 +7,7 @@ import {
   normalizeSource,
   rateLimit,
   readEnvInt,
+  validateUrlPolicy,
 } from './utils';
 
 interface TelegramUpdate {
@@ -81,7 +82,7 @@ const SUPPORTED_FORMATS: AudioFormat[] = ['mp3', 'flac', 'ogg', 'm4a', 'opus', '
 const LOSSLESS_FORMATS: AudioFormat[] = ['flac', 'wav'];
 const LOSSLESS_QUALITIES: AudioQuality[] = ['lossless', 'best'];
 const LOSSY_QUALITIES: AudioQuality[] = ['best', '320', '256', '192', '128', '96'];
-const SUPPORTED_SOURCES = ['all', 'spotify', 'youtube', 'soundcloud', 'deezer', 'apple'];
+const SUPPORTED_SOURCES = ['all', 'spotify', 'youtube', 'soundcloud', 'deezer', 'apple', 'podcast'];
 type BotLanguage = 'bg' | 'en' | 'es' | 'ru' | 'de';
 
 const DEFAULT_SETTINGS: TelegramSettings = {
@@ -185,6 +186,11 @@ async function handleMessage(msg: TelegramMessage, env: Env): Promise<void> {
 }
 
 async function handleUrlInput(chatId: number, inputUrl: string, env: Env, replyToMessageId?: number): Promise<void> {
+  const policy = validateUrlPolicy(inputUrl, env);
+  if (!policy.allowed) {
+    await sendMessage(chatId, env, `URL е блокиран: ${policy.message ?? 'domain policy'}`, replyToMessageId ? { reply_to_message_id: replyToMessageId } : undefined);
+    return;
+  }
   const settings = await getTelegramSettings(chatId, env);
   const archiveMatch = settings.preferArchive ? await lookupArchiveByExactUrl(inputUrl, env) : null;
   if (archiveMatch) {
@@ -528,6 +534,11 @@ async function queueJobFromSelection(
   quality: AudioQuality,
   env: Env,
 ): Promise<void> {
+  const policy = validateUrlPolicy(url, env);
+  if (!policy.allowed) {
+    await editOrSend(chatId, messageId, env, `URL е блокиран: ${policy.message ?? 'domain policy'}`);
+    return;
+  }
   const cached = await env.CACHE.get(`tg:result:${cacheKey}`, { type: 'json' }) as CachedPickerResult | null;
   const source = normalizeSourceValue(cached?.source || detectSourceFromUrl(url));
   const fingerprint = await createJobFingerprint(url, format, quality);
@@ -707,6 +718,9 @@ async function editSettingsSourcePanel(chatId: number, messageId: number, env: E
       { text: sourceChoiceLabel('deezer', settings.defaultSource), callback_data: 's:setsrc:deezer' },
       { text: sourceChoiceLabel('apple', settings.defaultSource), callback_data: 's:setsrc:apple' },
     ],
+    [
+      { text: sourceChoiceLabel('podcast', settings.defaultSource), callback_data: 's:setsrc:podcast' },
+    ],
     [{ text: '⬅️ Назад', callback_data: 's:back' }],
   ];
 
@@ -835,6 +849,45 @@ export async function notifyTelegramComplete(job: DownloadJob, result: Downloade
   const sent = await sendAudio(job.chatId, link, result.title || 'Файл', result.artist || 'DyrakArmy', result.duration || 0, env);
   if (!sent.ok) {
     await sendMessage(job.chatId, env, `Telegram не прие директното audio изпращане. Използвай линка:\n${link}`);
+  }
+}
+
+export async function publishTelegramChannelDownload(
+  job: DownloadJob,
+  result: DownloaderDownloadResult,
+  env: Env,
+): Promise<void> {
+  const channelId = String(env.TELEGRAM_DOWNLOAD_CHANNEL_ID ?? '').trim();
+  if (!channelId) return;
+
+  const ttl = readEnvInt(env.DOWNLOAD_TOKEN_TTL_SECONDS, 3600);
+  const token = await createDownloadToken(
+    {
+      jobId: job.id,
+      exp: Math.floor(Date.now() / 1000) + ttl,
+    },
+    env.DOWNLOAD_TOKEN_SECRET,
+  );
+  const link = `${getPublicBaseUrl(env)}/api/file/${encodeURIComponent(token)}`;
+  const text = [
+    '✅ Ново сваляне в DyrakArmy',
+    `${result.artist || 'Неизвестен изпълнител'} - ${result.title || 'Файл'}`,
+    `Източник: ${result.source || job.source} | Формат: ${job.format.toUpperCase()} ${job.quality}`,
+    `${formatDuration(result.duration)} | ${formatFileSize(result.file_size)}`,
+    link,
+  ].join('\n');
+
+  const sent = await telegramRequest('sendMessage', {
+    chat_id: channelId,
+    text,
+    disable_web_page_preview: false,
+    reply_markup: {
+      inline_keyboard: [[{ text: 'Свали файла', url: link }]],
+    },
+  }, env);
+
+  if (!sent.ok) {
+    console.warn('Telegram channel publish failed', sent.description);
   }
 }
 
@@ -1133,6 +1186,7 @@ function sourceLabel(value: string): string {
     soundcloud: 'SoundCloud',
     deezer: 'Deezer',
     apple: 'Apple Music',
+    podcast: 'Podcast/RSS',
   };
   return map[value] ?? 'Всички';
 }

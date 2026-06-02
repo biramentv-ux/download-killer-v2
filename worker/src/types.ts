@@ -1,6 +1,6 @@
 export type AudioFormat = 'mp3' | 'flac' | 'ogg' | 'm4a' | 'opus' | 'wav';
 export type AudioQuality = '320' | '256' | '192' | '128' | '96' | 'best' | 'lossless';
-export type JobStatus = 'queued' | 'processing' | 'done' | 'failed';
+export type JobStatus = 'queued' | 'processing' | 'paused' | 'done' | 'failed';
 
 export interface DownloadJob {
   id: string;
@@ -12,6 +12,17 @@ export interface DownloadJob {
   chatId?: number;
   messageId?: number;
   requestedAt: string;
+}
+
+export interface JobHistoryEvent {
+  kind: 'history_event';
+  id: string;
+  jobId: string;
+  event: 'queued' | 'processing' | 'done' | 'failed' | 'paused' | 'resumed' | 'deduped';
+  status: JobStatus;
+  source?: string;
+  detail?: string;
+  createdAt: string;
 }
 
 export interface DownloaderSearchResult {
@@ -43,6 +54,7 @@ export interface Env {
   DB: D1Database;
   FILES?: R2Bucket;
   DOWNLOAD_QUEUE: Queue<DownloadJob>;
+  HISTORY_QUEUE?: Queue<JobHistoryEvent>;
   CACHE: KVNamespace;
   ASSETS: Fetcher;
   ANALYTICS?: AnalyticsEngineDataset;
@@ -50,6 +62,7 @@ export interface Env {
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_SECRET_TOKEN: string;
   TELEGRAM_BOT_USERNAME?: string;
+  TELEGRAM_DOWNLOAD_CHANNEL_ID?: string;
   DOWNLOADER_API_URL: string;
   DOWNLOADER_ORIGINS_JSON?: string;
   DOWNLOADER_BACKUP_API_URL?: string;
@@ -91,6 +104,8 @@ export interface Env {
   RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64?: string;
   RELEASE_MANIFEST_CACHE_TTL_SECONDS?: string;
   PLAYLIST_QUEUE_MAX_TRACKS?: string;
+  URL_ALLOWLIST?: string;
+  URL_BLOCKLIST?: string;
 
   CORS_ORIGINS?: string;
   DOWNLOAD_TOKEN_TTL_SECONDS?: string;

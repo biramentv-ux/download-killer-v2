@@ -18,6 +18,7 @@ import urllib.parse
 import urllib.error
 import urllib.request
 import uuid
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -1067,13 +1068,21 @@ def detect_source(url: str, fallback: str = 'unknown') -> str:
   if 'youtube.com' in lower or 'youtu.be' in lower or 'music.youtube.com' in lower:
     return 'youtube'
   if 'spotify.com' in lower:
+    if '/show/' in lower or '/episode/' in lower:
+      return 'podcast'
     return 'spotify'
+  if 'podcasts.apple.com' in lower:
+    return 'podcast'
   if 'soundcloud.com' in lower:
     return 'soundcloud'
   if 'deezer.com' in lower:
     return 'deezer'
   if 'music.apple.com' in lower or 'itunes.apple.com' in lower:
+    if '/podcast/' in lower or 'podcast' in lower:
+      return 'podcast'
     return 'apple'
+  if '/feed' in lower or 'rss' in lower or lower.endswith('.xml'):
+    return 'podcast'
   return (fallback or 'unknown').lower()
 
 
@@ -1094,6 +1103,12 @@ def is_playlist_url(raw_url: str) -> bool:
   if 'playlist' in path:
     return True
   if '/sets/' in path:
+    return True
+  if 'podcasts.apple.com' in host:
+    return True
+  if host.endswith('spotify.com') and '/show/' in path:
+    return True
+  if path.endswith('.xml') or '/feed' in path or 'rss' in path:
     return True
   return False
 
@@ -1117,6 +1132,26 @@ def extract_spotify_playlist_id(raw_url: str) -> str | None:
 def extract_deezer_playlist_id(raw_url: str) -> str | None:
   match = re.search(r'deezer\.com/(?:[a-z]{2}/)?playlist/([0-9]+)', raw_url)
   return match.group(1) if match else None
+
+
+def extract_spotify_show_id(raw_url: str) -> str | None:
+  match = re.search(r'spotify\.com/show/([a-zA-Z0-9]+)', raw_url)
+  return match.group(1) if match else None
+
+
+def extract_apple_podcast_id(raw_url: str) -> str | None:
+  match = re.search(r'id([0-9]{4,})', raw_url)
+  return match.group(1) if match else None
+
+
+def is_rss_feed_url(raw_url: str) -> bool:
+  try:
+    parsed = urllib.parse.urlparse(raw_url)
+  except Exception:
+    return False
+  path = parsed.path.lower()
+  query = parsed.query.lower()
+  return path.endswith(('.xml', '.rss', '.atom')) or '/feed' in path or 'rss' in path or 'feed=' in query
 
 
 def fetch_json(url: str, timeout_seconds: int = 20, headers: dict[str, str] | None = None) -> Any:
@@ -1144,6 +1179,80 @@ def fetch_text(url: str, timeout_seconds: int = 20, headers: dict[str, str] | No
   request = urllib.request.Request(url, headers=request_headers)
   with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
     return response.read().decode('utf-8', errors='replace')
+
+
+def xml_local_name(tag: str) -> str:
+  return str(tag or '').split('}', 1)[-1].lower()
+
+
+def direct_child_text(element: ET.Element, names: set[str]) -> str:
+  for child in list(element):
+    if xml_local_name(child.tag) in names and child.text:
+      return html.unescape(child.text).strip()
+  return ''
+
+
+def direct_child_attr(element: ET.Element, name: str, attr: str) -> str:
+  for child in list(element):
+    if xml_local_name(child.tag) == name:
+      value = str(child.attrib.get(attr) or '').strip()
+      if value:
+        return value
+  return ''
+
+
+def atom_link_url(entry: ET.Element) -> str:
+  fallback = ''
+  for child in list(entry):
+    if xml_local_name(child.tag) != 'link':
+      continue
+    href = str(child.attrib.get('href') or '').strip()
+    if not href:
+      continue
+    rel = str(child.attrib.get('rel') or 'alternate').lower()
+    if rel == 'enclosure':
+      return href
+    if not fallback and rel in {'alternate', 'related'}:
+      fallback = href
+  return fallback
+
+
+def resolve_rss_feed(url: str) -> PlaylistResolveResponse:
+  raw_xml = fetch_text(
+    url,
+    timeout_seconds=25,
+    headers={'Accept': 'application/rss+xml,application/atom+xml,application/xml,text/xml,*/*'},
+  )
+  root = ET.fromstring(raw_xml)
+  root_name = xml_local_name(root.tag)
+  tracks: list[PlaylistTrack] = []
+
+  if root_name == 'feed':
+    feed_title = direct_child_text(root, {'title'}) or 'Podcast Feed'
+    for index, entry in enumerate([child for child in list(root) if xml_local_name(child.tag) == 'entry'], start=1):
+      episode_url = atom_link_url(entry)
+      if not episode_url:
+        continue
+      title = direct_child_text(entry, {'title'}) or f'Episode {index}'
+      author = direct_child_text(entry, {'author', 'creator', 'name'}) or feed_title
+      tracks.append(PlaylistTrack(title=title, artist=author, source='podcast', url=episode_url))
+    return PlaylistResolveResponse(title=feed_title, source='podcast', total=len(tracks), tracks=tracks)
+
+  channel = root.find('channel')
+  if channel is None:
+    channel = root
+
+  feed_title = direct_child_text(channel, {'title'}) or 'Podcast Feed'
+  items = [child for child in list(channel) if xml_local_name(child.tag) == 'item']
+  for index, item in enumerate(items, start=1):
+    episode_url = direct_child_attr(item, 'enclosure', 'url') or direct_child_text(item, {'link', 'guid'})
+    if not episode_url or not episode_url.startswith(('http://', 'https://')):
+      continue
+    title = direct_child_text(item, {'title'}) or f'Episode {index}'
+    artist = direct_child_text(item, {'author', 'creator'}) or feed_title
+    tracks.append(PlaylistTrack(title=title, artist=artist, source='podcast', url=episode_url))
+
+  return PlaylistResolveResponse(title=feed_title, source='podcast', total=len(tracks), tracks=tracks)
 
 
 def get_spotify_access_token() -> str:
@@ -1830,10 +1939,134 @@ def resolve_deezer_playlist(url: str) -> PlaylistResolveResponse:
   )
 
 
+def resolve_apple_podcast(url: str) -> PlaylistResolveResponse:
+  podcast_id = extract_apple_podcast_id(url)
+  if not podcast_id:
+    raise RuntimeError('Invalid Apple Podcasts URL')
+
+  payload = fetch_json(
+    f'https://itunes.apple.com/lookup?id={podcast_id}&entity=podcastEpisode&limit=200',
+    timeout_seconds=25,
+  )
+  results = payload.get('results') if isinstance(payload, dict) else []
+  if not isinstance(results, list):
+    results = []
+
+  title = 'Apple Podcast'
+  tracks: list[PlaylistTrack] = []
+  for row in results:
+    if not isinstance(row, dict):
+      continue
+    if str(row.get('wrapperType') or '').lower() == 'track' and str(row.get('kind') or '').lower() == 'podcast':
+      title = str(row.get('collectionName') or title).strip() or title
+      continue
+
+    episode_url = str(row.get('episodeUrl') or row.get('trackViewUrl') or '').strip()
+    if not episode_url:
+      continue
+    tracks.append(
+      PlaylistTrack(
+        title=str(row.get('trackName') or row.get('collectionName') or 'Podcast Episode').strip(),
+        artist=str(row.get('artistName') or row.get('collectionName') or title).strip(),
+        source='podcast',
+        url=episode_url,
+      ),
+    )
+
+  return PlaylistResolveResponse(title=title, source='podcast', total=len(tracks), tracks=tracks)
+
+
+def resolve_spotify_show(url: str) -> PlaylistResolveResponse:
+  show_id = extract_spotify_show_id(url)
+  if not show_id:
+    raise RuntimeError('Invalid Spotify show URL')
+
+  access_token = get_spotify_access_token()
+  headers = {'Authorization': f'Bearer {access_token}'}
+
+  show_payload = fetch_json(f'https://api.spotify.com/v1/shows/{show_id}?market=US', timeout_seconds=20, headers=headers)
+  show_title = str(show_payload.get('name') or 'Spotify Podcast').strip() if isinstance(show_payload, dict) else 'Spotify Podcast'
+  publisher = str(show_payload.get('publisher') or show_title).strip() if isinstance(show_payload, dict) else show_title
+
+  tracks: list[PlaylistTrack] = []
+  next_url = f'https://api.spotify.com/v1/shows/{show_id}/episodes?limit=50&offset=0&market=US'
+  while next_url:
+    page = fetch_json(next_url, timeout_seconds=25, headers=headers)
+    if not isinstance(page, dict):
+      break
+    rows = page.get('items')
+    if not isinstance(rows, list):
+      break
+
+    for row in rows:
+      if not isinstance(row, dict):
+        continue
+      external_urls = row.get('external_urls')
+      episode_url = ''
+      if isinstance(external_urls, dict):
+        episode_url = str(external_urls.get('spotify') or '').strip()
+      if not episode_url:
+        continue
+      tracks.append(
+        PlaylistTrack(
+          title=str(row.get('name') or 'Podcast Episode').strip(),
+          artist=publisher,
+          source='podcast',
+          url=episode_url,
+        ),
+      )
+
+    next_value = page.get('next')
+    next_url = str(next_value).strip() if isinstance(next_value, str) and next_value.strip() else ''
+
+  return PlaylistResolveResponse(title=show_title, source='podcast', total=len(tracks), tracks=tracks)
+
+
+def search_podcast_episodes(query: str, limit: int) -> list[SearchItem]:
+  encoded_query = urllib.parse.quote(query.strip())
+  payload = fetch_json(
+    f'https://itunes.apple.com/search?term={encoded_query}&media=podcast&entity=podcastEpisode&limit={max(1, min(20, limit))}',
+    timeout_seconds=20,
+  )
+  results = payload.get('results') if isinstance(payload, dict) else []
+  if not isinstance(results, list):
+    return []
+
+  items: list[SearchItem] = []
+  for row in results:
+    if not isinstance(row, dict):
+      continue
+    episode_url = str(row.get('episodeUrl') or row.get('trackViewUrl') or '').strip()
+    if not episode_url:
+      continue
+    year_value = parse_year(str(row.get('releaseDate') or ''))
+    items.append(
+      SearchItem(
+        id=str(row.get('trackId') or uuid.uuid4().hex),
+        title=str(row.get('trackName') or 'Podcast Episode').strip(),
+        artist=str(row.get('collectionName') or row.get('artistName') or 'Podcast').strip(),
+        album=str(row.get('collectionName') or '').strip() or None,
+        duration=max(0, int((row.get('trackTimeMillis') or 0) / 1000)) if isinstance(row.get('trackTimeMillis'), (int, float)) else 0,
+        thumbnail=str(row.get('artworkUrl600') or row.get('artworkUrl100') or '').strip() or None,
+        source='podcast',
+        url=episode_url,
+        year=int(year_value) if year_value else None,
+      ),
+    )
+  return items
+
+
 def resolve_playlist(url: str, source: str) -> PlaylistResolveResponse:
   detected_source = detect_source(url, source)
   if not is_playlist_url(url):
     raise RuntimeError('URL is not recognized as a playlist')
+
+  if is_rss_feed_url(url):
+    return resolve_rss_feed(url)
+  if 'podcasts.apple.com' in url.lower():
+    return resolve_apple_podcast(url)
+  if extract_spotify_show_id(url):
+    return resolve_spotify_show(url)
 
   try:
     return resolve_playlist_with_ytdlp(url, detected_source)
@@ -1943,6 +2176,9 @@ def internal_metadata_lookup(payload: MetadataLookupRequest) -> MetadataLookupRe
 @app.post('/internal/search', response_model=SearchResponse, dependencies=[Depends(require_api_key)])
 def internal_search(payload: SearchRequest) -> SearchResponse:
   source = (payload.source or 'all').strip().lower()
+
+  if source == 'podcast':
+    return SearchResponse(results=search_podcast_episodes(payload.query.strip(), payload.limit))
 
   # Mirror-oriented fallback: Spotify/Deezer/Apple are resolved via YouTube search.
   effective_source = 'youtube' if source in FALLBACK_SOURCES else source

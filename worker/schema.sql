@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS download_jobs (
   source        TEXT NOT NULL DEFAULT 'unknown',
   format        TEXT NOT NULL DEFAULT 'mp3',
   quality       TEXT NOT NULL DEFAULT '320',
-  status        TEXT NOT NULL DEFAULT 'queued', -- queued | processing | done | failed
+  status        TEXT NOT NULL DEFAULT 'queued', -- queued | processing | paused | done | failed
   attempts      INTEGER NOT NULL DEFAULT 0,
   fingerprint   TEXT,
   content_hash  TEXT,
@@ -33,11 +33,24 @@ CREATE INDEX IF NOT EXISTS idx_jobs_source       ON download_jobs(source);
 CREATE INDEX IF NOT EXISTS idx_jobs_fingerprint  ON download_jobs(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_jobs_content_hash ON download_jobs(content_hash);
 
+CREATE TABLE IF NOT EXISTS job_history_events (
+  id         TEXT PRIMARY KEY,
+  job_id     TEXT NOT NULL,
+  event      TEXT NOT NULL,
+  status     TEXT NOT NULL,
+  source     TEXT,
+  detail     TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_history_events_job_created ON job_history_events(job_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_job_history_events_created ON job_history_events(created_at DESC);
+
 CREATE TABLE IF NOT EXISTS playlist_workflows (
   workflow_id       TEXT PRIMARY KEY,
   source_url        TEXT NOT NULL,
   source            TEXT NOT NULL DEFAULT 'unknown',
-  status            TEXT NOT NULL DEFAULT 'queued', -- queued | processing | done | failed
+  status            TEXT NOT NULL DEFAULT 'queued', -- queued | processing | paused | done | failed
   phase             TEXT NOT NULL DEFAULT 'init',
   total_tracks      INTEGER NOT NULL DEFAULT 0,
   queued_count      INTEGER NOT NULL DEFAULT 0,

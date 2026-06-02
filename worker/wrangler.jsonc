@@ -59,6 +59,10 @@
       {
         "binding": "DOWNLOAD_QUEUE",
         "queue": "sounddrop-downloads"
+      },
+      {
+        "binding": "HISTORY_QUEUE",
+        "queue": "sounddrop-history-events"
       }
     ],
     "consumers": [
@@ -69,6 +73,13 @@
         "max_retries": 5,
         "retry_delay": 20,
         "dead_letter_queue": "sounddrop-downloads-dlq"
+      },
+      {
+        "queue": "sounddrop-history-events",
+        "max_batch_size": 25,
+        "max_batch_timeout": 10,
+        "max_retries": 3,
+        "retry_delay": 10
       }
     ]
   },
@@ -79,6 +90,8 @@
     "DOWNLOADER_BACKUP_API_URL": "https://sounddrop-downloader-primary.onrender.com",
     "DOWNLOADER_TERTIARY_API_URL": "https://cake-increasingly-accordingly-jpg.trycloudflare.com",
     "TELEGRAM_BOT_USERNAME": "dyrakarmy_bot",
+    "TELEGRAM_DOWNLOAD_CHANNEL_ID": "",
+    "URL_BLOCKLIST": "localhost,*.localhost,*.local,*.onion",
     "CORS_ORIGINS": "https://dyrakarmy.online,https://www.dyrakarmy.online,https://sounddrop.biramentv.workers.dev,http://localhost:8787,http://localhost:3000",
     "DOWNLOAD_TOKEN_TTL_SECONDS": "3600",
     "SEARCH_CACHE_TTL_SECONDS": "180",

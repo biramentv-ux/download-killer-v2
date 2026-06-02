@@ -81,6 +81,93 @@ def test_playlist_resolve_works_with_mock(monkeypatch):
   assert body['tracks'][0]['source'] == 'youtube'
 
 
+def test_rss_podcast_resolve(monkeypatch):
+  from app import main
+
+  monkeypatch.setattr(
+    main,
+    'fetch_text',
+    lambda *_args, **_kwargs: '''<?xml version="1.0"?>
+      <rss version="2.0">
+        <channel>
+          <title>Test Podcast</title>
+          <item>
+            <title>Episode One</title>
+            <author>Host One</author>
+            <enclosure url="https://cdn.example.com/episode-one.mp3" type="audio/mpeg" />
+          </item>
+        </channel>
+      </rss>''',
+  )
+
+  resolved = main.resolve_playlist('https://feeds.example.com/podcast.xml', 'podcast')
+
+  assert resolved.source == 'podcast'
+  assert resolved.title == 'Test Podcast'
+  assert resolved.total == 1
+  assert resolved.tracks[0].url == 'https://cdn.example.com/episode-one.mp3'
+
+
+def test_apple_podcast_resolve(monkeypatch):
+  from app import main
+
+  monkeypatch.setattr(
+    main,
+    'fetch_json',
+    lambda *_args, **_kwargs: {
+      'results': [
+        {'wrapperType': 'track', 'kind': 'podcast', 'collectionName': 'Apple Show'},
+        {
+          'wrapperType': 'podcastEpisode',
+          'trackName': 'Apple Episode',
+          'artistName': 'Apple Host',
+          'episodeUrl': 'https://cdn.example.com/apple-episode.m4a',
+        },
+      ],
+    },
+  )
+
+  resolved = main.resolve_playlist('https://podcasts.apple.com/us/podcast/test/id123456789', 'podcast')
+
+  assert resolved.title == 'Apple Show'
+  assert resolved.total == 1
+  assert resolved.tracks[0].source == 'podcast'
+  assert resolved.tracks[0].url.endswith('apple-episode.m4a')
+
+
+def test_podcast_search_uses_itunes(monkeypatch):
+  from app import main
+
+  monkeypatch.setattr(
+    main,
+    'fetch_json',
+    lambda *_args, **_kwargs: {
+      'results': [
+        {
+          'trackId': 42,
+          'trackName': 'Search Episode',
+          'collectionName': 'Search Show',
+          'episodeUrl': 'https://cdn.example.com/search.mp3',
+          'trackTimeMillis': 180000,
+          'releaseDate': '2024-01-02T00:00:00Z',
+        },
+      ],
+    },
+  )
+
+  client = TestClient(app)
+  response = client.post(
+    '/internal/search',
+    json={'query': 'search show', 'source': 'podcast', 'limit': 3},
+    headers={'X-API-Key': 'change-me'},
+  )
+
+  assert response.status_code == 200
+  body = response.json()
+  assert body['results'][0]['source'] == 'podcast'
+  assert body['results'][0]['year'] == 2024
+
+
 def test_playlist_workflow_start_and_status(monkeypatch):
   from app import main
   main.WORKFLOW_STATE.clear()

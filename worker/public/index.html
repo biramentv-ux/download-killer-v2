@@ -478,6 +478,7 @@
     .dot.soundcloud { background: #ffaf40; color: #ffaf40; }
     .dot.deezer { background: #37d5ff; color: #37d5ff; }
     .dot.apple { background: #ff758d; color: #ff758d; }
+    .dot.podcast { background: #c58cff; color: #c58cff; }
 
     .source-pill.active {
       border-color: rgba(0, 247, 168, 0.72);
@@ -705,6 +706,7 @@
     }
 
     .status.queued { background: #9fb0cb; color: #9fb0cb; }
+    .status.paused { background: #ffc857; color: #ffc857; }
     .status.processing { background: #43d4ff; color: #43d4ff; }
     .status.done { background: #00f7a8; color: #00f7a8; }
     .status.failed { background: #ff7685; color: #ff7685; }
@@ -1922,6 +1924,7 @@
           <button class="source-pill" data-source="soundcloud"><span class="dot soundcloud"></span>SoundCloud</button>
           <button class="source-pill" data-source="deezer"><span class="dot deezer"></span>Deezer</button>
           <button class="source-pill" data-source="apple"><span class="dot apple"></span>Apple Music</button>
+          <button class="source-pill" data-source="podcast"><span class="dot podcast"></span>Podcast/RSS</button>
         </div>
 
         <div class="batch-panel">
@@ -1946,6 +1949,8 @@
               <option value="lossless">lossless</option>
             </select>
             <button class="action-btn" id="queueBatchBtn">Queue Batch</button>
+            <button class="action-btn" id="pauseAllBatchBtn">Pause all</button>
+            <button class="action-btn" id="resumeAllBatchBtn">Resume all</button>
           </div>
           <div class="soft" id="batchHint">One URL per line. Supports track, album and playlist URLs.</div>
         </div>
@@ -1976,6 +1981,7 @@
               <option value="">All</option>
               <option value="done">Done</option>
               <option value="queued">Queued</option>
+              <option value="paused">Paused</option>
               <option value="processing">Processing</option>
               <option value="failed">Failed</option>
             </select>
@@ -2270,17 +2276,23 @@
         source_soundcloud: "SoundCloud",
         source_deezer: "Deezer",
         source_apple: "Apple Music",
+        source_podcast: "Podcast/RSS",
         batch_title: "BATCH URLS",
-        batch_hint: "One URL per line. Supports track, album and playlist URLs.",
+        batch_hint: "One URL per line. Supports track, podcast RSS, album and playlist URLs.",
         batch_queue: "Queue Batch",
+        batch_pause_all: "Pause all",
+        batch_resume_all: "Resume all",
         batch_placeholder: "https://...\\nhttps://...",
         batch_queued: "Queued {count}/{total} links",
         batch_none: "No valid URLs in batch input.",
+        batch_pause_all_done: "Paused {count} active workflows.",
+        batch_resume_all_done: "Resumed {count} workflows. Replayed {jobs} jobs.",
         refresh_history: "Refresh history",
         history_search_placeholder: "Search history...",
         history_filter_all: "All",
         history_filter_done: "Done",
         history_filter_queued: "Queued",
+        history_filter_paused: "Paused",
         history_filter_processing: "Processing",
         history_filter_failed: "Failed",
         history_hide_done: "Hide done",
@@ -2388,6 +2400,9 @@
         sync_set_prompt: "Enter sync key from another device:",
         sync_set_updated: "Sync key updated.",
         queue_retry: "Retry",
+        queue_pause: "Pause",
+        queue_resume: "Resume",
+        queue_action_failed: "Queue action failed: {message}",
         file_unavailable_hint: "File is no longer available. Use Retry.",
         archive_title: "ARCHIVE",
         archive_search_placeholder: "Search local archive...",
@@ -2487,17 +2502,23 @@
         source_soundcloud: "SoundCloud",
         source_deezer: "Deezer",
         source_apple: "Apple Music",
+        source_podcast: "Podcast/RSS",
         batch_title: "ГРУПОВИ URL-и",
-        batch_hint: "По един URL на ред. Поддържа трак, албум и плейлист URL.",
+        batch_hint: "По един URL на ред. Поддържа трак, podcast RSS, албум и плейлист URL.",
         batch_queue: "Добави групово",
+        batch_pause_all: "Пауза на всички",
+        batch_resume_all: "Продължи всички",
         batch_placeholder: "https://...\\nhttps://...",
         batch_queued: "Добавени {count}/{total} линка",
         batch_none: "Няма валидни URL-и в полето.",
+        batch_pause_all_done: "Паузирани {count} активни workflow задачи.",
+        batch_resume_all_done: "Продължени {count} workflow задачи. Върнати {jobs} jobs.",
         refresh_history: "Обнови история",
         history_search_placeholder: "Търси в историята...",
         history_filter_all: "Всички",
         history_filter_done: "Готови",
         history_filter_queued: "Чакащи",
+        history_filter_paused: "Паузирани",
         history_filter_processing: "Обработка",
         history_filter_failed: "Грешки",
         history_hide_done: "Скрий готовите",
@@ -2604,8 +2625,11 @@
 	        sync_invalid_key: "Невалиден формат на Sync ключ.",
 	        sync_set_prompt: "Въведи Sync ключ от друго устройство:",
 	        sync_set_updated: "Sync ключът е обновен.",
-	        queue_retry: "Повтори",
-	        file_unavailable_hint: "Файлът вече не е наличен. Използвай Повтори.",
+        queue_retry: "Повтори",
+        queue_pause: "Пауза",
+        queue_resume: "Продължи",
+        queue_action_failed: "Грешка при действие в опашката: {message}",
+        file_unavailable_hint: "Файлът вече не е наличен. Използвай Повтори.",
         archive_title: "АРХИВ",
         archive_search_placeholder: "Търси в локалния архив...",
         archive_search: "Търси",
@@ -2695,6 +2719,14 @@
       studio_open_telegram: "Bot Telegram",
       search_placeholder: "Pega URL o busca",
       source_all: "Todo",
+      source_podcast: "Podcast/RSS",
+      batch_pause_all: "Pausar todo",
+      batch_resume_all: "Reanudar todo",
+      batch_pause_all_done: "Pausados {count} workflows activos.",
+      batch_resume_all_done: "Reanudados {count} workflows. Reenviados {jobs} jobs.",
+      queue_pause: "Pausar",
+      queue_resume: "Reanudar",
+      queue_action_failed: "Acción de cola fallida: {message}",
       refresh_history: "Actualizar historial",
       check_health: "Comprobar API",
       copy_sync_link: "Copiar enlace Sync",
@@ -2784,6 +2816,14 @@
       studio_open_telegram: "Telegram бот",
       search_placeholder: "Вставьте URL или выполните поиск",
       source_all: "Все",
+      source_podcast: "Podcast/RSS",
+      batch_pause_all: "Пауза для всех",
+      batch_resume_all: "Продолжить все",
+      batch_pause_all_done: "Поставлено на паузу: {count}.",
+      batch_resume_all_done: "Возобновлено workflows: {count}. Повторно отправлено jobs: {jobs}.",
+      queue_pause: "Пауза",
+      queue_resume: "Продолжить",
+      queue_action_failed: "Ошибка действия очереди: {message}",
       refresh_history: "Обновить историю",
       check_health: "Проверить API",
       copy_sync_link: "Копировать Sync ссылку",
@@ -2873,6 +2913,14 @@
       studio_open_telegram: "Telegram Bot",
       search_placeholder: "URL einfügen oder suchen",
       source_all: "Alle",
+      source_podcast: "Podcast/RSS",
+      batch_pause_all: "Alle pausieren",
+      batch_resume_all: "Alle fortsetzen",
+      batch_pause_all_done: "{count} aktive Workflows pausiert.",
+      batch_resume_all_done: "{count} Workflows fortgesetzt. {jobs} Jobs erneut eingereiht.",
+      queue_pause: "Pause",
+      queue_resume: "Fortsetzen",
+      queue_action_failed: "Warteschlangen-Aktion fehlgeschlagen: {message}",
       refresh_history: "Verlauf aktualisieren",
       check_health: "API prüfen",
       copy_sync_link: "Sync-Link kopieren",
@@ -3130,7 +3178,7 @@
       }
       if (payload.source) {
         const sourceCandidate = String(payload.source).toLowerCase();
-        if (["all", "spotify", "youtube", "soundcloud", "deezer", "apple"].includes(sourceCandidate)) {
+        if (["all", "spotify", "youtube", "soundcloud", "deezer", "apple", "podcast"].includes(sourceCandidate)) {
           currentSource = sourceCandidate;
         }
       }
@@ -3188,7 +3236,7 @@
       const storedTelegramMode = String(localStorage.getItem("sd_telegram_link_mode") || PREFERENCE_DEFAULTS.telegram_link_mode || "bot");
 
       currentLang = storedLang || queryLang || normalizeLang(PREFERENCE_DEFAULTS.language) || languageFromBrowser();
-      if (["all", "spotify", "youtube", "soundcloud", "deezer", "apple"].includes(storedSource)) {
+      if (["all", "spotify", "youtube", "soundcloud", "deezer", "apple", "podcast"].includes(storedSource)) {
         currentSource = storedSource;
       }
       if (FORMATS.includes(storedFormat)) {
@@ -3260,6 +3308,10 @@
       if (batchUrls) batchUrls.placeholder = translate("batch_placeholder");
       const queueBatchBtn = document.getElementById("queueBatchBtn");
       if (queueBatchBtn) queueBatchBtn.textContent = translate("batch_queue");
+      const pauseAllBatchBtn = document.getElementById("pauseAllBatchBtn");
+      if (pauseAllBatchBtn) pauseAllBatchBtn.textContent = translate("batch_pause_all");
+      const resumeAllBatchBtn = document.getElementById("resumeAllBatchBtn");
+      if (resumeAllBatchBtn) resumeAllBatchBtn.textContent = translate("batch_resume_all");
 
       const sourceMap = {
         all: translate("source_all"),
@@ -3268,6 +3320,7 @@
         soundcloud: translate("source_soundcloud"),
         deezer: translate("source_deezer"),
         apple: translate("source_apple"),
+        podcast: translate("source_podcast"),
       };
       document.querySelectorAll(".source-pill").forEach((pill) => {
         const source = pill.dataset.source || "all";
@@ -3395,8 +3448,9 @@
         if (options[0]) options[0].textContent = translate("history_filter_all");
         if (options[1]) options[1].textContent = translate("history_filter_done");
         if (options[2]) options[2].textContent = translate("history_filter_queued");
-        if (options[3]) options[3].textContent = translate("history_filter_processing");
-        if (options[4]) options[4].textContent = translate("history_filter_failed");
+        if (options[3]) options[3].textContent = translate("history_filter_paused");
+        if (options[4]) options[4].textContent = translate("history_filter_processing");
+        if (options[5]) options[5].textContent = translate("history_filter_failed");
       }
       const clearDoneHistoryBtn = document.getElementById("clearDoneHistoryBtn");
       if (clearDoneHistoryBtn) clearDoneHistoryBtn.textContent = translate("history_hide_done");
@@ -4625,10 +4679,15 @@
       try {
         const value = String(rawUrl || "").toLowerCase();
         if (value.includes("youtube.com") || value.includes("youtu.be") || value.includes("music.youtube.com")) return "youtube";
-        if (value.includes("spotify.com")) return "spotify";
+        if (value.includes("spotify.com")) {
+          if (value.includes("/show/") || value.includes("/episode/")) return "podcast";
+          return "spotify";
+        }
+        if (value.includes("podcasts.apple.com") || value.includes("/podcast/") || value.includes("/show/")) return "podcast";
         if (value.includes("soundcloud.com")) return "soundcloud";
         if (value.includes("deezer.com")) return "deezer";
         if (value.includes("music.apple.com") || value.includes("itunes.apple.com")) return "apple";
+        if (value.includes("/feed") || value.includes("rss") || value.endsWith(".xml")) return "podcast";
       } catch {
         // noop
       }
@@ -4644,6 +4703,9 @@
         if (host.endsWith("youtube.com") && u.searchParams.get("list")) return true;
         if (path.includes("playlist")) return true;
         if (path.includes("/sets/")) return true;
+        if (host.includes("podcasts.apple.com")) return true;
+        if (host.endsWith("spotify.com") && path.includes("/show/")) return true;
+        if (path.endsWith(".xml") || path.endsWith(".rss") || path.endsWith(".atom") || path.includes("/feed") || path.includes("rss")) return true;
       } catch {
         return false;
       }
@@ -4665,6 +4727,7 @@
         soundcloud: translate("source_soundcloud"),
         deezer: translate("source_deezer"),
         apple: translate("source_apple"),
+        podcast: translate("source_podcast"),
         all: translate("source_all"),
       };
       return map[source] || source || translate("unknown_source");
@@ -5264,6 +5327,38 @@
       alert(translate("batch_queued", { count: queuedCount, total: urls.length }));
     }
 
+    async function runBatchControl(action) {
+      const endpoint = action === "resume" ? "/batch/resume-all" : "/batch/pause-all";
+      try {
+        const payload = await apiJson(endpoint, { method: "POST" });
+        if (action === "pause") {
+          for (const job of queueJobs.values()) {
+            if (isWorkflowJob(job) && !isWorkflowTerminal(job)) {
+              job.controlState = "paused";
+              job.workflowPhase = "paused";
+              queueJobs.set(job.id, job);
+            }
+          }
+          alert(translate("batch_pause_all_done", { count: payload.paused_workflows || 0 }));
+        } else {
+          for (const job of queueJobs.values()) {
+            if (isWorkflowJob(job) && String(job.controlState || "").toLowerCase() === "paused") {
+              job.controlState = "active";
+              queueJobs.set(job.id, job);
+              subscribeToWorkflow(job.workflowId);
+            }
+          }
+          alert(translate("batch_resume_all_done", {
+            count: payload.resumed_workflows || 0,
+            jobs: payload.replayed_jobs || 0,
+          }));
+        }
+        renderQueue();
+      } catch (error) {
+        alert(translate("workflow_control_failed", { message: error.message || String(error) }));
+      }
+    }
+
     async function retryQueueJob(jobId) {
       const existing = queueJobs.get(jobId);
       if (!existing || isWorkflowJob(existing) || !existing.url) return;
@@ -5322,6 +5417,30 @@
       renderQueue();
     }
 
+    async function runQueueJobAction(jobId, action) {
+      const existing = queueJobs.get(jobId);
+      if (!existing || isWorkflowJob(existing) || !["pause", "resume"].includes(action)) return;
+      try {
+        const payload = await apiJson(`/job/${encodeURIComponent(jobId)}/${action}`, { method: "POST" });
+        if (payload && payload.job) {
+          updateJobFromServer(jobId, payload.job);
+        } else {
+          existing.status = action === "pause" ? "paused" : "queued";
+          existing.error = null;
+          queueJobs.set(jobId, existing);
+          renderQueue();
+        }
+
+        if (action === "pause") {
+          closeJobStream(jobId);
+        } else {
+          subscribeToJobStream(jobId);
+        }
+      } catch (error) {
+        alert(translate("queue_action_failed", { message: error.message || String(error) }));
+      }
+    }
+
     function renderQueue() {
       const list = document.getElementById("queueList");
       if (!list) return;
@@ -5346,6 +5465,8 @@
             ${isWorkflowJob(job) && job.archiveError ? `<div class="item-error">${translate("workflow_archive_failed", { message: job.archiveError })}</div>` : ""}
             ${isWorkflowJob(job) ? `<a class="item-link" target="_blank" rel="noreferrer" href="${API_BASE}/playlist/workflow/${encodeURIComponent(job.workflowId)}">${translate("workflow_link")}</a>` : ""}
             ${isWorkflowJob(job) ? workflowActionsMarkup(job) : ""}
+            ${!isWorkflowJob(job) && job.status === "queued" && job.url ? `<button class="item-link item-action" data-action="pause-job" data-job-id="${job.id}">${translate("queue_pause")}</button>` : ""}
+            ${!isWorkflowJob(job) && job.status === "paused" && job.url ? `<button class="item-link item-action" data-action="resume-job" data-job-id="${job.id}">${translate("queue_resume")}</button>` : ""}
             ${!isWorkflowJob(job) && job.status === "failed" && job.url ? `<button class="item-link item-action" data-action="retry-job" data-job-id="${job.id}">${translate("queue_retry")}</button>` : ""}
             ${job.localPath ? `<div class="item-meta">${translate("saved_prefix")}: ${job.localPath}</div>` : ""}
             ${job.error ? `<div class="item-error">${job.error}</div>` : ""}
@@ -5360,6 +5481,15 @@
         node.addEventListener("click", async () => {
           const retryId = String(node.dataset.jobId || "");
           await retryQueueJob(retryId);
+        });
+      });
+      list.querySelectorAll("[data-action='pause-job'], [data-action='resume-job']").forEach((node) => {
+        if (node.dataset.bound === "1") return;
+        node.dataset.bound = "1";
+        node.addEventListener("click", async () => {
+          const jobId = String(node.dataset.jobId || "");
+          const action = String(node.dataset.action || "") === "pause-job" ? "pause" : "resume";
+          await runQueueJobAction(jobId, action);
         });
       });
       bindWorkflowActionButtons(list);
@@ -5555,7 +5685,7 @@
         try {
           const payload = JSON.parse(event.data);
           updateJobFromServer(jobId, payload);
-          if (payload.status === "done" || payload.status === "failed") closeJobStream(jobId);
+          if (payload.status === "done" || payload.status === "failed" || payload.status === "paused") closeJobStream(jobId);
         } catch {
           // noop
         }
@@ -5950,6 +6080,18 @@
     if (queueBatchBtn) {
       queueBatchBtn.addEventListener("click", () => {
         void queueBatchDownloads();
+      });
+    }
+    const pauseAllBatchBtn = document.getElementById("pauseAllBatchBtn");
+    if (pauseAllBatchBtn) {
+      pauseAllBatchBtn.addEventListener("click", () => {
+        void runBatchControl("pause");
+      });
+    }
+    const resumeAllBatchBtn = document.getElementById("resumeAllBatchBtn");
+    if (resumeAllBatchBtn) {
+      resumeAllBatchBtn.addEventListener("click", () => {
+        void runBatchControl("resume");
       });
     }
 	

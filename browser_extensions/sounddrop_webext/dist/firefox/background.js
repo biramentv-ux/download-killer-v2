@@ -27,7 +27,7 @@
   const LOSSLESS_FORMATS = new Set(['flac', 'wav']);
   const LOSSLESS_QUALITIES = new Set(['lossless', 'best']);
   const LOSSY_QUALITIES = new Set(['best', '320', '256', '192', '128', '96']);
-  const SUPPORTED_SOURCES = new Set(['all', 'spotify', 'youtube', 'soundcloud', 'deezer', 'apple']);
+  const SUPPORTED_SOURCES = new Set(['all', 'spotify', 'youtube', 'soundcloud', 'deezer', 'apple', 'podcast']);
   const SYNC_KEY_RE = /^[a-zA-Z0-9_-]{8,64}$/;
   const EXTENSION_VERSION = String((ext.runtime && ext.runtime.getManifest && ext.runtime.getManifest().version) || '0.0.0');
 
@@ -289,10 +289,15 @@
   function detectSourceFromUrl(rawUrl) {
     const value = String(rawUrl || '').toLowerCase();
     if (value.includes('youtube.com') || value.includes('youtu.be') || value.includes('music.youtube.com')) return 'youtube';
-    if (value.includes('spotify.com')) return 'spotify';
+    if (value.includes('spotify.com')) {
+      if (value.includes('/show/') || value.includes('/episode/')) return 'podcast';
+      return 'spotify';
+    }
+    if (value.includes('podcasts.apple.com') || value.includes('/podcast/') || value.includes('/show/')) return 'podcast';
     if (value.includes('soundcloud.com')) return 'soundcloud';
     if (value.includes('deezer.com')) return 'deezer';
     if (value.includes('music.apple.com') || value.includes('itunes.apple.com')) return 'apple';
+    if (value.includes('/feed') || value.includes('rss') || value.endsWith('.xml')) return 'podcast';
     return 'all';
   }
 

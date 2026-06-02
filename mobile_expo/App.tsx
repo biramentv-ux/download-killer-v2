@@ -15,7 +15,7 @@ import {
 
 type Language = 'bg' | 'en' | 'es' | 'ru' | 'de';
 type TabKey = 'download' | 'history' | 'settings';
-type Source = 'all' | 'spotify' | 'youtube' | 'soundcloud' | 'deezer' | 'apple';
+type Source = 'all' | 'spotify' | 'youtube' | 'soundcloud' | 'deezer' | 'apple' | 'podcast';
 type AudioFormat = 'mp3' | 'm4a' | 'ogg' | 'opus' | 'flac' | 'wav';
 type AudioQuality = 'best' | '320' | '256' | '192' | '128' | '96' | 'lossless';
 type AudioProfile = 'low' | 'high' | 'lossless' | 'hifi';
@@ -100,7 +100,7 @@ const APP_VERSION = '1.0.1';
 const STORAGE_KEY = 'dyrakarmy_mobile_settings_v3';
 const RUNTIME_CACHE_KEY = 'dyrakarmy_mobile_runtime_v2';
 const RUNTIME_CACHE_TTL_MS = 5 * 60 * 1000;
-const SOURCES: Source[] = ['all', 'spotify', 'youtube', 'soundcloud', 'deezer', 'apple'];
+const SOURCES: Source[] = ['all', 'spotify', 'youtube', 'soundcloud', 'deezer', 'apple', 'podcast'];
 const FORMATS: AudioFormat[] = ['mp3', 'm4a', 'ogg', 'opus', 'flac', 'wav'];
 const LOSSLESS_FORMATS = new Set<AudioFormat>(['flac', 'wav']);
 const LOSSLESS_QUALITIES: AudioQuality[] = ['lossless', 'best'];
@@ -402,11 +402,16 @@ function qualityOptions(format: AudioFormat): AudioQuality[] {
 
 function detectSource(value: string): Source {
   const lower = value.toLowerCase();
-  if (lower.includes('spotify.com')) return 'spotify';
   if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'youtube';
+  if (lower.includes('spotify.com')) {
+    if (lower.includes('/show/') || lower.includes('/episode/')) return 'podcast';
+    return 'spotify';
+  }
+  if (lower.includes('podcasts.apple.com') || lower.includes('/podcast/') || lower.includes('/show/')) return 'podcast';
   if (lower.includes('soundcloud.com')) return 'soundcloud';
   if (lower.includes('deezer.com')) return 'deezer';
   if (lower.includes('music.apple.com') || lower.includes('itunes.apple.com')) return 'apple';
+  if (lower.includes('/feed') || lower.includes('rss') || lower.endsWith('.xml')) return 'podcast';
   return 'all';
 }
 

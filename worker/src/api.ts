@@ -14,6 +14,8 @@ import {
   normalizeDownloaderUrl,
 } from './origins';
 import { buildOpsSummary, recordTelemetry } from './telemetry';
+import { enqueueHistoryEvent } from './history';
+import { ensurePlaylistWorkflowSchema } from './schema';
 import {
   corsHeaders,
   createDownloadToken,
@@ -31,6 +33,7 @@ import {
   readEnvInt,
   sha256HexBytes,
   verifyDownloadToken,
+  validateUrlPolicy,
 } from './utils';
 
 interface SearchRequestBody {
@@ -154,6 +157,7 @@ interface JobRecord {
   source: string;
   format: string;
   quality: string;
+  fingerprint: string | null;
   status: JobStatus;
   attempts: number;
   result_url: string | null;
@@ -393,6 +397,14 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
     return handlePlaylistQueue(request, env);
   }
 
+  if (path === '/batch/pause-all' && request.method === 'POST') {
+    return handleBatchPauseAll(request, env);
+  }
+
+  if (path === '/batch/resume-all' && request.method === 'POST') {
+    return handleBatchResumeAll(request, env);
+  }
+
   const playlistWorkflowMatch = path.match(/^\/playlist\/workflow\/([0-9a-f-]{36})$/i);
   if (playlistWorkflowMatch && request.method === 'GET') {
     return handlePlaylistWorkflowStatus(request, env, playlistWorkflowMatch[1]!);
@@ -421,6 +433,16 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
   const jobEventsMatch = path.match(/^\/job\/([0-9a-f-]{36})\/events$/i);
   if (jobEventsMatch && request.method === 'GET') {
     return handleJobEvents(request, env, jobEventsMatch[1]!);
+  }
+
+  const jobPauseMatch = path.match(/^\/job\/([0-9a-f-]{36})\/pause$/i);
+  if (jobPauseMatch && request.method === 'POST') {
+    return handleJobControl(request, env, jobPauseMatch[1]!, 'pause');
+  }
+
+  const jobResumeMatch = path.match(/^\/job\/([0-9a-f-]{36})\/resume$/i);
+  if (jobResumeMatch && request.method === 'POST') {
+    return handleJobControl(request, env, jobResumeMatch[1]!, 'resume');
   }
 
   const jobStatusMatch = path.match(/^\/job\/([0-9a-f-]{36})$/i);
@@ -475,6 +497,12 @@ async function handleSearch(request: Request, env: Env): Promise<Response> {
 
   const source = normalizeSource(body.source);
   const query = body.query.trim();
+  if (isValidUrl(query)) {
+    const policy = validateUrlPolicy(query, env);
+    if (!policy.allowed) {
+      return jsonError(request, env, policy.code ?? 'URL_BLOCKED', policy.message ?? 'URL is blocked', 400);
+    }
+  }
   const cacheTtl = readEnvInt(env.SEARCH_CACHE_TTL_SECONDS, 180);
   const cacheKey = `search:${source}:${query.toLowerCase()}`;
 
@@ -548,6 +576,12 @@ async function handlePreview(request: Request, env: Env): Promise<Response> {
   }
   if (query.length > 2000) {
     return jsonError(request, env, 'INVALID_PREVIEW_QUERY', 'Preview query is too long', 400);
+  }
+  if (isValidUrl(query)) {
+    const policy = validateUrlPolicy(query, env);
+    if (!policy.allowed) {
+      return jsonError(request, env, policy.code ?? 'URL_BLOCKED', policy.message ?? 'URL is blocked', 400);
+    }
   }
 
   const source = normalizeSource(body?.source);
@@ -659,6 +693,10 @@ async function handleDownload(request: Request, env: Env): Promise<Response> {
   if (!isValidUrl(url)) {
     return jsonError(request, env, 'INVALID_URL', 'URL must be HTTP or HTTPS', 400);
   }
+  const policy = validateUrlPolicy(url, env);
+  if (!policy.allowed) {
+    return jsonError(request, env, policy.code ?? 'URL_BLOCKED', policy.message ?? 'URL is blocked', 400);
+  }
 
   const queued = await queueDownloadJob(env, {
     url,
@@ -745,6 +783,10 @@ async function handleSharedQueuePost(request: Request, env: Env): Promise<Respon
   const url = String(body?.url ?? '').trim();
   if (!isValidUrl(url)) {
     return jsonError(request, env, 'INVALID_URL', 'URL must be HTTP or HTTPS', 400);
+  }
+  const policy = validateUrlPolicy(url, env);
+  if (!policy.allowed) {
+    return jsonError(request, env, policy.code ?? 'URL_BLOCKED', policy.message ?? 'URL is blocked', 400);
   }
 
   const queued = await queueDownloadJob(env, {
@@ -876,6 +918,13 @@ async function queueDownloadJob(
   const dedupeTtl = readEnvInt(env.DOWNLOAD_DEDUPE_TTL_SECONDS, 120);
   const existing = await getExistingJobByFingerprint(env, fingerprint, dedupeTtl);
   if (existing) {
+    await enqueueHistoryEvent(env, {
+      jobId: existing.id,
+      event: 'deduped',
+      status: existing.status,
+      source,
+      detail: fingerprint,
+    });
     await recordTelemetry(env, {
       event: 'download_deduped',
       status: '202',
@@ -912,6 +961,12 @@ async function queueDownloadJob(
     status: '202',
     source,
   });
+  await enqueueHistoryEvent(env, {
+    jobId,
+    event: 'queued',
+    status: 'queued',
+    source,
+  });
 
   return { jobId, status: 'queued', deduped: false, source, format, quality };
 }
@@ -930,6 +985,10 @@ async function handlePlaylistResolve(request: Request, env: Env): Promise<Respon
   const playlistUrl = body.url.trim();
   if (!isValidUrl(playlistUrl)) {
     return jsonError(request, env, 'INVALID_URL', 'URL must be HTTP or HTTPS', 400);
+  }
+  const policy = validateUrlPolicy(playlistUrl, env);
+  if (!policy.allowed) {
+    return jsonError(request, env, policy.code ?? 'URL_BLOCKED', policy.message ?? 'URL is blocked', 400);
   }
   if (!isPlaylistUrl(playlistUrl)) {
     return jsonError(request, env, 'INVALID_PLAYLIST_URL', 'URL is not recognized as a playlist', 400);
@@ -957,6 +1016,7 @@ async function handlePlaylistResolve(request: Request, env: Env): Promise<Respon
 }
 
 async function handlePlaylistQueue(request: Request, env: Env): Promise<Response> {
+  await ensurePlaylistWorkflowSchema(env);
   const ip = getClientAddress(request);
   const rl = await rateLimit(env.CACHE, `playlist-queue:${ip}`, 5, 60);
   if (rl.limited) {
@@ -970,6 +1030,10 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
   const playlistUrl = body.url.trim();
   if (!isValidUrl(playlistUrl)) {
     return jsonError(request, env, 'INVALID_URL', 'URL must be HTTP or HTTPS', 400);
+  }
+  const policy = validateUrlPolicy(playlistUrl, env);
+  if (!policy.allowed) {
+    return jsonError(request, env, policy.code ?? 'URL_BLOCKED', policy.message ?? 'URL is blocked', 400);
   }
   if (!isPlaylistUrl(playlistUrl)) {
     return jsonError(request, env, 'INVALID_PLAYLIST_URL', 'URL is not recognized as a playlist', 400);
@@ -1032,6 +1096,8 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
     const trackUrl = String(track.url ?? '').trim();
     if (!isValidUrl(trackUrl)) {
       failed += 1;
+    } else if (!validateUrlPolicy(trackUrl, env).allowed) {
+      failed += 1;
     } else {
       const trackSource = normalizeSource(track.source || detectSourceFromUrl(trackUrl) || source);
       const fingerprint = await createJobFingerprint(trackUrl, format, quality);
@@ -1048,6 +1114,13 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
           `INSERT OR IGNORE INTO playlist_workflow_jobs (workflow_id, job_id, is_deduped)
            VALUES (?, ?, 1)`,
         ).bind(workflowId, existing.id).run();
+        await enqueueHistoryEvent(env, {
+          jobId: existing.id,
+          event: 'deduped',
+          status: existing.status,
+          source: trackSource,
+          detail: workflowId,
+        });
         queuedJobIds.push(existing.id);
       } else {
         const jobId = crypto.randomUUID();
@@ -1082,6 +1155,13 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
         } catch (error) {
           console.warn('Playlist dedupe cache write skipped', error);
         }
+        await enqueueHistoryEvent(env, {
+          jobId,
+          event: 'queued',
+          status: 'queued',
+          source: trackSource,
+          detail: workflowId,
+        });
         accepted += 1;
         queuedJobIds.push(jobId);
       }
@@ -1150,6 +1230,7 @@ async function flushDownloadQueueBatch(
 }
 
 async function handlePlaylistWorkflowStatus(request: Request, env: Env, workflowId: string): Promise<Response> {
+  await ensurePlaylistWorkflowSchema(env);
   await syncPlaylistWorkflowRollup(env, workflowId);
   let row: PlaylistWorkflowRecord | null = null;
   try {
@@ -1186,6 +1267,7 @@ async function handlePlaylistWorkflowControl(
   workflowId: string,
   action: WorkflowControlAction,
 ): Promise<Response> {
+  await ensurePlaylistWorkflowSchema(env);
   const row = await env.DB.prepare(
     `SELECT workflow_id, source, status
      FROM playlist_workflows
@@ -1318,6 +1400,7 @@ async function handlePlaylistWorkflowControl(
 }
 
 async function handlePlaylistWorkflowZip(request: Request, env: Env, workflowId: string): Promise<Response> {
+  await ensurePlaylistWorkflowSchema(env);
   const row = await env.DB.prepare(
     `SELECT workflow_id, source, status, phase
      FROM playlist_workflows
@@ -1459,13 +1542,147 @@ async function handlePlaylistWorkflowZip(request: Request, env: Env, workflowId:
   }
 }
 
+async function handleBatchPauseAll(request: Request, env: Env): Promise<Response> {
+  await ensurePlaylistWorkflowSchema(env);
+  const result = await env.DB.prepare(
+    `UPDATE playlist_workflows
+     SET control_state = 'paused',
+         phase = 'paused',
+         updated_at = CURRENT_TIMESTAMP
+     WHERE COALESCE(control_state, 'active') = 'active'
+       AND status IN ('queued', 'processing')`,
+  ).run();
+
+  await recordTelemetry(env, {
+    event: 'batch_pause_all',
+    status: '200',
+    value: result.meta?.changes ?? 0,
+  });
+
+  return jsonOk(request, env, {
+    ok: true,
+    paused_workflows: result.meta?.changes ?? 0,
+  });
+}
+
+async function handleBatchResumeAll(request: Request, env: Env): Promise<Response> {
+  await ensurePlaylistWorkflowSchema(env);
+  const rows = await env.DB.prepare(
+    `SELECT workflow_id
+     FROM playlist_workflows
+     WHERE COALESCE(control_state, 'active') = 'paused'
+       AND status IN ('queued', 'processing')`,
+  ).all<{ workflow_id: string }>();
+
+  let resumed = 0;
+  let replayed = 0;
+  for (const row of rows.results ?? []) {
+    await env.DB.prepare(
+      `UPDATE playlist_workflows
+       SET control_state = 'active',
+           phase = 'queued_tracks',
+           status = 'processing',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE workflow_id = ?`,
+    ).bind(row.workflow_id).run();
+    replayed += await replayQueuedWorkflowJobs(env, row.workflow_id);
+    await notifyDownloaderWorkflowControl(env, row.workflow_id, 'resume');
+    resumed += 1;
+  }
+
+  await recordTelemetry(env, {
+    event: 'batch_resume_all',
+    status: '200',
+    value: replayed,
+  });
+
+  return jsonOk(request, env, {
+    ok: true,
+    resumed_workflows: resumed,
+    replayed_jobs: replayed,
+  });
+}
+
+async function handleJobControl(
+  request: Request,
+  env: Env,
+  jobId: string,
+  action: 'pause' | 'resume',
+): Promise<Response> {
+  const row = await getJobRecord(env, jobId);
+  if (!row) {
+    return jsonError(request, env, 'JOB_NOT_FOUND', 'Job not found', 404);
+  }
+
+  if (action === 'pause') {
+    if (row.status !== 'queued') {
+      return jsonError(request, env, 'JOB_NOT_PAUSABLE', 'Only queued jobs can be paused safely', 409);
+    }
+    await env.DB.prepare(
+      `UPDATE download_jobs
+       SET status = 'paused',
+           error_code = 'JOB_PAUSED',
+           error_message = 'Paused by user',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    ).bind(jobId).run();
+    await enqueueHistoryEvent(env, {
+      jobId,
+      event: 'paused',
+      status: 'paused',
+      source: row.source,
+    });
+    const updated = await getJobRecord(env, jobId);
+    return jsonOk(request, env, { ok: true, action, job: updated ? await hydrateJobRecord(request, env, updated) : null });
+  }
+
+  if (!['paused', 'failed', 'queued'].includes(row.status)) {
+    return jsonError(request, env, 'JOB_NOT_RESUMABLE', 'Only paused, failed or queued jobs can be resumed', 409);
+  }
+
+  const format = normalizeAudioFormat(row.format, 'mp3');
+  const quality = normalizeAudioQuality(row.quality, format, '320');
+  const fingerprint = row.fingerprint ?? await createJobFingerprint(row.url, format, quality);
+
+  await env.DB.prepare(
+    `UPDATE download_jobs
+     SET status = 'queued',
+         attempts = 0,
+         error_code = NULL,
+         error_message = NULL,
+         finished_at = NULL,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+  ).bind(jobId).run();
+
+  await env.DOWNLOAD_QUEUE.send({
+    id: row.id,
+    url: row.url,
+    source: row.source,
+    format,
+    quality,
+    fingerprint,
+    requestedAt: new Date().toISOString(),
+  });
+
+  await enqueueHistoryEvent(env, {
+    jobId,
+    event: 'resumed',
+    status: 'queued',
+    source: row.source,
+  });
+
+  const updated = await getJobRecord(env, jobId);
+  return jsonOk(request, env, { ok: true, action, job: updated ? await hydrateJobRecord(request, env, updated) : null });
+}
+
 async function replayQueuedWorkflowJobs(env: Env, workflowId: string): Promise<number> {
   const queuedRows = await env.DB.prepare(
     `SELECT j.id, j.url, j.source, j.format, j.quality, j.fingerprint, j.created_at
      FROM playlist_workflow_jobs wj
      JOIN download_jobs j ON j.id = wj.job_id
      WHERE wj.workflow_id = ?
-       AND j.status = 'queued'`,
+       AND j.status IN ('queued', 'paused')`,
   ).bind(workflowId).all<{
     id: string;
     url: string;
@@ -1521,6 +1738,7 @@ async function syncPlaylistWorkflowRollup(
   workflowId: string,
   totalTracksOverride?: number,
 ): Promise<PlaylistWorkflowRollup> {
+  await ensurePlaylistWorkflowSchema(env);
   let rollup:
     | {
       total_links: number | null;
@@ -1535,7 +1753,7 @@ async function syncPlaylistWorkflowRollup(
     rollup = await env.DB.prepare(
       `SELECT
          COUNT(*) AS total_links,
-         SUM(CASE WHEN j.status = 'queued' THEN 1 ELSE 0 END) AS queued_count,
+         SUM(CASE WHEN j.status IN ('queued', 'paused') THEN 1 ELSE 0 END) AS queued_count,
          SUM(CASE WHEN j.status = 'processing' THEN 1 ELSE 0 END) AS processing_count,
          SUM(CASE WHEN j.status = 'done' THEN 1 ELSE 0 END) AS done_count,
          SUM(CASE WHEN j.status = 'failed' THEN 1 ELSE 0 END) AS failed_count,
@@ -1663,12 +1881,13 @@ async function getExistingJobByFingerprint(
     `SELECT id, status
      FROM download_jobs
      WHERE fingerprint = ?
-       AND status IN ('queued', 'processing', 'done')
+       AND status IN ('queued', 'processing', 'paused', 'done')
      ORDER BY
        CASE status
          WHEN 'done' THEN 0
          WHEN 'processing' THEN 1
-         ELSE 2
+         WHEN 'paused' THEN 2
+         ELSE 3
        END,
        finished_at DESC,
        created_at DESC
@@ -1806,6 +2025,7 @@ async function handleStats(request: Request, env: Env): Promise<Response> {
        COUNT(*) AS total,
        SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END) AS queued,
        SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) AS processing,
+       SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) AS paused,
        SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done,
        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
        SUM(COALESCE(file_size, 0)) AS total_size_bytes,
@@ -1815,6 +2035,7 @@ async function handleStats(request: Request, env: Env): Promise<Response> {
     total: number | null;
     queued: number | null;
     processing: number | null;
+    paused: number | null;
     done: number | null;
     failed: number | null;
     total_size_bytes: number | null;
@@ -1857,6 +2078,7 @@ async function handleStats(request: Request, env: Env): Promise<Response> {
     total: Number(summary?.total ?? 0),
     queued: Number(summary?.queued ?? 0),
     processing: Number(summary?.processing ?? 0),
+    paused: Number(summary?.paused ?? 0),
     done: Number(summary?.done ?? 0),
     failed: Number(summary?.failed ?? 0),
     total_size_bytes: totalSizeBytes,
@@ -2322,6 +2544,7 @@ async function handleRuntimeConfig(request: Request, env: Env): Promise<Response
       download_link: telegram.downloadLink,
     } : { available: false },
     supported_languages: ['en', 'bg', 'es', 'ru', 'de'],
+    supported_sources: ['all', 'youtube', 'spotify', 'soundcloud', 'deezer', 'apple', 'podcast'],
     default_language: 'en',
     features: {
       sse_job_events: true,
@@ -3246,7 +3469,7 @@ async function getJobRecord(env: Env, jobId: string): Promise<JobRecord | null> 
   return env.DB.prepare(
     `SELECT id, url, source, format, quality, status, attempts,
             result_url, r2_key, title, artist, duration, file_size,
-            content_hash, error_code, error_message, created_at, updated_at, finished_at
+            fingerprint, content_hash, error_code, error_message, created_at, updated_at, finished_at
      FROM download_jobs
      WHERE id = ?`,
   ).bind(jobId).first<JobRecord>();
@@ -3671,6 +3894,15 @@ function isPlaylistUrl(rawUrl: string): boolean {
       return true;
     }
     if (path.includes('/sets/')) {
+      return true;
+    }
+    if (host.includes('podcasts.apple.com')) {
+      return true;
+    }
+    if (host.endsWith('spotify.com') && path.includes('/show/')) {
+      return true;
+    }
+    if (path.endsWith('.xml') || path.endsWith('.rss') || path.endsWith('.atom') || path.includes('/feed') || path.includes('rss')) {
       return true;
     }
     return false;

@@ -4,8 +4,15 @@
  */
 
 import { downloadRouter } from './api';
-import { handleTelegramUpdate, notifyTelegramComplete, notifyTelegramFailure } from './telegram';
-import type { DownloadJob, DownloaderDownloadResult, Env } from './types';
+import { enqueueHistoryEvent, processHistoryEventBatch } from './history';
+import { ensurePlaylistWorkflowSchema } from './schema';
+import {
+  handleTelegramUpdate,
+  notifyTelegramComplete,
+  notifyTelegramFailure,
+  publishTelegramChannelDownload,
+} from './telegram';
+import type { DownloadJob, DownloaderDownloadResult, Env, JobHistoryEvent, JobStatus } from './types';
 import { jsonError, optionsResponse, sha256HexBytes } from './utils';
 import {
   buildDownloaderHeaders,
@@ -51,10 +58,38 @@ export default {
     }
   },
 
-  async queue(batch: MessageBatch<DownloadJob>, env: Env): Promise<void> {
+  async queue(batch: MessageBatch<DownloadJob | JobHistoryEvent>, env: Env): Promise<void> {
+    const queueName = String((batch as unknown as { queue?: string }).queue ?? '');
+    const firstBody = batch.messages[0]?.body as Partial<JobHistoryEvent> | undefined;
+    if (queueName.includes('history') || firstBody?.kind === 'history_event') {
+      await processHistoryEventBatch(
+        env,
+        batch.messages.map((message) => message.body as JobHistoryEvent),
+      );
+      for (const message of batch.messages) message.ack();
+      return;
+    }
+
     for (const message of batch.messages) {
-      const job = message.body;
+      const job = message.body as DownloadJob;
       const attempts = Number((message as unknown as { attempts?: number }).attempts ?? 1);
+
+      const currentStatus = await getJobCurrentStatus(job.id, env);
+      if (currentStatus === 'paused') {
+        await enqueueHistoryEvent(env, {
+          jobId: job.id,
+          event: 'paused',
+          status: 'paused',
+          source: job.source,
+          detail: 'Queue message acknowledged while job is paused',
+        });
+        message.ack();
+        continue;
+      }
+      if (currentStatus === 'done' || currentStatus === 'failed') {
+        message.ack();
+        continue;
+      }
 
       const control = await getWorkflowControlForJob(job.id, env);
       if (control === 'paused') {
@@ -147,7 +182,18 @@ export default {
       code: controller.cron,
     });
   },
-} satisfies ExportedHandler<Env, DownloadJob>;
+} satisfies ExportedHandler<Env, DownloadJob | JobHistoryEvent>;
+
+async function getJobCurrentStatus(jobId: string, env: Env): Promise<JobStatus | null> {
+  try {
+    const row = await env.DB.prepare('SELECT status FROM download_jobs WHERE id = ? LIMIT 1')
+      .bind(jobId)
+      .first<{ status: JobStatus }>();
+    return row?.status ?? null;
+  } catch {
+    return null;
+  }
+}
 
 async function processDownloadJob(job: DownloadJob, env: Env, attempts: number): Promise<void> {
   await env.DB.prepare(
@@ -155,6 +201,12 @@ async function processDownloadJob(job: DownloadJob, env: Env, attempts: number):
      SET status = 'processing', attempts = ?, error_code = NULL, error_message = NULL, finished_at = NULL, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
   ).bind(attempts, job.id).run();
+  await enqueueHistoryEvent(env, {
+    jobId: job.id,
+    event: 'processing',
+    status: 'processing',
+    source: job.source,
+  });
 
   let result: DownloaderDownloadResult | null = null;
   const internalAttemptErrors: string[] = [];
@@ -231,9 +283,20 @@ async function processDownloadJob(job: DownloadJob, env: Env, attempts: number):
     result.file_size,
     job.id,
   ).run();
+  await enqueueHistoryEvent(env, {
+    jobId: job.id,
+    event: 'done',
+    status: 'done',
+    source: result.source ?? job.source,
+  });
 
   if (job.chatId && job.messageId) {
     await notifyTelegramComplete(job, result, env);
+  }
+  try {
+    await publishTelegramChannelDownload(job, result, env);
+  } catch (error) {
+    console.warn('Telegram channel publish skipped', error);
   }
 }
 
@@ -284,6 +347,12 @@ async function markFailed(
          finished_at = ${finishedAtExpr}
      WHERE id = ?`,
   ).bind(status, attempts, errorCode, errorMessage.slice(0, 2000), jobId).run();
+  await enqueueHistoryEvent(env, {
+    jobId,
+    event: terminal ? 'failed' : 'queued',
+    status,
+    detail: `${errorCode}: ${errorMessage}`.slice(0, 1000),
+  });
 
   if (!terminal) {
     return;
@@ -426,6 +495,7 @@ async function getWorkflowControlForJob(
   env: Env,
 ): Promise<'active' | 'paused' | 'cancelled'> {
   try {
+    await ensurePlaylistWorkflowSchema(env);
     const row = await env.DB.prepare(
       `SELECT COALESCE(w.control_state, 'active') AS control_state
        FROM playlist_workflow_jobs wj
