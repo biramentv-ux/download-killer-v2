@@ -13,7 +13,7 @@ import {
   publishTelegramChannelDownload,
 } from './telegram';
 import type { DownloadJob, DownloaderDownloadResult, Env, JobHistoryEvent, JobStatus } from './types';
-import { jsonError, optionsResponse, sha256HexBytes } from './utils';
+import { detectRequestThreat, jsonError, optionsResponse, sha256HexBytes } from './utils';
 import {
   buildDownloaderHeaders,
   fetchDownloaderWithFailover,
@@ -21,6 +21,7 @@ import {
   probeDownloaderOrigins,
 } from './origins';
 import { evaluateOpsAlerts, recordSmokeProbeResult, recordTelemetry } from './telemetry';
+import { cleanupStaleKvKeys, resolvePrivateUrl } from './security';
 
 const MAX_QUEUE_RETRIES = 5;
 const INVIDIOUS_DEFAULT_BASE_URL = 'https://inv.nadeko.net';
@@ -43,6 +44,17 @@ export default {
     }
 
     try {
+      const threat = detectRequestThreat(request);
+      if (threat.blocked) {
+        return jsonError(
+          request,
+          env,
+          threat.code ?? 'REQUEST_BLOCKED',
+          threat.message ?? 'Request blocked by security policy',
+          403,
+        );
+      }
+
       if (pathname === '/telegram/webhook') {
         return handleTelegramUpdate(request, env);
       }
@@ -175,11 +187,12 @@ export default {
     await runDownloaderSmokeChecks(env);
 
     await evaluateOpsAlerts(env);
+    const cleanup = await cleanupStaleKvKeys(env);
     await recordTelemetry(env, {
       event: 'scheduled_tick',
       status: '200',
       latency_ms: Date.now() - startedAt,
-      code: controller.cron,
+      code: `${controller.cron};kv_cleanup_scanned=${cleanup.scanned};kv_cleanup_deleted=${cleanup.deleted}`,
     });
   },
 } satisfies ExportedHandler<Env, DownloadJob | JobHistoryEvent>;
@@ -374,10 +387,11 @@ async function markFailed(
   }>();
 
   if (row?.chat_id && row.message_id) {
+    const originalUrl = await resolvePrivateUrl(env, 'job', row.id, row.url);
     await notifyTelegramFailure(
       {
         id: row.id,
-        url: row.url,
+        url: originalUrl ?? '',
         source: row.source,
         format: row.format,
         quality: row.quality,

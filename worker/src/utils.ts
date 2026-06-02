@@ -18,6 +18,12 @@ export interface UrlPolicyResult {
   host?: string;
 }
 
+export interface RequestThreatResult {
+  blocked: boolean;
+  code?: string;
+  message?: string;
+}
+
 const encoder = new TextEncoder();
 
 export function readEnvInt(raw: string | undefined, fallback: number): number {
@@ -58,6 +64,15 @@ export function isValidUrl(raw: string): boolean {
 }
 
 export function validateUrlPolicy(raw: string, env: Env): UrlPolicyResult {
+  return validateUrlPolicyWithAllowlist(raw, env, env.URL_ALLOWLIST);
+}
+
+export function validateDownloadUrlPolicy(raw: string, env: Env): UrlPolicyResult {
+  const allowlist = env.DOWNLOAD_URL_ALLOWLIST ?? DEFAULT_DOWNLOAD_ALLOWED_DOMAINS.join(',');
+  return validateUrlPolicyWithAllowlist(raw, env, allowlist);
+}
+
+function validateUrlPolicyWithAllowlist(raw: string, env: Env, allowlistRaw: string | undefined): UrlPolicyResult {
   let parsed: URL;
   try {
     parsed = new URL(raw);
@@ -83,7 +98,7 @@ export function validateUrlPolicy(raw: string, env: Env): UrlPolicyResult {
     };
   }
 
-  const allowlist = parseDomainList(env.URL_ALLOWLIST);
+  const allowlist = parseDomainList(allowlistRaw);
   if (allowlist.length > 0 && !allowlist.some((rule) => domainMatches(host, rule))) {
     return {
       allowed: false,
@@ -109,6 +124,77 @@ export function validateUrlPolicy(raw: string, env: Env): UrlPolicyResult {
   return { allowed: true, host };
 }
 
+export function detectRequestThreat(request: Request): RequestThreatResult {
+  const parsed = new URL(request.url);
+  const path = parsed.pathname.toLowerCase();
+  const query = parsed.search.slice(1).toLowerCase();
+  const userAgent = request.headers.get('user-agent')?.toLowerCase() ?? '';
+
+  if (containsPathTraversal(path) || containsPathTraversal(query)) {
+    return {
+      blocked: true,
+      code: 'PATH_TRAVERSAL_BLOCKED',
+      message: 'Path traversal patterns are blocked',
+    };
+  }
+
+  const isSensitiveApi = path === '/api/search' || path.startsWith('/api/job/');
+  if (isSensitiveApi && containsSqlInjectionProbe(query)) {
+    return {
+      blocked: true,
+      code: 'SQLI_BLOCKED',
+      message: 'SQL injection probe blocked',
+    };
+  }
+
+  if (path.startsWith('/api/') && containsScraperUserAgent(userAgent)) {
+    return {
+      blocked: true,
+      code: 'SCRAPER_UA_BLOCKED',
+      message: 'Automated scraping clients are blocked for API routes',
+    };
+  }
+
+  return { blocked: false };
+}
+
+const DEFAULT_DOWNLOAD_ALLOWED_DOMAINS = [
+  'youtube.com',
+  '*.youtube.com',
+  'youtu.be',
+  'spotify.com',
+  '*.spotify.com',
+  'spotify.link',
+  'soundcloud.com',
+  '*.soundcloud.com',
+  'deezer.com',
+  '*.deezer.com',
+  'music.apple.com',
+  '*.music.apple.com',
+  'podcasts.apple.com',
+  '*.podcasts.apple.com',
+  'itunes.apple.com',
+  '*.itunes.apple.com',
+  'rss.com',
+  '*.rss.com',
+  'anchor.fm',
+  '*.anchor.fm',
+  'simplecast.com',
+  '*.simplecast.com',
+  'buzzsprout.com',
+  '*.buzzsprout.com',
+  'podbean.com',
+  '*.podbean.com',
+  'libsyn.com',
+  '*.libsyn.com',
+  'megaphone.fm',
+  '*.megaphone.fm',
+  'omny.fm',
+  '*.omny.fm',
+  'transistor.fm',
+  '*.transistor.fm',
+];
+
 const DEFAULT_BLOCKED_DOMAINS = [
   'localhost',
   'local',
@@ -133,6 +219,51 @@ function domainMatches(host: string, rule: string): boolean {
     return host === suffix || host.endsWith(`.${suffix}`);
   }
   return host === normalized || host.endsWith(`.${normalized}`);
+}
+
+const PATH_TRAVERSAL_PATTERNS = [
+  '../',
+  '..\\',
+  '..%2f',
+  '..%5c',
+  '%2e%2e',
+  '%252e%252e',
+];
+
+function containsPathTraversal(value: string): boolean {
+  return PATH_TRAVERSAL_PATTERNS.some((pattern) => value.includes(pattern));
+}
+
+const SQLI_PROBE_PATTERNS = [
+  'union select',
+  'union%20select',
+  'information_schema',
+  ' or 1=1',
+  '%20or%201=1',
+  "' or '",
+  '%27%20or%20%27',
+  'sleep(',
+  'benchmark(',
+];
+
+function containsSqlInjectionProbe(value: string): boolean {
+  return SQLI_PROBE_PATTERNS.some((pattern) => value.includes(pattern));
+}
+
+const SCRAPER_USER_AGENT_PATTERNS = [
+  'python-requests',
+  'scrapy',
+  'go-http-client',
+  'java/',
+  'okhttp',
+  'libwww-perl',
+  'httpclient',
+  'aiohttp',
+  'node-fetch',
+];
+
+function containsScraperUserAgent(value: string): boolean {
+  return SCRAPER_USER_AGENT_PATTERNS.some((pattern) => value.includes(pattern));
 }
 
 function isPrivateOrLocalHost(host: string): boolean {
@@ -166,7 +297,7 @@ export function corsHeaders(request: Request, env: Env): Record<string, string> 
   return {
     'Access-Control-Allow-Origin': getAllowedOrigin(request, env),
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Requested-With',
+    'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Requested-With,X-DyrakArmy-Timestamp,X-DyrakArmy-Signature',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   };

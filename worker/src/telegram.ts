@@ -1,4 +1,5 @@
 import { fetchDownloaderWithFailover } from './origins';
+import { hashAndCachePrivateUrl, verifyTelegramWebhookToken } from './security';
 import type { AudioFormat, AudioQuality, DownloadJob, DownloaderDownloadResult, Env } from './types';
 import {
   createDownloadToken,
@@ -7,6 +8,7 @@ import {
   normalizeSource,
   rateLimit,
   readEnvInt,
+  validateDownloadUrlPolicy,
   validateUrlPolicy,
 } from './utils';
 
@@ -103,8 +105,7 @@ const MENU_LABELS = {
 
 export async function handleTelegramUpdate(request: Request, env: Env): Promise<Response> {
   const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token')?.trim();
-  const expectedSecret = env.TELEGRAM_SECRET_TOKEN?.trim();
-  if (!secret || !expectedSecret || secret !== expectedSecret) {
+  if (!await verifyTelegramWebhookToken(secret ?? null, env)) {
     return Response.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized', retryable: false } }, { status: 401 });
   }
 
@@ -534,7 +535,7 @@ async function queueJobFromSelection(
   quality: AudioQuality,
   env: Env,
 ): Promise<void> {
-  const policy = validateUrlPolicy(url, env);
+  const policy = validateDownloadUrlPolicy(url, env);
   if (!policy.allowed) {
     await editOrSend(chatId, messageId, env, `URL е блокиран: ${policy.message ?? 'domain policy'}`);
     return;
@@ -545,6 +546,7 @@ async function queueJobFromSelection(
   const existing = await findCompletedJobByFingerprint(fingerprint, env);
 
   if (existing) {
+    await hashAndCachePrivateUrl(env, 'job', existing.id, url);
     const ttl = readEnvInt(env.DOWNLOAD_TOKEN_TTL_SECONDS, 3600);
     const token = await createDownloadToken(
       {
@@ -575,12 +577,13 @@ async function queueJobFromSelection(
   const jobId = crypto.randomUUID();
   const title = cached?.title?.trim() || null;
   const artist = cached?.artist?.trim() || null;
+  const urlHash = await hashAndCachePrivateUrl(env, 'job', jobId, url);
 
   await env.DB.prepare(
     `INSERT INTO download_jobs (
       id, url, source, format, quality, status, attempts, fingerprint, chat_id, message_id, title, artist, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-  ).bind(jobId, url, source, format, quality, fingerprint, chatId, messageId, title, artist).run();
+  ).bind(jobId, urlHash, source, format, quality, fingerprint, chatId, messageId, title, artist).run();
 
   const job: DownloadJob = {
     id: jobId,

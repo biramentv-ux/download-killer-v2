@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   createDownloadToken,
   createJobFingerprint,
+  detectRequestThreat,
+  validateDownloadUrlPolicy,
   validateUrlPolicy,
   verifyDownloadToken,
 } from '../src/utils';
@@ -58,5 +60,41 @@ describe('utils url policy', () => {
     expect(validateUrlPolicy('https://www.youtube.com/watch?v=x', env).allowed).toBe(true);
     expect(validateUrlPolicy('https://open.spotify.com/track/x', env).allowed).toBe(true);
     expect(validateUrlPolicy('https://example.com/x', env).allowed).toBe(false);
+  });
+
+  it('restricts download URLs to supported media domains by default', () => {
+    const env = {} as never;
+    expect(validateDownloadUrlPolicy('https://www.youtube.com/watch?v=x', env).allowed).toBe(true);
+    expect(validateDownloadUrlPolicy('https://open.spotify.com/track/x', env).allowed).toBe(true);
+    expect(validateDownloadUrlPolicy('https://soundcloud.com/artist/track', env).allowed).toBe(true);
+    expect(validateDownloadUrlPolicy('https://example.com/arbitrary.bin', env).allowed).toBe(false);
+  });
+
+  it('supports an explicit download URL allowlist override', () => {
+    const env = { DOWNLOAD_URL_ALLOWLIST: 'media.example' } as never;
+    expect(validateDownloadUrlPolicy('https://media.example/file.mp3', env).allowed).toBe(true);
+    expect(validateDownloadUrlPolicy('https://www.youtube.com/watch?v=x', env).allowed).toBe(false);
+  });
+});
+
+describe('utils request threat detection', () => {
+  it('blocks path traversal probes in query strings', () => {
+    const threat = detectRequestThreat(new Request('https://dyrakarmy.online/api/search?file=../secret'));
+    expect(threat.blocked).toBe(true);
+    expect(threat.code).toBe('PATH_TRAVERSAL_BLOCKED');
+  });
+
+  it('blocks SQL injection probes on sensitive API routes', () => {
+    const threat = detectRequestThreat(new Request('https://dyrakarmy.online/api/search?q=1%20union%20select%20password'));
+    expect(threat.blocked).toBe(true);
+    expect(threat.code).toBe('SQLI_BLOCKED');
+  });
+
+  it('blocks common scraping user agents on API routes', () => {
+    const threat = detectRequestThreat(new Request('https://dyrakarmy.online/api/formats', {
+      headers: { 'User-Agent': 'python-requests/2.32' },
+    }));
+    expect(threat.blocked).toBe(true);
+    expect(threat.code).toBe('SCRAPER_UA_BLOCKED');
   });
 });

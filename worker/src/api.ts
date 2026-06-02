@@ -17,6 +17,12 @@ import { buildOpsSummary, recordTelemetry } from './telemetry';
 import { enqueueHistoryEvent } from './history';
 import { ensurePlaylistWorkflowSchema } from './schema';
 import {
+  hashAndCachePrivateUrl,
+  resolvePrivateUrl,
+  safeUrlHash,
+  verifyExternalHmacRequest,
+} from './security';
+import {
   corsHeaders,
   createDownloadToken,
   createJobFingerprint,
@@ -33,6 +39,7 @@ import {
   readEnvInt,
   sha256HexBytes,
   verifyDownloadToken,
+  validateDownloadUrlPolicy,
   validateUrlPolicy,
 } from './utils';
 
@@ -339,6 +346,10 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
 
   if (path === '/recommend-format' && request.method === 'POST') {
     return handleRecommendFormat(request, env);
+  }
+
+  if (path === '/webhooks/external/ping' && request.method === 'POST') {
+    return handleSignedWebhookPing(request, env);
   }
 
   if (path === '/shared-queue' && request.method === 'GET') {
@@ -693,7 +704,7 @@ async function handleDownload(request: Request, env: Env): Promise<Response> {
   if (!isValidUrl(url)) {
     return jsonError(request, env, 'INVALID_URL', 'URL must be HTTP or HTTPS', 400);
   }
-  const policy = validateUrlPolicy(url, env);
+  const policy = validateDownloadUrlPolicy(url, env);
   if (!policy.allowed) {
     return jsonError(request, env, policy.code ?? 'URL_BLOCKED', policy.message ?? 'URL is blocked', 400);
   }
@@ -767,6 +778,25 @@ async function handleRecommendFormat(request: Request, env: Env): Promise<Respon
   });
 }
 
+async function handleSignedWebhookPing(request: Request, env: Env): Promise<Response> {
+  const bodyText = await request.text();
+  const verification = await verifyExternalHmacRequest(request, bodyText, env);
+  if (!verification.ok) {
+    return jsonError(request, env, verification.code, verification.message, 401);
+  }
+
+  await recordTelemetry(env, {
+    event: 'external_webhook_verified',
+    status: '200',
+    code: 'HMAC_OK',
+  });
+
+  return jsonOk(request, env, {
+    ok: true,
+    verified: true,
+  });
+}
+
 async function handleSharedQueuePost(request: Request, env: Env): Promise<Response> {
   const ip = getClientAddress(request);
   const rl = await rateLimit(env.CACHE, `shared-queue:${ip}`, 20, 60);
@@ -784,7 +814,7 @@ async function handleSharedQueuePost(request: Request, env: Env): Promise<Respon
   if (!isValidUrl(url)) {
     return jsonError(request, env, 'INVALID_URL', 'URL must be HTTP or HTTPS', 400);
   }
-  const policy = validateUrlPolicy(url, env);
+  const policy = validateDownloadUrlPolicy(url, env);
   if (!policy.allowed) {
     return jsonError(request, env, policy.code ?? 'URL_BLOCKED', policy.message ?? 'URL is blocked', 400);
   }
@@ -800,6 +830,7 @@ async function handleSharedQueuePost(request: Request, env: Env): Promise<Respon
 
   await ensureSharedQueueTable(env);
   const itemId = crypto.randomUUID();
+  const sharedUrlHash = await hashAndCachePrivateUrl(env, 'shared', itemId, url);
   const title = String(body?.title ?? '').trim() || null;
   const artist = String(body?.artist ?? '').trim() || null;
   const addedBy = String(body?.added_by ?? '').trim().slice(0, 80) || null;
@@ -807,7 +838,7 @@ async function handleSharedQueuePost(request: Request, env: Env): Promise<Respon
     `INSERT INTO shared_queue_items (
       id, sync_key, job_id, url, source, format, quality, title, artist, added_by, status, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-  ).bind(itemId, key, queued.jobId, url, queued.source, queued.format, queued.quality, title, artist, addedBy, queued.status).run();
+  ).bind(itemId, key, queued.jobId, sharedUrlHash, queued.source, queued.format, queued.quality, title, artist, addedBy, queued.status).run();
 
   await recordTelemetry(env, {
     event: 'shared_queue_item_added',
@@ -820,7 +851,8 @@ async function handleSharedQueuePost(request: Request, env: Env): Promise<Respon
     item: {
       id: itemId,
       job_id: queued.jobId,
-      url,
+      url: null,
+      url_hash: sharedUrlHash,
       source: queued.source,
       format: queued.format,
       quality: queued.quality,
@@ -858,6 +890,7 @@ async function handleSharedQueueGet(request: Request, env: Env): Promise<Respons
 
   const items = await Promise.all((rows.results ?? []).map(async (row) => {
     const status = String(row.job_status ?? row.shared_status ?? 'queued');
+    const urlHash = await safeUrlHash(String(row.url ?? ''));
     const hasDownloadTarget =
       (typeof row.r2_key === 'string' && row.r2_key.length > 0)
       || (typeof row.result_url === 'string' && row.result_url.length > 0);
@@ -870,7 +903,8 @@ async function handleSharedQueueGet(request: Request, env: Env): Promise<Respons
     return {
       id: row.id,
       job_id: row.job_id,
-      url: row.url,
+      url: null,
+      url_hash: urlHash,
       source: row.source,
       format: row.format,
       quality: row.quality,
@@ -922,6 +956,7 @@ async function queueDownloadJob(
   const dedupeTtl = readEnvInt(env.DOWNLOAD_DEDUPE_TTL_SECONDS, 120);
   const existing = await getExistingJobByFingerprint(env, fingerprint, dedupeTtl);
   if (existing) {
+    await hashAndCachePrivateUrl(env, 'job', existing.id, url);
     await enqueueHistoryEvent(env, {
       jobId: existing.id,
       event: 'deduped',
@@ -938,12 +973,13 @@ async function queueDownloadJob(
   }
 
   const jobId = crypto.randomUUID();
+  const urlHash = await hashAndCachePrivateUrl(env, 'job', jobId, url);
 
   await env.DB.prepare(
     `INSERT INTO download_jobs (
       id, url, source, format, quality, status, attempts, fingerprint, title, artist, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-  ).bind(jobId, url, source, format, quality, fingerprint, input.title ?? null, input.artist ?? null).run();
+  ).bind(jobId, urlHash, source, format, quality, fingerprint, input.title ?? null, input.artist ?? null).run();
 
   await env.DOWNLOAD_QUEUE.send({
     id: jobId,
@@ -990,7 +1026,7 @@ async function handlePlaylistResolve(request: Request, env: Env): Promise<Respon
   if (!isValidUrl(playlistUrl)) {
     return jsonError(request, env, 'INVALID_URL', 'URL must be HTTP or HTTPS', 400);
   }
-  const policy = validateUrlPolicy(playlistUrl, env);
+  const policy = validateDownloadUrlPolicy(playlistUrl, env);
   if (!policy.allowed) {
     return jsonError(request, env, policy.code ?? 'URL_BLOCKED', policy.message ?? 'URL is blocked', 400);
   }
@@ -1035,7 +1071,7 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
   if (!isValidUrl(playlistUrl)) {
     return jsonError(request, env, 'INVALID_URL', 'URL must be HTTP or HTTPS', 400);
   }
-  const policy = validateUrlPolicy(playlistUrl, env);
+  const policy = validateDownloadUrlPolicy(playlistUrl, env);
   if (!policy.allowed) {
     return jsonError(request, env, policy.code ?? 'URL_BLOCKED', policy.message ?? 'URL is blocked', 400);
   }
@@ -1071,6 +1107,7 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
 
   const dedupeTtl = readEnvInt(env.DOWNLOAD_DEDUPE_TTL_SECONDS, 120);
   const workflowId = crypto.randomUUID();
+  const playlistUrlHash = await hashAndCachePrivateUrl(env, 'workflow', workflowId, playlistUrl);
 
   await env.DB.prepare(
     `INSERT INTO playlist_workflows (
@@ -1078,7 +1115,7 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
       queued_count, processing_count, done_count, failed_count, deduped_count,
       created_at, updated_at
     ) VALUES (?, ?, ?, 'processing', 'resolving', 0, 0, 0, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-  ).bind(workflowId, playlistUrl, source).run();
+  ).bind(workflowId, playlistUrlHash, source).run();
   await maybeStartDownloaderPlaylistWorkflow(env, {
     workflowId,
     playlistUrl,
@@ -1100,7 +1137,7 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
     const trackUrl = String(track.url ?? '').trim();
     if (!isValidUrl(trackUrl)) {
       failed += 1;
-    } else if (!validateUrlPolicy(trackUrl, env).allowed) {
+    } else if (!validateDownloadUrlPolicy(trackUrl, env).allowed) {
       failed += 1;
     } else {
       const trackSource = normalizeSource(track.source || detectSourceFromUrl(trackUrl) || source);
@@ -1108,6 +1145,7 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
       const dedupeKey = `dedupe:${fingerprint}`;
       const existing = await getExistingJobByFingerprint(env, fingerprint, dedupeTtl);
       if (existing) {
+        await hashAndCachePrivateUrl(env, 'job', existing.id, trackUrl);
         deduped += 1;
         if (existing.status === 'done') {
           ready += 1;
@@ -1130,12 +1168,13 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
         const jobId = crypto.randomUUID();
         const title = String(track.title ?? '').trim() || 'Unknown Title';
         const artist = String(track.artist ?? '').trim() || 'Unknown Artist';
+        const trackUrlHash = await hashAndCachePrivateUrl(env, 'job', jobId, trackUrl);
 
         await env.DB.prepare(
           `INSERT INTO download_jobs (
             id, url, source, format, quality, status, attempts, fingerprint, title, artist, created_at, updated_at
           ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        ).bind(jobId, trackUrl, trackSource, format, quality, fingerprint, title, artist).run();
+        ).bind(jobId, trackUrlHash, trackSource, format, quality, fingerprint, title, artist).run();
 
         pendingQueueBatch.push({
           body: {
@@ -1259,7 +1298,7 @@ async function handlePlaylistWorkflowStatus(request: Request, env: Env, workflow
   }
 
   return jsonOk(request, env, {
-    workflow: row,
+    workflow: await sanitizePlaylistWorkflow(row),
   });
 }
 
@@ -1399,8 +1438,17 @@ async function handlePlaylistWorkflowControl(
   return jsonOk(request, env, {
     ok: true,
     action,
-    workflow: updated,
+    workflow: updated ? await sanitizePlaylistWorkflow(updated) : null,
   });
+}
+
+async function sanitizePlaylistWorkflow(row: PlaylistWorkflowRecord): Promise<Record<string, unknown>> {
+  const { source_url: sourceUrl, ...safeRow } = row;
+  return {
+    ...safeRow,
+    source_url: null,
+    source_url_hash: await safeUrlHash(sourceUrl),
+  };
 }
 
 async function handlePlaylistWorkflowZip(request: Request, env: Env, workflowId: string): Promise<Response> {
@@ -1646,7 +1694,11 @@ async function handleJobControl(
 
   const format = normalizeAudioFormat(row.format, 'mp3');
   const quality = normalizeAudioQuality(row.quality, format, '320');
-  const fingerprint = row.fingerprint ?? await createJobFingerprint(row.url, format, quality);
+  const originalUrl = await resolvePrivateUrl(env, 'job', row.id, row.url);
+  if (!originalUrl) {
+    return jsonError(request, env, 'URL_EXPIRED', 'Original URL expired from private cache; create a new download request', 410);
+  }
+  const fingerprint = row.fingerprint ?? await createJobFingerprint(originalUrl, format, quality);
 
   await env.DB.prepare(
     `UPDATE download_jobs
@@ -1661,7 +1713,7 @@ async function handleJobControl(
 
   await env.DOWNLOAD_QUEUE.send({
     id: row.id,
-    url: row.url,
+    url: originalUrl,
     source: row.source,
     format,
     quality,
@@ -1699,9 +1751,22 @@ async function replayQueuedWorkflowJobs(env: Env, workflowId: string): Promise<n
 
   let sent = 0;
   for (const row of queuedRows.results ?? []) {
+    const originalUrl = await resolvePrivateUrl(env, 'job', row.id, row.url);
+    if (!originalUrl) {
+      await env.DB.prepare(
+        `UPDATE download_jobs
+         SET status = 'failed',
+             error_code = 'URL_EXPIRED',
+             error_message = 'Original URL expired from private cache',
+             updated_at = CURRENT_TIMESTAMP,
+             finished_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+      ).bind(row.id).run();
+      continue;
+    }
     await env.DOWNLOAD_QUEUE.send({
       id: row.id,
-      url: row.url,
+      url: originalUrl,
       source: row.source,
       format: row.format,
       quality: row.quality,
@@ -1911,6 +1976,12 @@ async function getExistingJobByFingerprint(
 }
 
 async function handleJobStatus(request: Request, env: Env, jobId: string): Promise<Response> {
+  const ip = getClientAddress(request);
+  const rl = await rateLimit(env.CACHE, `job-status:${jobId}:${ip}`, 10, 60);
+  if (rl.limited) {
+    return jsonError(request, env, 'RATE_LIMITED', 'Too many status requests for this job', 429, true);
+  }
+
   const row = await getJobRecord(env, jobId);
   if (!row) {
     return jsonError(request, env, 'JOB_NOT_FOUND', 'Job not found', 404);
@@ -2967,8 +3038,23 @@ async function handleOpsReplay(request: Request, env: Env): Promise<Response> {
 
     const format = AUDIO_FORMATS.includes(row.format as AudioFormat) ? (row.format as AudioFormat) : 'mp3';
     const quality = AUDIO_QUALITIES.includes(row.quality as AudioQuality) ? (row.quality as AudioQuality) : '320';
-    const source = normalizeSource(row.source || detectSourceFromUrl(row.url));
-    const fingerprint = row.fingerprint || await createJobFingerprint(row.url, format, quality);
+    const originalUrl = await resolvePrivateUrl(env, 'job', row.id, row.url);
+    if (!originalUrl) {
+      skipped += 1;
+      skippedIds.push(row.id);
+      await env.DB.prepare(
+        `UPDATE download_jobs
+         SET status = 'failed',
+             error_code = 'URL_EXPIRED',
+             error_message = 'Original URL expired from private cache',
+             updated_at = CURRENT_TIMESTAMP,
+             finished_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+      ).bind(row.id).run();
+      continue;
+    }
+    const source = normalizeSource(row.source || detectSourceFromUrl(originalUrl));
+    const fingerprint = row.fingerprint || await createJobFingerprint(originalUrl, format, quality);
 
     await env.DB.prepare(
       `UPDATE download_jobs
@@ -2982,7 +3068,7 @@ async function handleOpsReplay(request: Request, env: Env): Promise<Response> {
 
     await env.DOWNLOAD_QUEUE.send({
       id: row.id,
-      url: row.url,
+      url: originalUrl,
       source,
       format,
       quality,
@@ -3532,9 +3618,12 @@ async function hydrateJobRecord(request: Request, env: Env, row: JobRecord): Pro
     downloadUrl = available ? await buildDownloadUrl(request, env, row.id) : null;
     streamUrl = available ? await buildStreamUrl(request, env, row.id) : null;
   }
+  const { url: storedUrl, ...safeRow } = row;
 
   return {
-    ...row,
+    ...safeRow,
+    url: null,
+    url_hash: await safeUrlHash(storedUrl),
     download_url: downloadUrl,
     stream_url: streamUrl,
     download_available: Boolean(downloadUrl),
