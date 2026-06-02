@@ -2992,6 +2992,7 @@
     const queueJobs = new Map();
     const jobStreams = new Map();
     const workflowPollers = new Map();
+    const workflowZipInFlight = new Set();
     let historyRowsCache = [];
     const hiddenDoneHistoryIds = new Set();
     let historyTotalRows = 0;
@@ -4782,6 +4783,16 @@
       `;
     }
 
+    function shouldAutoBuildWorkflowZip(job) {
+      if (!isWorkflowJob(job)) return false;
+      if (String(job.status || "").toLowerCase() !== "done") return false;
+      if (job.archiveUrl) return false;
+      const archiveStatus = String(job.archiveStatus || "").toLowerCase();
+      if (archiveStatus === "building" || archiveStatus === "ready") return false;
+      if (workflowZipInFlight.has(job.workflowId)) return false;
+      return Number(job.doneCount || 0) > 0;
+    }
+
     function getErrorMessage(payload, fallback) {
       return payload && payload.error && payload.error.message ? payload.error.message : fallback;
     }
@@ -5555,6 +5566,10 @@
         if (payload && payload.workflow) {
           upsertWorkflowJob(payload.workflow);
           const updated = queueJobs.get(workflowId);
+          if (shouldAutoBuildWorkflowZip(updated)) {
+            void runWorkflowAction(workflowId, "zip", { auto: true });
+            return;
+          }
           if (updated && isWorkflowTerminal(updated)) {
             closeWorkflowPoller(workflowId);
           }
@@ -5581,33 +5596,40 @@
       workflowPollers.set(workflowId, handle);
     }
 
-    async function runWorkflowAction(workflowId, action) {
+    async function runWorkflowAction(workflowId, action, options = {}) {
       if (!workflowId || !action) return;
+      const isAuto = Boolean(options.auto);
       try {
         if (action === "cancel") {
           const ok = window.confirm(translate("workflow_cancel_confirm"));
           if (!ok) return;
         }
         if (action === "zip") {
-          const pending = queueJobs.get(workflowId);
-          if (pending) {
-            pending.archiveStatus = "building";
-            pending.archiveError = null;
-            queueJobs.set(workflowId, pending);
-            renderQueue();
-          }
-          const payload = await apiJson(`/playlist/workflow/${encodeURIComponent(workflowId)}/zip`, { method: "POST" });
-          if (payload && payload.archive_url) {
-            const entry = queueJobs.get(workflowId);
-            if (entry) {
-              entry.archiveStatus = "ready";
-              entry.archiveUrl = payload.archive_url;
-              entry.archiveError = null;
-              queueJobs.set(workflowId, entry);
+          if (workflowZipInFlight.has(workflowId)) return;
+          workflowZipInFlight.add(workflowId);
+          try {
+            const pending = queueJobs.get(workflowId);
+            if (pending) {
+              pending.archiveStatus = "building";
+              pending.archiveError = null;
+              queueJobs.set(workflowId, pending);
               renderQueue();
             }
+            const payload = await apiJson(`/playlist/workflow/${encodeURIComponent(workflowId)}/zip`, { method: "POST" });
+            if (payload && payload.archive_url) {
+              const entry = queueJobs.get(workflowId);
+              if (entry) {
+                entry.archiveStatus = "ready";
+                entry.archiveUrl = payload.archive_url;
+                entry.archiveError = null;
+                queueJobs.set(workflowId, entry);
+                renderQueue();
+              }
+            }
+            void refreshWorkflowStatus(workflowId);
+          } finally {
+            workflowZipInFlight.delete(workflowId);
           }
-          void refreshWorkflowStatus(workflowId);
           return;
         }
 
@@ -5635,7 +5657,7 @@
           }
         }
         const key = action === "zip" ? "workflow_zip_failed" : "workflow_control_failed";
-        alert(translate(key, { message }));
+        if (!isAuto) alert(translate(key, { message }));
       }
     }
 
