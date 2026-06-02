@@ -864,6 +864,9 @@ async function handleSharedQueueGet(request: Request, env: Env): Promise<Respons
     const downloadUrl = status === 'done' && hasDownloadTarget
       ? await buildDownloadUrl(request, env, String(row.job_id))
       : null;
+    const streamUrl = downloadUrl
+      ? await buildStreamUrl(request, env, String(row.job_id))
+      : null;
     return {
       id: row.id,
       job_id: row.job_id,
@@ -879,6 +882,7 @@ async function handleSharedQueueGet(request: Request, env: Env): Promise<Respons
       error_message: row.error_message,
       file_size: row.file_size,
       download_url: downloadUrl,
+      stream_url: streamUrl,
       created_at: row.created_at,
       updated_at: row.updated_at,
       finished_at: row.finished_at,
@@ -2005,9 +2009,16 @@ async function handleHistory(request: Request, env: Env): Promise<Response> {
       if (row.status === 'done' && hasDownloadTarget) {
         const available = await isDownloadTargetAvailable(env, row);
         const downloadUrl = available ? await buildDownloadUrl(request, env, String(row.id)) : null;
-        return { ...row, download_url: downloadUrl, download_available: Boolean(downloadUrl) };
+        const streamUrl = downloadUrl ? await buildStreamUrl(request, env, String(row.id)) : null;
+        return {
+          ...row,
+          download_url: downloadUrl,
+          stream_url: streamUrl,
+          download_available: Boolean(downloadUrl),
+          stream_available: Boolean(streamUrl),
+        };
       }
-      return { ...row, download_url: null, download_available: false };
+      return { ...row, download_url: null, stream_url: null, download_available: false, stream_available: false };
     }),
   );
 
@@ -3374,6 +3385,9 @@ async function handleFileDownload(request: Request, env: Env, token: string): Pr
   if (!payload) {
     return jsonError(request, env, 'INVALID_TOKEN', 'Download token is invalid or expired', 401);
   }
+  const accessUrl = new URL(request.url);
+  const inline = accessUrl.searchParams.get('inline') === '1';
+  const rangeHeader = request.headers.get('range');
 
   const job = await env.DB.prepare(
     `SELECT title, artist, format, r2_key, result_url FROM download_jobs WHERE id = ?`,
@@ -3392,7 +3406,26 @@ async function handleFileDownload(request: Request, env: Env, token: string): Pr
   const fallbackFilename = formatFileName(job.title ?? 'track', job.artist ?? 'dyrakarmy', fallbackExt);
 
   if (job.r2_key && env.FILES) {
-    const object = await env.FILES.get(job.r2_key);
+    const head = await env.FILES.head(job.r2_key);
+    if (!head) {
+      return jsonError(request, env, 'FILE_NOT_FOUND', 'File not found', 404);
+    }
+
+    const byteRange = parseByteRangeHeader(rangeHeader, head.size);
+    if (byteRange === 'invalid') {
+      return new Response(null, {
+        status: 416,
+        headers: {
+          'accept-ranges': 'bytes',
+          'content-range': `bytes */${head.size}`,
+        },
+      });
+    }
+
+    const object = await env.FILES.get(
+      job.r2_key,
+      byteRange ? { range: { offset: byteRange.offset, length: byteRange.length } } : undefined,
+    );
     if (!object || !object.body) {
       return jsonError(request, env, 'FILE_NOT_FOUND', 'File not found', 404);
     }
@@ -3400,10 +3433,17 @@ async function handleFileDownload(request: Request, env: Env, token: string): Pr
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set('etag', object.httpEtag);
-    headers.set('content-disposition', `attachment; filename="${fallbackFilename}"`);
+    headers.set('accept-ranges', 'bytes');
+    headers.set('content-disposition', `${inline ? 'inline' : 'attachment'}; filename="${fallbackFilename}"`);
+    if (byteRange) {
+      headers.set('content-range', `bytes ${byteRange.offset}-${byteRange.end}/${byteRange.total}`);
+      headers.set('content-length', String(byteRange.length));
+    } else {
+      headers.set('content-length', String(head.size));
+    }
 
     return new Response(object.body, {
-      status: 200,
+      status: byteRange ? 206 : 200,
       headers,
     });
   }
@@ -3417,14 +3457,16 @@ async function handleFileDownload(request: Request, env: Env, token: string): Pr
   try {
     const parsed = new URL(normalizedResultUrl);
     if (parsed.pathname.startsWith('/internal/files/')) {
+      const proxyHeaders: Record<string, string> = {
+        'X-API-Key': env.DOWNLOADER_API_KEY,
+      };
+      if (rangeHeader) proxyHeaders.Range = rangeHeader;
       const failover = await fetchDownloaderWithFailover(
         env,
         `${parsed.pathname}${parsed.search}`,
         {
           method: 'GET',
-          headers: {
-            'X-API-Key': env.DOWNLOADER_API_KEY,
-          },
+          headers: proxyHeaders,
         },
       );
       upstream = failover.response;
@@ -3436,7 +3478,9 @@ async function handleFileDownload(request: Request, env: Env, token: string): Pr
       });
     } else {
       const upstreamHeaders = buildDownloaderHeaders(normalizedResultUrl, env);
-      upstream = await fetch(normalizedResultUrl, upstreamHeaders ? { headers: upstreamHeaders } : undefined);
+      const headers = new Headers(upstreamHeaders ?? undefined);
+      if (rangeHeader) headers.set('Range', rangeHeader);
+      upstream = await fetch(normalizedResultUrl, upstreamHeaders || rangeHeader ? { headers } : undefined);
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
@@ -3451,16 +3495,21 @@ async function handleFileDownload(request: Request, env: Env, token: string): Pr
   const headers = new Headers();
   const contentType = upstream.headers.get('content-type') ?? 'application/octet-stream';
   headers.set('content-type', contentType);
+  headers.set('accept-ranges', upstream.headers.get('accept-ranges') ?? 'bytes');
   const contentLength = upstream.headers.get('content-length');
   if (contentLength) {
     headers.set('content-length', contentLength);
   }
+  const contentRange = upstream.headers.get('content-range');
+  if (contentRange) {
+    headers.set('content-range', contentRange);
+  }
   const extFromMime = mimeTypeToExtension(contentType);
   const filename = formatFileName(job.title ?? 'track', job.artist ?? 'dyrakarmy', extFromMime || fallbackExt);
-  headers.set('content-disposition', `attachment; filename="${filename}"`);
+  headers.set('content-disposition', `${inline ? 'inline' : 'attachment'}; filename="${filename}"`);
 
   return new Response(upstream.body, {
-    status: 200,
+    status: upstream.status === 206 ? 206 : 200,
     headers,
   });
 }
@@ -3477,19 +3526,36 @@ async function getJobRecord(env: Env, jobId: string): Promise<JobRecord | null> 
 
 async function hydrateJobRecord(request: Request, env: Env, row: JobRecord): Promise<Record<string, unknown>> {
   let downloadUrl: string | null = null;
+  let streamUrl: string | null = null;
   if (row.status === 'done' && (row.r2_key || row.result_url)) {
     const available = await isDownloadTargetAvailable(env, row);
     downloadUrl = available ? await buildDownloadUrl(request, env, row.id) : null;
+    streamUrl = available ? await buildStreamUrl(request, env, row.id) : null;
   }
 
   return {
     ...row,
     download_url: downloadUrl,
+    stream_url: streamUrl,
     download_available: Boolean(downloadUrl),
+    stream_available: Boolean(streamUrl),
   };
 }
 
 async function buildDownloadUrl(request: Request, env: Env, jobId: string): Promise<string> {
+  return buildFileAccessUrl(request, env, jobId, false);
+}
+
+async function buildStreamUrl(request: Request, env: Env, jobId: string): Promise<string> {
+  return buildFileAccessUrl(request, env, jobId, true);
+}
+
+async function buildFileAccessUrl(
+  request: Request,
+  env: Env,
+  jobId: string,
+  inline: boolean,
+): Promise<string> {
   const ttl = readEnvInt(env.DOWNLOAD_TOKEN_TTL_SECONDS, 3600);
   const token = await createDownloadToken(
     {
@@ -3500,7 +3566,48 @@ async function buildDownloadUrl(request: Request, env: Env, jobId: string): Prom
   );
 
   const base = new URL(request.url);
-  return `${base.origin}/api/file/${encodeURIComponent(token)}`;
+  const suffix = inline ? '?inline=1' : '';
+  return `${base.origin}/api/file/${encodeURIComponent(token)}${suffix}`;
+}
+
+type ParsedByteRange = {
+  offset: number;
+  end: number;
+  length: number;
+  total: number;
+};
+
+function parseByteRangeHeader(value: string | null, total: number): ParsedByteRange | 'invalid' | null {
+  if (!value) return null;
+  const normalized = value.trim();
+  const match = normalized.match(/^bytes=(\d*)-(\d*)$/i);
+  if (!match || !Number.isFinite(total) || total <= 0) return 'invalid';
+
+  const startRaw = match[1] ?? '';
+  const endRaw = match[2] ?? '';
+  if (!startRaw && !endRaw) return 'invalid';
+
+  let offset: number;
+  let end: number;
+  if (!startRaw) {
+    const suffixLength = Number.parseInt(endRaw, 10);
+    if (!Number.isFinite(suffixLength) || suffixLength <= 0) return 'invalid';
+    offset = Math.max(total - suffixLength, 0);
+    end = total - 1;
+  } else {
+    offset = Number.parseInt(startRaw, 10);
+    end = endRaw ? Number.parseInt(endRaw, 10) : total - 1;
+    if (!Number.isFinite(offset) || !Number.isFinite(end)) return 'invalid';
+    if (offset < 0 || offset >= total || end < offset) return 'invalid';
+    end = Math.min(end, total - 1);
+  }
+
+  return {
+    offset,
+    end,
+    length: end - offset + 1,
+    total,
+  };
 }
 
 async function isDownloadTargetAvailable(
