@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS playlist_workflows (
   control_state     TEXT NOT NULL DEFAULT 'active', -- active | paused | cancelled
   archive_status    TEXT, -- building | ready | failed
   archive_url       TEXT,
+  archive_r2_key    TEXT,
   archive_error     TEXT,
   archive_finished_at TEXT,
   error_code        TEXT,
@@ -129,6 +130,22 @@ CREATE TABLE IF NOT EXISTS ops_audit_events (
 CREATE INDEX IF NOT EXISTS idx_ops_audit_created ON ops_audit_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ops_audit_action  ON ops_audit_events(action, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS dead_letter_jobs (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id        TEXT NOT NULL,
+  source        TEXT,
+  format        TEXT,
+  quality       TEXT,
+  attempts      INTEGER NOT NULL DEFAULT 0,
+  error_code    TEXT NOT NULL,
+  error_message TEXT,
+  queue_name    TEXT NOT NULL DEFAULT 'sounddrop-downloads',
+  created_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_dead_letter_jobs_job ON dead_letter_jobs(job_id);
+CREATE INDEX IF NOT EXISTS idx_dead_letter_jobs_created ON dead_letter_jobs(created_at DESC);
+
 CREATE TABLE IF NOT EXISTS user_preferences (
   sync_key   TEXT PRIMARY KEY,
   payload    TEXT NOT NULL,
@@ -136,6 +153,19 @@ CREATE TABLE IF NOT EXISTS user_preferences (
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_preferences_updated ON user_preferences(updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS sync_key_claims (
+  sync_key           TEXT PRIMARY KEY,
+  email_hash         TEXT,
+  turnstile_verified INTEGER NOT NULL DEFAULT 0,
+  ip_hash            TEXT,
+  created_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_claimed_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_key_claims_email ON sync_key_claims(email_hash);
+CREATE INDEX IF NOT EXISTS idx_sync_key_claims_updated ON sync_key_claims(updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS shared_queue_items (
   id         TEXT PRIMARY KEY,

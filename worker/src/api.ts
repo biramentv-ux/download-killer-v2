@@ -15,7 +15,7 @@ import {
 } from './origins';
 import { buildOpsSummary, recordTelemetry } from './telemetry';
 import { enqueueHistoryEvent } from './history';
-import { ensureDownloadJobMetadataSchema, ensurePlaylistWorkflowSchema } from './schema';
+import { ensureDownloadJobMetadataSchema, ensurePlaylistWorkflowSchema, ensureSyncKeyClaimsSchema } from './schema';
 import {
   hashAndCachePrivateUrl,
   resolvePrivateUrl,
@@ -38,6 +38,7 @@ import {
   parseJson,
   rateLimit,
   readEnvInt,
+  sha256Hex,
   sha256HexBytes,
   verifyDownloadToken,
   validateDownloadUrlPolicy,
@@ -69,6 +70,12 @@ interface DownloadRequestBody {
   quality?: AudioQuality;
   sync_key?: string;
   client_id?: string;
+}
+
+interface SyncClaimRequestBody {
+  key?: string;
+  email?: string;
+  turnstile_token?: string;
 }
 
 interface SmartFormatRequestBody {
@@ -214,6 +221,7 @@ interface PlaylistWorkflowRecord {
   control_state?: string | null;
   archive_status?: string | null;
   archive_url?: string | null;
+  archive_r2_key?: string | null;
   archive_error?: string | null;
   archive_finished_at?: string | null;
   error_code: string | null;
@@ -397,6 +405,10 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
     return handlePreferencesPost(request, env);
   }
 
+  if (path === '/sync/claim' && request.method === 'POST') {
+    return handleSyncClaim(request, env);
+  }
+
   if (path === '/search' && request.method === 'POST') {
     return handleSearch(request, env);
   }
@@ -452,6 +464,11 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
   const playlistWorkflowZipMatch = path.match(/^\/playlist\/workflow\/([0-9a-f-]{36})\/zip$/i);
   if (playlistWorkflowZipMatch && request.method === 'POST') {
     return handlePlaylistWorkflowZip(request, env, playlistWorkflowZipMatch[1]!);
+  }
+
+  const playlistWorkflowArchiveMatch = path.match(/^\/playlist\/workflow\/([0-9a-f-]{36})\/archive$/i);
+  if (playlistWorkflowArchiveMatch && request.method === 'GET') {
+    return handlePlaylistWorkflowArchiveDownload(request, env, playlistWorkflowArchiveMatch[1]!);
   }
 
   const jobEventsMatch = path.match(/^\/job\/([0-9a-f-]{36})\/events$/i);
@@ -1567,7 +1584,7 @@ async function handlePlaylistWorkflowStatus(request: Request, env: Env, workflow
   try {
     row = await env.DB.prepare(
       `SELECT workflow_id, source_url, source, status, phase, total_tracks, queued_count, processing_count,
-              done_count, failed_count, deduped_count, control_state, archive_status, archive_url, archive_error,
+              done_count, failed_count, deduped_count, control_state, archive_status, archive_url, archive_r2_key, archive_error,
               archive_finished_at, error_code, error_message, created_at, updated_at, finished_at
        FROM playlist_workflows
        WHERE workflow_id = ?`,
@@ -1703,7 +1720,7 @@ async function handlePlaylistWorkflowControl(
   try {
     updated = await env.DB.prepare(
       `SELECT workflow_id, source_url, source, status, phase, total_tracks, queued_count, processing_count,
-              done_count, failed_count, deduped_count, control_state, archive_status, archive_url, archive_error,
+              done_count, failed_count, deduped_count, control_state, archive_status, archive_url, archive_r2_key, archive_error,
               archive_finished_at, error_code, error_message, created_at, updated_at, finished_at
        FROM playlist_workflows
        WHERE workflow_id = ?`,
@@ -1732,6 +1749,7 @@ async function handlePlaylistWorkflowControl(
 
 async function sanitizePlaylistWorkflow(row: PlaylistWorkflowRecord): Promise<Record<string, unknown>> {
   const { source_url: sourceUrl, ...safeRow } = row;
+  delete (safeRow as { archive_r2_key?: unknown }).archive_r2_key;
   return {
     ...safeRow,
     source_url: null,
@@ -1841,15 +1859,28 @@ async function handlePlaylistWorkflowZip(request: Request, env: Env, workflowId:
       throw new Error('ZIP response missing download_url');
     }
 
+    let servedArchiveUrl = archiveUrl;
+    let archiveR2Key: string | null = null;
+    try {
+      const stored = await persistWorkflowArchiveToR2(env, workflowId, archiveUrl, payload.filename ?? `${workflowId}.zip`);
+      if (stored) {
+        archiveR2Key = stored.r2Key;
+        servedArchiveUrl = `${resolvePublicBaseUrl(request, env)}/api/playlist/workflow/${workflowId}/archive`;
+      }
+    } catch (error) {
+      console.warn('Workflow archive R2 persistence skipped', error);
+    }
+
     await env.DB.prepare(
       `UPDATE playlist_workflows
        SET archive_status = 'ready',
            archive_url = ?,
+           archive_r2_key = ?,
            archive_error = NULL,
            archive_finished_at = CURRENT_TIMESTAMP,
            updated_at = CURRENT_TIMESTAMP
        WHERE workflow_id = ?`,
-    ).bind(archiveUrl, workflowId).run();
+    ).bind(servedArchiveUrl, archiveR2Key, workflowId).run();
 
     await recordTelemetry(env, {
       event: 'workflow_archive_ready',
@@ -1864,7 +1895,8 @@ async function handlePlaylistWorkflowZip(request: Request, env: Env, workflowId:
       ok: true,
       workflow_id: workflowId,
       archive_status: 'ready',
-      archive_url: archiveUrl,
+      archive_url: servedArchiveUrl,
+      archive_r2_cached: Boolean(archiveR2Key),
       archive_filename: payload.filename ?? `${workflowId}.zip`,
       archive_file_size: payload.file_size ?? 0,
       file_count: files.length,
@@ -1880,6 +1912,114 @@ async function handlePlaylistWorkflowZip(request: Request, env: Env, workflowId:
     ).bind(message.slice(0, 400), workflowId).run();
     return jsonError(request, env, 'WORKFLOW_ARCHIVE_FAILED', message, 502, true);
   }
+}
+
+async function persistWorkflowArchiveToR2(
+  env: Env,
+  workflowId: string,
+  archiveUrl: string,
+  filename: string,
+): Promise<{ r2Key: string; fileSize: number } | null> {
+  if (!env.FILES) return null;
+
+  const normalizedArchiveUrl = normalizeDownloaderUrl(archiveUrl, env);
+  const archiveHeaders = buildDownloaderHeaders(normalizedArchiveUrl, env);
+  const response = await fetch(normalizedArchiveUrl, archiveHeaders ? { headers: archiveHeaders } : undefined);
+  if (!response.ok || !response.body) {
+    const details = await response.text();
+    throw new Error(`Archive fetch failed (${response.status}): ${details.slice(0, 180)}`);
+  }
+
+  const buffer = await response.arrayBuffer();
+  const hash = await sha256HexBytes(buffer);
+  const r2Key = `archives/${workflowId}/${hash}.zip`;
+  const existing = await env.FILES.head(r2Key);
+  if (!existing) {
+    await env.FILES.put(r2Key, buffer, {
+      httpMetadata: {
+        contentType: response.headers.get('content-type') ?? 'application/zip',
+        contentDisposition: `attachment; filename="${sanitizeArchiveFilename(filename)}"`,
+      },
+    });
+  }
+
+  return { r2Key, fileSize: buffer.byteLength };
+}
+
+async function handlePlaylistWorkflowArchiveDownload(
+  request: Request,
+  env: Env,
+  workflowId: string,
+): Promise<Response> {
+  await ensurePlaylistWorkflowSchema(env);
+  const row = await env.DB.prepare(
+    `SELECT workflow_id, archive_status, archive_url, archive_r2_key
+     FROM playlist_workflows
+     WHERE workflow_id = ?`,
+  ).bind(workflowId).first<{
+    workflow_id: string;
+    archive_status: string | null;
+    archive_url: string | null;
+    archive_r2_key: string | null;
+  }>();
+
+  if (!row) {
+    return jsonError(request, env, 'WORKFLOW_NOT_FOUND', 'Playlist workflow not found', 404);
+  }
+  if (row.archive_status !== 'ready') {
+    return jsonError(request, env, 'WORKFLOW_ARCHIVE_NOT_READY', 'Playlist archive is not ready', 409, true);
+  }
+
+  const fallbackFilename = `${workflowId}.zip`;
+  if (row.archive_r2_key && env.FILES) {
+    const object = await env.FILES.get(row.archive_r2_key);
+    if (!object || !object.body) {
+      return jsonError(request, env, 'WORKFLOW_ARCHIVE_MISSING', 'Playlist archive file is missing', 404, true);
+    }
+
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set('etag', object.httpEtag);
+    headers.set('content-type', headers.get('content-type') ?? 'application/zip');
+    headers.set('content-disposition', `attachment; filename="${fallbackFilename}"`);
+
+    return new Response(object.body, {
+      status: 200,
+      headers,
+    });
+  }
+
+  if (!row.archive_url) {
+    return jsonError(request, env, 'WORKFLOW_ARCHIVE_MISSING', 'Playlist archive URL is missing', 404, true);
+  }
+
+  const normalizedArchiveUrl = normalizeDownloaderUrl(row.archive_url, env);
+  const archiveHeaders = buildDownloaderHeaders(normalizedArchiveUrl, env);
+  const upstream = await fetch(normalizedArchiveUrl, archiveHeaders ? { headers: archiveHeaders } : undefined);
+  if (!upstream.ok || !upstream.body) {
+    const details = await upstream.text();
+    return jsonError(request, env, 'WORKFLOW_ARCHIVE_FETCH_FAILED', details || 'Unable to fetch playlist archive', 502, true);
+  }
+
+  const headers = new Headers();
+  headers.set('content-type', upstream.headers.get('content-type') ?? 'application/zip');
+  const contentLength = upstream.headers.get('content-length');
+  if (contentLength) headers.set('content-length', contentLength);
+  headers.set('content-disposition', `attachment; filename="${fallbackFilename}"`);
+
+  return new Response(upstream.body, {
+    status: 200,
+    headers,
+  });
+}
+
+function sanitizeArchiveFilename(filename: string): string {
+  const cleaned = String(filename || 'playlist.zip')
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+  return cleaned.toLowerCase().endsWith('.zip') ? cleaned : `${cleaned || 'playlist'}.zip`;
 }
 
 async function handleBatchPauseAll(request: Request, env: Env): Promise<Response> {
@@ -2944,6 +3084,13 @@ async function handleRuntimeConfig(request: Request, env: Env): Promise<Response
       shared_queue: true,
       offline_cache_warming: true,
       archive_browser_v2: true,
+      sync_key_claims: true,
+    },
+    sync_key_claim: {
+      endpoint: `${base}/api/sync/claim`,
+      email_required: env.SYNC_KEY_EMAIL_REQUIRED === '1',
+      turnstile_required: env.SYNC_KEY_TURNSTILE_REQUIRED === '1',
+      turnstile_site_key: String(env.SYNC_KEY_TURNSTILE_SITE_KEY ?? '').trim() || null,
     },
     client_min_versions: {
       web: (env.MIN_CLIENT_WEB ?? '7.0.0').trim(),
@@ -3482,6 +3629,109 @@ async function resolveTelegramInfo(env: Env): Promise<{ available: boolean; user
 async function handleTelegramInfo(request: Request, env: Env): Promise<Response> {
   const info = await resolveTelegramInfo(env);
   return jsonOk(request, env, info);
+}
+
+async function handleSyncClaim(request: Request, env: Env): Promise<Response> {
+  const ip = getClientAddress(request);
+  const rl = await rateLimit(env.CACHE, `sync-claim:${ip}`, 5, 60);
+  if (rl.limited) {
+    return jsonError(request, env, 'RATE_LIMITED', 'Too many sync claim requests', 429, true);
+  }
+
+  const body = await parseJson<SyncClaimRequestBody>(request);
+  const providedKey = normalizeOptionalSyncKey(body?.key);
+  if (body?.key && !providedKey) {
+    return jsonError(request, env, 'INVALID_SYNC_KEY', 'Sync key is invalid', 400);
+  }
+
+  const email = normalizeEmail(body?.email);
+  if (body?.email && !email) {
+    return jsonError(request, env, 'INVALID_EMAIL', 'Email address is invalid', 400);
+  }
+  if (env.SYNC_KEY_EMAIL_REQUIRED === '1' && !email) {
+    return jsonError(request, env, 'EMAIL_REQUIRED', 'Email address is required to claim a sync key', 400);
+  }
+
+  let turnstileVerified = false;
+  if (env.SYNC_KEY_TURNSTILE_REQUIRED === '1' || body?.turnstile_token) {
+    const token = String(body?.turnstile_token ?? '').trim();
+    if (!token) {
+      return jsonError(request, env, 'CAPTCHA_REQUIRED', 'Captcha token is required to claim a sync key', 400);
+    }
+    const verified = await verifyTurnstileToken(env, token, ip);
+    if (!verified) {
+      return jsonError(request, env, 'CAPTCHA_FAILED', 'Captcha verification failed', 400);
+    }
+    turnstileVerified = true;
+  }
+
+  const key = providedKey ?? generateSyncKey();
+  const emailHash = email ? await sha256Hex(email) : null;
+  const ipHash = await sha256Hex(ip);
+
+  await ensureSyncKeyClaimsSchema(env);
+  await env.DB.prepare(
+    `INSERT INTO sync_key_claims (
+       sync_key, email_hash, turnstile_verified, ip_hash, created_at, updated_at, last_claimed_at
+     ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+     ON CONFLICT(sync_key) DO UPDATE SET
+       email_hash = COALESCE(excluded.email_hash, sync_key_claims.email_hash),
+       turnstile_verified = MAX(sync_key_claims.turnstile_verified, excluded.turnstile_verified),
+       ip_hash = excluded.ip_hash,
+       updated_at = CURRENT_TIMESTAMP,
+       last_claimed_at = CURRENT_TIMESTAMP`,
+  ).bind(key, emailHash, turnstileVerified ? 1 : 0, ipHash).run();
+
+  await recordTelemetry(env, {
+    event: 'sync_key_claimed',
+    status: '200',
+    code: emailHash ? 'EMAIL_HASHED' : 'NO_EMAIL',
+  });
+
+  return jsonOk(request, env, {
+    key,
+    claimed: true,
+    email_bound: Boolean(emailHash),
+    turnstile_verified: turnstileVerified,
+  });
+}
+
+function normalizeEmail(input: string | null | undefined): string | null {
+  const value = String(input ?? '').trim().toLowerCase();
+  if (!value) return null;
+  if (value.length > 254) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return null;
+  return value;
+}
+
+function generateSyncKey(): string {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `sd${btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')}`.slice(0, 32);
+}
+
+async function verifyTurnstileToken(env: Env, token: string, ip: string): Promise<boolean> {
+  const secret = String(env.SYNC_KEY_TURNSTILE_SECRET ?? '').trim();
+  if (!secret) return false;
+
+  const form = new FormData();
+  form.set('secret', secret);
+  form.set('response', token);
+  if (ip && ip !== 'unknown') form.set('remoteip', ip);
+
+  try {
+    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: form,
+    });
+    if (!response.ok) return false;
+    const payload = await response.json<{ success?: boolean }>();
+    return payload.success === true;
+  } catch {
+    return false;
+  }
 }
 
 async function ensurePreferencesTable(env: Env): Promise<void> {

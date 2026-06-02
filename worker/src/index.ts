@@ -5,7 +5,7 @@
 
 import { downloadRouter } from './api';
 import { enqueueHistoryEvent, processHistoryEventBatch } from './history';
-import { ensurePlaylistWorkflowSchema } from './schema';
+import { ensureDeadLetterSchema, ensurePlaylistWorkflowSchema } from './schema';
 import {
   handleTelegramUpdate,
   notifyTelegramComplete,
@@ -23,6 +23,7 @@ import {
 import { evaluateOpsAlerts, recordSmokeProbeResult, recordTelemetry } from './telemetry';
 import { cleanupStaleKvKeys, resolvePrivateUrl } from './security';
 import { calculateQueueRetryDelayFromEnv } from './retry';
+import { cleanupExpiredJobsAndFiles, shouldRunRetentionCleanup } from './retention';
 
 const MAX_QUEUE_RETRIES = 5;
 const INVIDIOUS_DEFAULT_BASE_URL = 'https://inv.nadeko.net';
@@ -191,11 +192,21 @@ export default {
 
     await evaluateOpsAlerts(env);
     const cleanup = await cleanupStaleKvKeys(env);
+    const retention = shouldRunRetentionCleanup(controller.cron)
+      ? await cleanupExpiredJobsAndFiles(env)
+      : null;
     await recordTelemetry(env, {
       event: 'scheduled_tick',
       status: '200',
       latency_ms: Date.now() - startedAt,
-      code: `${controller.cron};kv_cleanup_scanned=${cleanup.scanned};kv_cleanup_deleted=${cleanup.deleted}`,
+      code: [
+        controller.cron,
+        `kv_cleanup_scanned=${cleanup.scanned}`,
+        `kv_cleanup_deleted=${cleanup.deleted}`,
+        retention
+          ? `retention_jobs=${retention.jobs_deleted};retention_r2=${retention.r2_keys_deleted}`
+          : 'retention_skipped=cron',
+      ].join(';'),
     });
   },
 } satisfies ExportedHandler<Env, DownloadJob | JobHistoryEvent>;
@@ -389,6 +400,20 @@ async function markFailed(
     created_at: string;
   }>();
 
+  try {
+    await recordDeadLetterJob(env, {
+      jobId,
+      source: row?.source ?? null,
+      format: row?.format ?? null,
+      quality: row?.quality ?? null,
+      attempts,
+      errorCode,
+      errorMessage,
+    });
+  } catch (error) {
+    console.warn(`Dead-letter audit insert skipped for job ${jobId}`, error);
+  }
+
   if (row?.chat_id && row.message_id) {
     const originalUrl = await resolvePrivateUrl(env, 'job', row.id, row.url);
     await notifyTelegramFailure(
@@ -407,6 +432,35 @@ async function markFailed(
       env,
     );
   }
+}
+
+async function recordDeadLetterJob(
+  env: Env,
+  input: {
+    jobId: string;
+    source: string | null;
+    format: string | null;
+    quality: string | null;
+    attempts: number;
+    errorCode: string;
+    errorMessage: string;
+  },
+): Promise<void> {
+  await ensureDeadLetterSchema(env);
+  await env.DB.prepare(
+    `INSERT INTO dead_letter_jobs (
+       job_id, source, format, quality, attempts, error_code, error_message, queue_name
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    input.jobId,
+    input.source,
+    input.format,
+    input.quality,
+    input.attempts,
+    input.errorCode,
+    input.errorMessage.slice(0, 2000),
+    'sounddrop-downloads',
+  ).run();
 }
 
 async function downloadViaInternalService(

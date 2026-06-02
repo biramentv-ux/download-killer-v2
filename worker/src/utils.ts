@@ -325,7 +325,7 @@ function jsonResponse(request: Request, env: Env, payload: unknown, status: numb
     'Content-Type': 'application/json; charset=utf-8',
   });
   const body = JSON.stringify(payload);
-  const compressed = maybeCompressJsonBody(request, body, headers);
+  const compressed = maybeCompressJsonBody(request, env, body, headers);
 
   return new Response(compressed, {
     status,
@@ -333,7 +333,11 @@ function jsonResponse(request: Request, env: Env, payload: unknown, status: numb
   });
 }
 
-function maybeCompressJsonBody(request: Request, body: string, headers: Headers): BodyInit {
+function maybeCompressJsonBody(request: Request, env: Env, body: string, headers: Headers): BodyInit {
+  if (env.API_JSON_COMPRESSION_ENABLED !== '1') {
+    return body;
+  }
+
   const acceptEncoding = request.headers.get('Accept-Encoding')?.toLowerCase() ?? '';
   appendVary(headers, 'Accept-Encoding');
 

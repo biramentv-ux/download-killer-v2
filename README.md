@@ -405,6 +405,13 @@ Worker vars/secrets:
 - `RELEASE_SIGNING_KEY_ID` - public key id label embedded in `/api/releases/manifest`.
 - `RELEASE_MANIFEST_CACHE_TTL_SECONDS` - cache TTL for generated release manifests.
 - `RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64` (secret) - Ed25519 PKCS#8 private key used to sign the release manifest payload.
+- `SYNC_KEY_EMAIL_REQUIRED` - require email when claiming/protecting a sync key (`0` by default).
+- `SYNC_KEY_TURNSTILE_REQUIRED` - require Cloudflare Turnstile token for `/api/sync/claim` (`0` by default).
+- `SYNC_KEY_TURNSTILE_SITE_KEY` - public Turnstile site key exposed through `/api/runtime-config`.
+- `SYNC_KEY_TURNSTILE_SECRET` (secret) - Turnstile secret used server-side by `/api/sync/claim`.
+- `JOB_RETENTION_ENABLED`, `JOB_RETENTION_DAYS`, `JOB_RETENTION_BATCH_SIZE` - daily cron cleanup for terminal jobs, dead-letter audit rows, old playlist workflows, and unreferenced R2 files.
+- `KV_CLEANUP_PREFIXES`, `KV_CLEANUP_MAX_KEYS` - stale KV cleanup scope for keys accidentally written without TTL.
+- `API_JSON_COMPRESSION_ENABLED` - optional Worker-side JSON compression flag. Keep `0` unless edge responses have been validated with correct `Content-Encoding` headers.
 
 Downloader vars:
 
@@ -417,5 +424,6 @@ Downloader vars:
 - Queue lifecycle: `queued -> processing -> done|failed`
 - Request dedupe: fingerprint (`url|format|quality`) in KV
 - File dedupe: global SHA-256 cache in R2 (when enabled)
+- Retention cleanup: daily cron deletes only terminal `done/failed` jobs older than the retention window and deletes R2 objects only after DB references are gone.
 - Download links are tokenized and time-limited
 - Playlist queueing has no app-level track-count cap; platform/API/runtime limits may still apply.

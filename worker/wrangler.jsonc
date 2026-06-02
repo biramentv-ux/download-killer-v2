@@ -32,7 +32,7 @@
   },
 
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    "crons": ["*/5 * * * *", "17 3 * * *"]
   },
 
   // Custom-domain routes are enabled after the Cloudflare account has an active
@@ -137,7 +137,14 @@
     "TELEGRAM_WEBHOOK_REQUIRE_JWT": "0",
     "WEBHOOK_HMAC_MAX_SKEW_SECONDS": "300",
     "KV_CLEANUP_PREFIXES": "url:,result:,private-url:,tg:url:,tg:result:",
-    "KV_CLEANUP_MAX_KEYS": "500"
+    "KV_CLEANUP_MAX_KEYS": "500",
+    "SYNC_KEY_EMAIL_REQUIRED": "0",
+    "SYNC_KEY_TURNSTILE_REQUIRED": "0",
+    "SYNC_KEY_TURNSTILE_SITE_KEY": "",
+    "JOB_RETENTION_ENABLED": "1",
+    "JOB_RETENTION_DAYS": "30",
+    "JOB_RETENTION_BATCH_SIZE": "100",
+    "API_JSON_COMPRESSION_ENABLED": "0"
   }
 
   // secrets (wrangler secret put):
@@ -145,6 +152,7 @@
   // TELEGRAM_SECRET_TOKEN
   // TELEGRAM_WEBHOOK_JWT_SECRET or TELEGRAM_WEBHOOK_JWT_PUBLIC_JWK
   // WEBHOOK_HMAC_SECRET
+  // SYNC_KEY_TURNSTILE_SECRET
   // DOWNLOADER_API_KEY
   // DOWNLOAD_TOKEN_SECRET
   // OPS_READ_TOKEN

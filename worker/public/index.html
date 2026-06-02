@@ -2186,6 +2186,11 @@
             <button class="action-btn" id="copySyncKeyBtn">Copy Sync Key</button>
             <button class="action-btn" id="setSyncKeyBtn">Set Sync Key</button>
           </div>
+          <div class="inline-row" style="margin-top:8px;">
+            <input id="syncClaimEmailInput" class="ops-input" type="email" autocomplete="email" placeholder="Email for protected sync key">
+            <button class="action-btn" id="claimSyncKeyBtn">Protect Sync Key</button>
+          </div>
+          <div id="syncClaimBox" class="soft"></div>
           <div id="syncBox" class="soft"></div>
           <div id="versionGateBox" class="status-card hidden" style="margin-top:10px;border-color:rgba(255,128,128,0.5);"></div>
           <div id="desktopModeBox" class="soft hidden"></div>
@@ -2259,6 +2264,11 @@
 	      downloadLink: "https://t.me/dyrakarmy_bot?start=download",
 	    };
 	    let TELEGRAM_LINK_OVERRIDE = { ...TELEGRAM_FALLBACK_LINK };
+	    let SYNC_CLAIM_CONFIG = {
+	      email_required: false,
+	      turnstile_required: false,
+	      turnstile_site_key: "",
+	    };
 	    const RUNTIME_CONFIG_STORAGE_KEY = "sd_runtime_config_v1";
 	    const RUNTIME_CONFIG_MAX_AGE_MS = 5 * 60 * 1000;
 	    const OPS_TOKEN_STORAGE_KEY = "sd_ops_token_v1";
@@ -2445,6 +2455,11 @@
         sync_invalid_key: "Invalid sync key format.",
         sync_set_prompt: "Enter sync key from another device:",
         sync_set_updated: "Sync key updated.",
+        sync_claim_email_placeholder: "Email for protected sync key",
+        sync_claim_button: "Protect Sync Key",
+        sync_claim_success: "Sync key protected. Email stored only as SHA-256 hash.",
+        sync_claim_failed: "Sync protection failed: {message}",
+        sync_claim_captcha_required: "Captcha is required; Turnstile widget is not configured in this client yet.",
         queue_retry: "Retry",
         queue_pause: "Pause",
         queue_resume: "Resume",
@@ -2676,6 +2691,11 @@
 	        sync_invalid_key: "Невалиден формат на Sync ключ.",
 	        sync_set_prompt: "Въведи Sync ключ от друго устройство:",
 	        sync_set_updated: "Sync ключът е обновен.",
+	        sync_claim_email_placeholder: "Имейл за защитен Sync ключ",
+	        sync_claim_button: "Защити Sync ключа",
+	        sync_claim_success: "Sync ключът е защитен. Имейлът се пази само като SHA-256 хеш.",
+	        sync_claim_failed: "Грешка при защита на Sync: {message}",
+	        sync_claim_captcha_required: "Изисква се Captcha; Turnstile widget още не е конфигуриран в клиента.",
         queue_retry: "Повтори",
         queue_pause: "Пауза",
         queue_resume: "Продължи",
@@ -2805,6 +2825,11 @@
       track_preview_label: "Vista previa completa",
 	      history_recent: "Tareas recientes",
 	      sync_label: "Clave Sync: {key} | Idioma sync: {lang}",
+	      sync_claim_email_placeholder: "Email para clave Sync protegida",
+	      sync_claim_button: "Proteger Sync",
+	      sync_claim_success: "Clave Sync protegida. El email se guarda solo como hash SHA-256.",
+	      sync_claim_failed: "Error de protección Sync: {message}",
+	      sync_claim_captcha_required: "Se requiere Captcha; el widget Turnstile aún no está configurado.",
 	      ops_load: "Cargar resumen Ops",
 	      ops_not_loaded: "Resumen Ops no cargado.",
 	      ops_loading: "Cargando resumen Ops...",
@@ -2907,6 +2932,11 @@
       track_preview_label: "Полное прослушивание",
 	      history_recent: "Последние задачи",
 	      sync_label: "Sync ключ: {key} | Язык sync: {lang}",
+	      sync_claim_email_placeholder: "Email для защищённого Sync ключа",
+	      sync_claim_button: "Защитить Sync",
+	      sync_claim_success: "Sync ключ защищён. Email хранится только как SHA-256 хеш.",
+	      sync_claim_failed: "Ошибка защиты Sync: {message}",
+	      sync_claim_captcha_required: "Требуется Captcha; виджет Turnstile ещё не настроен.",
 	      ops_load: "Загрузить сводку Ops",
 	      ops_not_loaded: "Сводка Ops не загружена.",
 	      ops_loading: "Загрузка сводки Ops...",
@@ -3009,6 +3039,11 @@
 	      track_preview_label: "Vollständige Vorschau",
 	      history_recent: "Letzte Aufgaben",
 	      sync_label: "Sync-Schlüssel: {key} | Sprache sync: {lang}",
+	      sync_claim_email_placeholder: "E-Mail für geschützten Sync-Schlüssel",
+	      sync_claim_button: "Sync schützen",
+	      sync_claim_success: "Sync-Schlüssel geschützt. E-Mail wird nur als SHA-256-Hash gespeichert.",
+	      sync_claim_failed: "Sync-Schutz fehlgeschlagen: {message}",
+	      sync_claim_captcha_required: "Captcha erforderlich; Turnstile-Widget ist noch nicht konfiguriert.",
 	      ops_load: "Ops-Zusammenfassung laden",
 	      ops_not_loaded: "Ops-Zusammenfassung nicht geladen.",
 	      ops_loading: "Ops-Zusammenfassung wird geladen...",
@@ -3665,6 +3700,10 @@
         if (copySyncKeyBtn) copySyncKeyBtn.textContent = translate("sync_copy_key");
         const setSyncKeyBtn = document.getElementById("setSyncKeyBtn");
         if (setSyncKeyBtn) setSyncKeyBtn.textContent = translate("sync_set_key");
+        const syncClaimEmailInput = document.getElementById("syncClaimEmailInput");
+        if (syncClaimEmailInput) syncClaimEmailInput.placeholder = translate("sync_claim_email_placeholder");
+        const claimSyncKeyBtn = document.getElementById("claimSyncKeyBtn");
+        if (claimSyncKeyBtn) claimSyncKeyBtn.textContent = translate("sync_claim_button");
 	      const opsSummaryBox = document.getElementById("opsSummaryBox");
 	      if (opsSummaryBox && (!opsSummaryBox.dataset.state || opsSummaryBox.dataset.state === "idle")) {
 	        opsSummaryBox.textContent = translate("ops_not_loaded");
@@ -3791,6 +3830,13 @@
         PREFERENCE_DEFAULTS = {
           ...PREFERENCE_DEFAULTS,
           ...config.preference_defaults,
+        };
+      }
+      if (config.sync_key_claim && typeof config.sync_key_claim === "object") {
+        SYNC_CLAIM_CONFIG = {
+          email_required: Boolean(config.sync_key_claim.email_required),
+          turnstile_required: Boolean(config.sync_key_claim.turnstile_required),
+          turnstile_site_key: String(config.sync_key_claim.turnstile_site_key || ""),
         };
       }
 
@@ -4448,6 +4494,47 @@
       await savePreferencesPreference();
       await loadTelegramButtons();
       alert(translate("sync_set_updated"));
+    }
+
+    async function claimSyncKey() {
+      const status = document.getElementById("syncClaimBox");
+      const emailInput = document.getElementById("syncClaimEmailInput");
+      const email = String(emailInput && emailInput.value ? emailInput.value : "").trim();
+      if (status) {
+        status.dataset.state = "loading";
+        status.textContent = "...";
+      }
+      if (SYNC_CLAIM_CONFIG.turnstile_required) {
+        if (status) {
+          status.dataset.state = "error";
+          status.textContent = translate("sync_claim_captcha_required");
+        }
+        return;
+      }
+      try {
+        const payload = await apiJson("/sync/claim", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            key: syncKey,
+            email,
+          }),
+        });
+        if (payload && payload.key && /^[a-zA-Z0-9_-]{8,64}$/.test(payload.key)) {
+          syncKey = payload.key;
+          localStorage.setItem("sd_sync_key", syncKey);
+          renderSyncInfo();
+        }
+        if (status) {
+          status.dataset.state = "loaded";
+          status.textContent = translate("sync_claim_success");
+        }
+      } catch (error) {
+        if (status) {
+          status.dataset.state = "error";
+          status.textContent = translate("sync_claim_failed", { message: error.message || String(error) });
+        }
+      }
     }
 
     function setupPlatformButtons() {
@@ -6404,6 +6491,12 @@
 	    if (setSyncKeyBtn) {
 	      setSyncKeyBtn.addEventListener("click", () => {
 	        void promptAndSetSyncKey();
+	      });
+	    }
+	    const claimSyncKeyBtn = document.getElementById("claimSyncKeyBtn");
+	    if (claimSyncKeyBtn) {
+	      claimSyncKeyBtn.addEventListener("click", () => {
+	        void claimSyncKey();
 	      });
 	    }
 	    document.getElementById("refreshOpsBtn").addEventListener("click", loadOpsSummary);

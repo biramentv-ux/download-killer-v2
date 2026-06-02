@@ -2,6 +2,8 @@ import type { Env } from './types';
 
 let playlistWorkflowSchemaReady: Promise<void> | null = null;
 let downloadJobMetadataSchemaReady: Promise<void> | null = null;
+let deadLetterSchemaReady: Promise<void> | null = null;
+let syncKeyClaimsSchemaReady: Promise<void> | null = null;
 
 export function ensureDownloadJobMetadataSchema(env: Env): Promise<void> {
   if (!downloadJobMetadataSchemaReady) {
@@ -21,6 +23,26 @@ export function ensurePlaylistWorkflowSchema(env: Env): Promise<void> {
     });
   }
   return playlistWorkflowSchemaReady;
+}
+
+export function ensureDeadLetterSchema(env: Env): Promise<void> {
+  if (!deadLetterSchemaReady) {
+    deadLetterSchemaReady = ensureDeadLetterSchemaInternal(env).catch((error) => {
+      deadLetterSchemaReady = null;
+      throw error;
+    });
+  }
+  return deadLetterSchemaReady;
+}
+
+export function ensureSyncKeyClaimsSchema(env: Env): Promise<void> {
+  if (!syncKeyClaimsSchemaReady) {
+    syncKeyClaimsSchemaReady = ensureSyncKeyClaimsSchemaInternal(env).catch((error) => {
+      syncKeyClaimsSchemaReady = null;
+      throw error;
+    });
+  }
+  return syncKeyClaimsSchemaReady;
 }
 
 async function ensureDownloadJobMetadataSchemaInternal(env: Env): Promise<void> {
@@ -65,6 +87,7 @@ async function ensurePlaylistWorkflowSchemaInternal(env: Env): Promise<void> {
       control_state     TEXT NOT NULL DEFAULT 'active',
       archive_status    TEXT,
       archive_url       TEXT,
+      archive_r2_key    TEXT,
       archive_error     TEXT,
       archive_finished_at TEXT,
       error_code        TEXT,
@@ -81,6 +104,7 @@ async function ensurePlaylistWorkflowSchemaInternal(env: Env): Promise<void> {
     ['control_state', "TEXT NOT NULL DEFAULT 'active'"],
     ['archive_status', 'TEXT'],
     ['archive_url', 'TEXT'],
+    ['archive_r2_key', 'TEXT'],
     ['archive_error', 'TEXT'],
     ['archive_finished_at', 'TEXT'],
   ];
@@ -109,5 +133,46 @@ async function ensurePlaylistWorkflowSchemaInternal(env: Env): Promise<void> {
       'CREATE INDEX IF NOT EXISTS idx_playlist_workflow_jobs_workflow ON playlist_workflow_jobs(workflow_id)',
     ),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_playlist_workflow_jobs_job ON playlist_workflow_jobs(job_id)'),
+  ]);
+}
+
+async function ensureDeadLetterSchemaInternal(env: Env): Promise<void> {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS dead_letter_jobs (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id        TEXT NOT NULL,
+      source        TEXT,
+      format        TEXT,
+      quality       TEXT,
+      attempts      INTEGER NOT NULL DEFAULT 0,
+      error_code    TEXT NOT NULL,
+      error_message TEXT,
+      queue_name    TEXT NOT NULL DEFAULT 'sounddrop-downloads',
+      created_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+
+  await env.DB.batch([
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_dead_letter_jobs_job ON dead_letter_jobs(job_id)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_dead_letter_jobs_created ON dead_letter_jobs(created_at DESC)'),
+  ]);
+}
+
+async function ensureSyncKeyClaimsSchemaInternal(env: Env): Promise<void> {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS sync_key_claims (
+      sync_key           TEXT PRIMARY KEY,
+      email_hash         TEXT,
+      turnstile_verified INTEGER NOT NULL DEFAULT 0,
+      ip_hash            TEXT,
+      created_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_claimed_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+
+  await env.DB.batch([
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_sync_key_claims_email ON sync_key_claims(email_hash)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_sync_key_claims_updated ON sync_key_claims(updated_at DESC)'),
   ]);
 }
