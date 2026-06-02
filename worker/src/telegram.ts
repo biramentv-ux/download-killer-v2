@@ -479,11 +479,11 @@ function buildQualityKeyboard(key: string, format: AudioFormat): Array<Array<{ t
 }
 
 async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise<void> {
-  const chatId = cb.message?.chat.id;
+  const chatId = cb.message?.chat?.id;
   const messageId = cb.message?.message_id;
   const data = cb.data ?? '';
 
-  await answerCallback(cb.id, env);
+  await answerCallback(cb.id, env, callbackNotice(data));
   if (!chatId || !messageId) return;
 
   const rl = await rateLimit(env.CACHE, `tgcb:${chatId}`, 80, 60);
@@ -639,7 +639,7 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
       if (!LOSSLESS_FORMATS.includes(format) && settings.defaultQuality === 'lossless') settings.defaultQuality = '320';
       await saveTelegramSettings(chatId, settings, env);
     }
-    await editSettingsPanel(chatId, messageId, env);
+    await editSettingsFormatPanel(chatId, messageId, env);
     return;
   }
 
@@ -650,7 +650,7 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
       settings.defaultQuality = quality;
       await saveTelegramSettings(chatId, settings, env);
     }
-    await editSettingsPanel(chatId, messageId, env);
+    await editSettingsQualityPanel(chatId, messageId, env);
     return;
   }
 
@@ -1664,6 +1664,37 @@ async function editOrSend(chatId: number | string, messageId: number, env: Env, 
 
 function answerCallback(callbackId: string, env: Env, text?: string) {
   return telegramRequest('answerCallbackQuery', { callback_query_id: callbackId, ...(text ? { text } : {}) }, env);
+}
+
+function callbackNotice(data: string): string | undefined {
+  if (data.startsWith('fmt:')) {
+    const [, , format] = data.split(':');
+    return format ? `Формат: ${format.toUpperCase()}. Избери качество.` : 'Избери качество.';
+  }
+  if (data.startsWith('dl:')) {
+    return 'Добавям задачата в опашката.';
+  }
+  if (data.startsWith('qdef:')) {
+    return 'Добавям с настройките по подразбиране.';
+  }
+  if (data.startsWith('s:setfmt:')) {
+    const format = data.replace('s:setfmt:', '');
+    return `Форматът е сменен на ${format.toUpperCase()}.`;
+  }
+  if (data.startsWith('s:setq:')) {
+    const quality = data.replace('s:setq:', '');
+    return `Качеството е сменено на ${quality}.`;
+  }
+  if (data.startsWith('s:settier:')) {
+    return 'Аудио профилът е обновен.';
+  }
+  if (data.startsWith('s:tog:')) {
+    return 'Настройката е обновена.';
+  }
+  if (data.startsWith('s:setlang:')) {
+    return 'Езикът е обновен.';
+  }
+  return undefined;
 }
 
 function sendAudio(
