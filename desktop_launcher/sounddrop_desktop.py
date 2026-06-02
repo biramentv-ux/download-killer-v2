@@ -991,6 +991,7 @@ class DesktopBridge:
         requested_ffmpeg_quality = choose_quality(requested_format, requested_quality)
         saved: list[dict[str, Any]] = []
         failed: list[dict[str, Any]] = []
+        digits = max(2, len(str(len(tracks))))
 
         for index, track in enumerate(tracks, start=1):
             track_url = str(track.get('url') or '').strip()
@@ -1015,7 +1016,7 @@ class DesktopBridge:
                     str(info.get('track') or info.get('title') or track_title),
                     f'Track {index}',
                 )
-                out_name = f'{index:04d} - {final_artist} - {final_title}.{requested_format}'
+                out_name = f'{index:0{digits}d} - {final_artist} - {final_title}.{requested_format}'
                 destination = self._unique_path(folder / out_name)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 if destination.exists():

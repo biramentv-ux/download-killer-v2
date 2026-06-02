@@ -426,6 +426,12 @@ async function downloadViaInternalService(
       source,
       format: job.format,
       quality,
+      parent_job_id: job.parentJobId,
+      variant_role: job.variantRole ?? 'primary',
+      sync_key: job.syncKey,
+      playlist_folder: job.playlistFolder,
+      playlist_index: job.playlistIndex,
+      local_relpath: job.localRelpath,
     }),
   });
   const response = failover.response;

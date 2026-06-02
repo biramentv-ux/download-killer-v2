@@ -10,6 +10,12 @@ CREATE TABLE IF NOT EXISTS download_jobs (
   status        TEXT NOT NULL DEFAULT 'queued', -- queued | processing | paused | done | failed
   attempts      INTEGER NOT NULL DEFAULT 0,
   fingerprint   TEXT,
+  parent_job_id TEXT,
+  variant_role  TEXT NOT NULL DEFAULT 'primary', -- primary | mobile
+  sync_key      TEXT,
+  playlist_folder TEXT,
+  playlist_index  INTEGER,
+  local_relpath   TEXT,
   content_hash  TEXT,
   result_url    TEXT,
   r2_key        TEXT,
@@ -32,6 +38,9 @@ CREATE INDEX IF NOT EXISTS idx_jobs_chat         ON download_jobs(chat_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_source       ON download_jobs(source);
 CREATE INDEX IF NOT EXISTS idx_jobs_fingerprint  ON download_jobs(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_jobs_content_hash ON download_jobs(content_hash);
+CREATE INDEX IF NOT EXISTS idx_jobs_parent       ON download_jobs(parent_job_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_sync_created ON download_jobs(sync_key, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_jobs_variant_role ON download_jobs(variant_role);
 
 CREATE TABLE IF NOT EXISTS job_history_events (
   id         TEXT PRIMARY KEY,

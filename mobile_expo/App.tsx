@@ -615,13 +615,26 @@ export default function App() {
       const response = await fetch(`${apiBase}/api/download`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: value, source, format: settings.format, quality: settings.quality }),
+        body: JSON.stringify({
+          url: value,
+          source,
+          format: settings.format,
+          quality: settings.quality,
+          sync_key: settings.syncKey,
+          client_id: 'mobile_expo',
+        }),
       });
-      const body = await response.json() as { jobId?: string; error?: { message?: string } };
+      const body = await response.json() as {
+        jobId?: string;
+        mobile_variant_job_id?: string | null;
+        error?: { message?: string };
+      };
       if (!response.ok || !body.jobId) throw new Error(body.error?.message || `HTTP ${response.status}`);
       const jobId = body.jobId;
       setQueue((prev) => [{ id: jobId, url: value, format: settings.format, quality: settings.quality, status: 'queued' }, ...prev].slice(0, 20));
-      setStatus(`#${jobId.slice(0, 8)} queued`);
+      setStatus(body.mobile_variant_job_id
+        ? `#${jobId.slice(0, 8)} queued + mobile MP3`
+        : `#${jobId.slice(0, 8)} queued`);
 
       for (let i = 0; i < 90; i += 1) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -653,7 +666,8 @@ export default function App() {
     setBusy(true);
     setStatus(tr('working'));
     try {
-      const response = await fetch(`${apiBase}/api/history?limit=25&offset=0`);
+      const historyUrl = `${apiBase}/api/history?limit=25&offset=0&sync_key=${encodeURIComponent(settings.syncKey)}`;
+      const response = await fetch(historyUrl);
       const body = await response.json() as { history?: HistoryItem[]; error?: { message?: string } };
       if (!response.ok) throw new Error(body.error?.message || `HTTP ${response.status}`);
       setHistory(body.history || []);

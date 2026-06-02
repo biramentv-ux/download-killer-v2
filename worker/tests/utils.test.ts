@@ -4,6 +4,7 @@ import {
   createDownloadToken,
   createJobFingerprint,
   detectRequestThreat,
+  formatPlaylistRelPath,
   validateDownloadUrlPolicy,
   validateUrlPolicy,
   verifyDownloadToken,
@@ -96,5 +97,15 @@ describe('utils request threat detection', () => {
     }));
     expect(threat.blocked).toBe(true);
     expect(threat.code).toBe('SCRAPER_UA_BLOCKED');
+  });
+});
+
+describe('utils playlist paths', () => {
+  it('builds stable structured playlist paths', () => {
+    expect(formatPlaylistRelPath('My Playlist', 3, 'Song / One', 'Artist:Name', 'mp3', 120)).toEqual({
+      folder: 'My Playlist',
+      filename: '003 - Artist Name - Song One.mp3',
+      relpath: 'My Playlist/003 - Artist Name - Song One.mp3',
+    });
   });
 });

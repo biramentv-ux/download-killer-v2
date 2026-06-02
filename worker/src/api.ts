@@ -15,7 +15,7 @@ import {
 } from './origins';
 import { buildOpsSummary, recordTelemetry } from './telemetry';
 import { enqueueHistoryEvent } from './history';
-import { ensurePlaylistWorkflowSchema } from './schema';
+import { ensureDownloadJobMetadataSchema, ensurePlaylistWorkflowSchema } from './schema';
 import {
   hashAndCachePrivateUrl,
   resolvePrivateUrl,
@@ -27,6 +27,7 @@ import {
   createDownloadToken,
   createJobFingerprint,
   detectSourceFromUrl,
+  formatPlaylistRelPath,
   formatFileName,
   getClientAddress,
   isValidUrl,
@@ -66,6 +67,8 @@ interface DownloadRequestBody {
   source?: string;
   format?: AudioFormat;
   quality?: AudioQuality;
+  sync_key?: string;
+  client_id?: string;
 }
 
 interface SmartFormatRequestBody {
@@ -93,6 +96,9 @@ interface QueuedDownloadResult {
   source: string;
   format: AudioFormat;
   quality: AudioQuality;
+  mobileVariantJobId?: string;
+  mobileVariantStatus?: JobStatus;
+  mobileVariantDeduped?: boolean;
 }
 
 interface PlaylistRequestBody {
@@ -100,6 +106,7 @@ interface PlaylistRequestBody {
   source?: string;
   format?: AudioFormat;
   quality?: AudioQuality;
+  sync_key?: string;
 }
 
 interface PlaylistTrack {
@@ -165,6 +172,12 @@ interface JobRecord {
   format: string;
   quality: string;
   fingerprint: string | null;
+  parent_job_id: string | null;
+  variant_role: string | null;
+  sync_key: string | null;
+  playlist_folder: string | null;
+  playlist_index: number | null;
+  local_relpath: string | null;
   status: JobStatus;
   attempts: number;
   result_url: string | null;
@@ -709,17 +722,26 @@ async function handleDownload(request: Request, env: Env): Promise<Response> {
     return jsonError(request, env, policy.code ?? 'URL_BLOCKED', policy.message ?? 'URL is blocked', 400);
   }
 
+  const syncKey = normalizeOptionalSyncKey(body.sync_key);
+  if (body.sync_key && !syncKey) {
+    return jsonError(request, env, 'INVALID_SYNC_KEY', 'Sync key is invalid', 400);
+  }
+
   const queued = await queueDownloadJob(env, {
     url,
     source: body.source,
     format: body.format,
     quality: body.quality,
+    syncKey,
   });
 
   return jsonOk(request, env, {
     jobId: queued.jobId,
     status: queued.status,
     deduped: queued.deduped,
+    mobile_variant_job_id: queued.mobileVariantJobId ?? null,
+    mobile_variant_status: queued.mobileVariantStatus ?? null,
+    mobile_variant_deduped: queued.mobileVariantDeduped ?? false,
   }, 202);
 }
 
@@ -826,6 +848,7 @@ async function handleSharedQueuePost(request: Request, env: Env): Promise<Respon
     quality: body?.quality,
     title: body?.title,
     artist: body?.artist,
+    syncKey: key,
   });
 
   await ensureSharedQueueTable(env);
@@ -839,6 +862,26 @@ async function handleSharedQueuePost(request: Request, env: Env): Promise<Respon
       id, sync_key, job_id, url, source, format, quality, title, artist, added_by, status, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
   ).bind(itemId, key, queued.jobId, sharedUrlHash, queued.source, queued.format, queued.quality, title, artist, addedBy, queued.status).run();
+
+  if (queued.mobileVariantJobId) {
+    const mobileItemId = crypto.randomUUID();
+    const mobileUrlHash = await hashAndCachePrivateUrl(env, 'shared', mobileItemId, url);
+    await env.DB.prepare(
+      `INSERT INTO shared_queue_items (
+        id, sync_key, job_id, url, source, format, quality, title, artist, added_by, status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, 'mp3', '128', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    ).bind(
+      mobileItemId,
+      key,
+      queued.mobileVariantJobId,
+      mobileUrlHash,
+      queued.source,
+      title ? `${title} (mobile 128)` : 'Mobile MP3 128',
+      artist,
+      addedBy,
+      queued.mobileVariantStatus ?? 'queued',
+    ).run();
+  }
 
   await recordTelemetry(env, {
     event: 'shared_queue_item_added',
@@ -864,6 +907,9 @@ async function handleSharedQueuePost(request: Request, env: Env): Promise<Respon
     jobId: queued.jobId,
     status: queued.status,
     deduped: queued.deduped,
+    mobile_variant_job_id: queued.mobileVariantJobId ?? null,
+    mobile_variant_status: queued.mobileVariantStatus ?? null,
+    mobile_variant_deduped: queued.mobileVariantDeduped ?? false,
   }, 202);
 }
 
@@ -880,7 +926,8 @@ async function handleSharedQueueGet(request: Request, env: Env): Promise<Respons
     `SELECT
        s.id, s.job_id, s.url, s.source, s.format, s.quality, s.title, s.artist, s.added_by,
        s.status AS shared_status, s.created_at, s.updated_at,
-       j.status AS job_status, j.error_code, j.error_message, j.result_url, j.r2_key, j.file_size, j.finished_at
+       j.status AS job_status, j.error_code, j.error_message, j.result_url, j.r2_key, j.file_size, j.finished_at,
+       j.parent_job_id, j.variant_role, j.playlist_folder, j.playlist_index, j.local_relpath
      FROM shared_queue_items s
      LEFT JOIN download_jobs j ON j.id = s.job_id
      WHERE s.sync_key = ?
@@ -915,6 +962,11 @@ async function handleSharedQueueGet(request: Request, env: Env): Promise<Respons
       error_code: row.error_code,
       error_message: row.error_message,
       file_size: row.file_size,
+      parent_job_id: row.parent_job_id,
+      variant_role: row.variant_role,
+      playlist_folder: row.playlist_folder,
+      playlist_index: row.playlist_index,
+      local_relpath: row.local_relpath,
       download_url: downloadUrl,
       stream_url: streamUrl,
       created_at: row.created_at,
@@ -944,19 +996,54 @@ async function queueDownloadJob(
     quality?: AudioQuality;
     title?: string;
     artist?: string;
+    syncKey?: string | null;
+    parentJobId?: string | null;
+    variantRole?: 'primary' | 'mobile';
+    playlistFolder?: string | null;
+    playlistIndex?: number | null;
+    localRelpath?: string | null;
   },
 ): Promise<QueuedDownloadResult> {
+  await ensureDownloadJobMetadataSchema(env);
   const url = input.url.trim();
   const format = normalizeAudioFormat(input.format, 'mp3');
   const quality = normalizeAudioQuality(input.quality, format, format === 'flac' || format === 'wav' ? 'lossless' : '320');
   const source = normalizeSource(input.source ?? detectSourceFromUrl(url));
   const fingerprint = await createJobFingerprint(url, format, quality);
   const dedupeKey = `dedupe:${fingerprint}`;
+  const syncKey = normalizeOptionalSyncKey(input.syncKey ?? undefined);
+  const variantRole = input.variantRole ?? 'primary';
+  const parentJobId = input.parentJobId ?? null;
+  const playlistFolder = input.playlistFolder ?? null;
+  const playlistIndex = Number.isFinite(input.playlistIndex ?? NaN) ? Number(input.playlistIndex) : null;
+  const localRelpath = input.localRelpath ?? null;
 
   const dedupeTtl = readEnvInt(env.DOWNLOAD_DEDUPE_TTL_SECONDS, 120);
   const existing = await getExistingJobByFingerprint(env, fingerprint, dedupeTtl);
   if (existing) {
     await hashAndCachePrivateUrl(env, 'job', existing.id, url);
+    await env.DB.prepare(
+      `UPDATE download_jobs
+       SET sync_key = COALESCE(sync_key, ?),
+           playlist_folder = COALESCE(playlist_folder, ?),
+           playlist_index = COALESCE(playlist_index, ?),
+           local_relpath = COALESCE(local_relpath, ?),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    ).bind(syncKey, playlistFolder, playlistIndex, localRelpath, existing.id).run();
+    const mobileVariant = await maybeQueueMobileVariant(env, {
+      sourceUrl: url,
+      source,
+      parentJobId: existing.id,
+      syncKey,
+      title: input.title,
+      artist: input.artist,
+      playlistFolder,
+      playlistIndex,
+      localRelpath,
+      requestedFormat: format,
+      variantRole,
+    });
     await enqueueHistoryEvent(env, {
       jobId: existing.id,
       event: 'deduped',
@@ -969,7 +1056,17 @@ async function queueDownloadJob(
       status: '202',
       source,
     });
-    return { jobId: existing.id, status: existing.status, deduped: true, source, format, quality };
+    return {
+      jobId: existing.id,
+      status: existing.status,
+      deduped: true,
+      source,
+      format,
+      quality,
+      mobileVariantJobId: mobileVariant?.jobId,
+      mobileVariantStatus: mobileVariant?.status,
+      mobileVariantDeduped: mobileVariant?.deduped,
+    };
   }
 
   const jobId = crypto.randomUUID();
@@ -977,9 +1074,26 @@ async function queueDownloadJob(
 
   await env.DB.prepare(
     `INSERT INTO download_jobs (
-      id, url, source, format, quality, status, attempts, fingerprint, title, artist, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-  ).bind(jobId, urlHash, source, format, quality, fingerprint, input.title ?? null, input.artist ?? null).run();
+      id, url, source, format, quality, status, attempts, fingerprint,
+      parent_job_id, variant_role, sync_key, playlist_folder, playlist_index, local_relpath,
+      title, artist, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+  ).bind(
+    jobId,
+    urlHash,
+    source,
+    format,
+    quality,
+    fingerprint,
+    parentJobId,
+    variantRole,
+    syncKey,
+    playlistFolder,
+    playlistIndex,
+    localRelpath,
+    input.title ?? null,
+    input.artist ?? null,
+  ).run();
 
   await env.DOWNLOAD_QUEUE.send({
     id: jobId,
@@ -988,6 +1102,12 @@ async function queueDownloadJob(
     format,
     quality,
     fingerprint,
+    parentJobId: parentJobId ?? undefined,
+    variantRole,
+    syncKey: syncKey ?? undefined,
+    playlistFolder: playlistFolder ?? undefined,
+    playlistIndex: playlistIndex ?? undefined,
+    localRelpath: localRelpath ?? undefined,
     requestedAt: new Date().toISOString(),
   });
 
@@ -1008,7 +1128,110 @@ async function queueDownloadJob(
     source,
   });
 
-  return { jobId, status: 'queued', deduped: false, source, format, quality };
+  const mobileVariant = await maybeQueueMobileVariant(env, {
+    sourceUrl: url,
+    source,
+    parentJobId: jobId,
+    syncKey,
+    title: input.title,
+    artist: input.artist,
+    playlistFolder,
+    playlistIndex,
+    localRelpath,
+    requestedFormat: format,
+    variantRole,
+  });
+
+  return {
+    jobId,
+    status: 'queued',
+    deduped: false,
+    source,
+    format,
+    quality,
+    mobileVariantJobId: mobileVariant?.jobId,
+    mobileVariantStatus: mobileVariant?.status,
+    mobileVariantDeduped: mobileVariant?.deduped,
+  };
+}
+
+async function maybeQueueMobileVariant(
+  env: Env,
+  input: {
+    sourceUrl: string;
+    source: string;
+    parentJobId: string;
+    syncKey: string | null;
+    title?: string;
+    artist?: string;
+    playlistFolder?: string | null;
+    playlistIndex?: number | null;
+    localRelpath?: string | null;
+    requestedFormat: AudioFormat;
+    variantRole: 'primary' | 'mobile';
+  },
+): Promise<QueuedDownloadResult | null> {
+  if (env.AUTO_MOBILE_VARIANT_ENABLED === '0') return null;
+  if (input.variantRole === 'mobile') return null;
+  if (input.requestedFormat !== 'flac') return null;
+  if (!input.syncKey) return null;
+
+  const mobileFormat = normalizeAudioFormat(env.MOBILE_VARIANT_FORMAT, 'mp3');
+  const mobileQuality = normalizeAudioQuality(env.MOBILE_VARIANT_QUALITY, mobileFormat, '128');
+  if (mobileFormat !== 'mp3' || mobileQuality !== '128') {
+    // Keep mobile sync deterministic and store-efficient unless explicitly changed in code.
+    return null;
+  }
+
+  const existingChild = await env.DB.prepare(
+    `SELECT id, status FROM download_jobs
+     WHERE parent_job_id = ? AND variant_role = 'mobile' AND format = 'mp3' AND quality = '128'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+  ).bind(input.parentJobId).first<ExistingFingerprintJob>();
+  if (existingChild) {
+    await env.DB.prepare(
+      `UPDATE download_jobs
+       SET sync_key = COALESCE(sync_key, ?),
+           playlist_folder = COALESCE(playlist_folder, ?),
+           playlist_index = COALESCE(playlist_index, ?),
+           local_relpath = COALESCE(local_relpath, ?),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    ).bind(input.syncKey, input.playlistFolder ?? null, input.playlistIndex ?? null, input.localRelpath ?? null, existingChild.id).run();
+    return {
+      jobId: existingChild.id,
+      status: existingChild.status,
+      deduped: true,
+      source: input.source,
+      format: 'mp3',
+      quality: '128',
+    };
+  }
+
+  const queued = await queueDownloadJob(env, {
+    url: input.sourceUrl,
+    source: input.source,
+    format: 'mp3',
+    quality: '128',
+    title: input.title ? `${input.title} (mobile 128)` : 'Mobile MP3 128',
+    artist: input.artist,
+    syncKey: input.syncKey,
+    parentJobId: input.parentJobId,
+    variantRole: 'mobile',
+    playlistFolder: input.playlistFolder,
+    playlistIndex: input.playlistIndex,
+    localRelpath: input.localRelpath,
+  });
+
+  await recordTelemetry(env, {
+    event: 'mobile_variant_queued',
+    status: '202',
+    source: input.source,
+    code: queued.deduped ? 'DEDUPED' : 'QUEUED',
+  });
+
+  return queued;
 }
 
 async function handlePlaylistResolve(request: Request, env: Env): Promise<Response> {
@@ -1057,6 +1280,7 @@ async function handlePlaylistResolve(request: Request, env: Env): Promise<Respon
 
 async function handlePlaylistQueue(request: Request, env: Env): Promise<Response> {
   await ensurePlaylistWorkflowSchema(env);
+  await ensureDownloadJobMetadataSchema(env);
   const ip = getClientAddress(request);
   const rl = await rateLimit(env.CACHE, `playlist-queue:${ip}`, 5, 60);
   if (rl.limited) {
@@ -1082,6 +1306,10 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
   const format = AUDIO_FORMATS.includes(body.format ?? 'mp3') ? (body.format ?? 'mp3') : 'mp3';
   const quality = AUDIO_QUALITIES.includes(body.quality ?? '320') ? (body.quality ?? '320') : '320';
   const source = normalizeSource(body.source ?? detectSourceFromUrl(playlistUrl));
+  const syncKey = normalizeOptionalSyncKey(body.sync_key);
+  if (body.sync_key && !syncKey) {
+    return jsonError(request, env, 'INVALID_SYNC_KEY', 'Sync key is invalid', 400);
+  }
 
   const resolved = await fetchPlaylistResolve(env, playlistUrl, source);
   if (!resolved.payload || !Array.isArray(resolved.payload.tracks)) {
@@ -1108,6 +1336,8 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
   const dedupeTtl = readEnvInt(env.DOWNLOAD_DEDUPE_TTL_SECONDS, 120);
   const workflowId = crypto.randomUUID();
   const playlistUrlHash = await hashAndCachePrivateUrl(env, 'workflow', workflowId, playlistUrl);
+  const playlistTitle = resolved.payload.title ?? 'Playlist';
+  const playlistFolder = formatPlaylistRelPath(playlistTitle, 1, 'Track', 'Artist', format, queueTracks.length).folder;
 
   await env.DB.prepare(
     `INSERT INTO playlist_workflows (
@@ -1143,9 +1373,21 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
       const trackSource = normalizeSource(track.source || detectSourceFromUrl(trackUrl) || source);
       const fingerprint = await createJobFingerprint(trackUrl, format, quality);
       const dedupeKey = `dedupe:${fingerprint}`;
+      const title = String(track.title ?? '').trim() || 'Unknown Title';
+      const artist = String(track.artist ?? '').trim() || 'Unknown Artist';
+      const pathInfo = formatPlaylistRelPath(playlistFolder, index + 1, title, artist, format, queueTracks.length);
       const existing = await getExistingJobByFingerprint(env, fingerprint, dedupeTtl);
       if (existing) {
         await hashAndCachePrivateUrl(env, 'job', existing.id, trackUrl);
+        await env.DB.prepare(
+          `UPDATE download_jobs
+           SET sync_key = COALESCE(sync_key, ?),
+               playlist_folder = COALESCE(playlist_folder, ?),
+               playlist_index = COALESCE(playlist_index, ?),
+               local_relpath = COALESCE(local_relpath, ?),
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+        ).bind(syncKey, pathInfo.folder, index + 1, pathInfo.relpath, existing.id).run();
         deduped += 1;
         if (existing.status === 'done') {
           ready += 1;
@@ -1163,18 +1405,45 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
           source: trackSource,
           detail: workflowId,
         });
+        const mobilePathInfo = formatPlaylistRelPath(playlistFolder, index + 1, title, artist, 'mp3', queueTracks.length);
+        await maybeQueueMobileVariant(env, {
+          sourceUrl: trackUrl,
+          source: trackSource,
+          parentJobId: existing.id,
+          syncKey,
+          title,
+          artist,
+          playlistFolder: mobilePathInfo.folder,
+          playlistIndex: index + 1,
+          localRelpath: mobilePathInfo.relpath,
+          requestedFormat: format,
+          variantRole: 'primary',
+        });
         queuedJobIds.push(existing.id);
       } else {
         const jobId = crypto.randomUUID();
-        const title = String(track.title ?? '').trim() || 'Unknown Title';
-        const artist = String(track.artist ?? '').trim() || 'Unknown Artist';
         const trackUrlHash = await hashAndCachePrivateUrl(env, 'job', jobId, trackUrl);
 
         await env.DB.prepare(
           `INSERT INTO download_jobs (
-            id, url, source, format, quality, status, attempts, fingerprint, title, artist, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        ).bind(jobId, trackUrlHash, trackSource, format, quality, fingerprint, title, artist).run();
+            id, url, source, format, quality, status, attempts, fingerprint,
+            parent_job_id, variant_role, sync_key, playlist_folder, playlist_index, local_relpath,
+            title, artist, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, NULL, 'primary', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        ).bind(
+          jobId,
+          trackUrlHash,
+          trackSource,
+          format,
+          quality,
+          fingerprint,
+          syncKey,
+          pathInfo.folder,
+          index + 1,
+          pathInfo.relpath,
+          title,
+          artist,
+        ).run();
 
         pendingQueueBatch.push({
           body: {
@@ -1184,6 +1453,11 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
           format,
           quality,
           fingerprint,
+          syncKey: syncKey ?? undefined,
+          variantRole: 'primary',
+          playlistFolder: pathInfo.folder,
+          playlistIndex: index + 1,
+          localRelpath: pathInfo.relpath,
           requestedAt: new Date().toISOString(),
         },
         });
@@ -1204,6 +1478,20 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
           status: 'queued',
           source: trackSource,
           detail: workflowId,
+        });
+        const mobilePathInfo = formatPlaylistRelPath(playlistFolder, index + 1, title, artist, 'mp3', queueTracks.length);
+        await maybeQueueMobileVariant(env, {
+          sourceUrl: trackUrl,
+          source: trackSource,
+          parentJobId: jobId,
+          syncKey,
+          title,
+          artist,
+          playlistFolder: mobilePathInfo.folder,
+          playlistIndex: index + 1,
+          localRelpath: mobilePathInfo.relpath,
+          requestedFormat: format,
+          variantRole: 'primary',
         });
         accepted += 1;
         queuedJobIds.push(jobId);
@@ -2058,18 +2346,29 @@ async function handleJobEvents(request: Request, env: Env, jobId: string): Promi
 }
 
 async function handleHistory(request: Request, env: Env): Promise<Response> {
+  await ensureDownloadJobMetadataSchema(env);
   const url = new URL(request.url);
   const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get('limit') ?? '20', 10)));
   const offset = Math.max(0, Number.parseInt(url.searchParams.get('offset') ?? '0', 10));
+  const syncKey = normalizeOptionalSyncKey(url.searchParams.get('sync_key'));
+  if (url.searchParams.has('sync_key') && !syncKey) {
+    return jsonError(request, env, 'INVALID_SYNC_KEY', 'Sync key is invalid', 400);
+  }
 
-  const rows = await env.DB.prepare(
-    `SELECT id, source, format, quality, status, title, artist, duration, file_size, result_url, r2_key, content_hash, created_at
-     FROM download_jobs
-     ORDER BY created_at DESC
-     LIMIT ? OFFSET ?`,
-  ).bind(limit, offset).all<Record<string, unknown>>();
+  const selectSql =
+    `SELECT id, source, format, quality, status, title, artist, duration, file_size,
+            result_url, r2_key, content_hash, parent_job_id, variant_role, sync_key,
+            playlist_folder, playlist_index, local_relpath, created_at
+     FROM download_jobs`;
+  const whereSql = syncKey ? ' WHERE sync_key = ?' : '';
+  const orderSql = ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+  const rows = syncKey
+    ? await env.DB.prepare(`${selectSql}${whereSql}${orderSql}`).bind(syncKey, limit, offset).all<Record<string, unknown>>()
+    : await env.DB.prepare(`${selectSql}${orderSql}`).bind(limit, offset).all<Record<string, unknown>>();
 
-  const countRow = await env.DB.prepare('SELECT COUNT(*) AS total FROM download_jobs').first<{ total: number }>();
+  const countRow = syncKey
+    ? await env.DB.prepare('SELECT COUNT(*) AS total FROM download_jobs WHERE sync_key = ?').bind(syncKey).first<{ total: number }>()
+    : await env.DB.prepare('SELECT COUNT(*) AS total FROM download_jobs').first<{ total: number }>();
 
   const history = await Promise.all(
     (rows.results ?? []).map(async (row) => {
@@ -3601,8 +3900,10 @@ async function handleFileDownload(request: Request, env: Env, token: string): Pr
 }
 
 async function getJobRecord(env: Env, jobId: string): Promise<JobRecord | null> {
+  await ensureDownloadJobMetadataSchema(env);
   return env.DB.prepare(
     `SELECT id, url, source, format, quality, status, attempts,
+            parent_job_id, variant_role, sync_key, playlist_folder, playlist_index, local_relpath,
             result_url, r2_key, title, artist, duration, file_size,
             fingerprint, content_hash, error_code, error_message, created_at, updated_at, finished_at
      FROM download_jobs
@@ -4086,6 +4387,14 @@ function isPlaylistUrl(rawUrl: string): boolean {
     if (host.endsWith('youtube.com') && url.searchParams.get('list')) {
       return true;
     }
+    if ((host.endsWith('youtube.com') || host.endsWith('youtu.be')) && (
+      path.startsWith('/@')
+      || path.startsWith('/channel/')
+      || path.startsWith('/c/')
+      || path.startsWith('/user/')
+    )) {
+      return true;
+    }
     if (path.includes('playlist')) {
       return true;
     }
@@ -4109,6 +4418,11 @@ function isPlaylistUrl(rawUrl: string): boolean {
 
 function isValidSyncKey(value: string): boolean {
   return /^[a-zA-Z0-9_-]{8,64}$/.test(value);
+}
+
+function normalizeOptionalSyncKey(value: string | null | undefined): string | null {
+  const normalized = String(value ?? '').trim();
+  return normalized && isValidSyncKey(normalized) ? normalized : null;
 }
 
 function normalizeLanguage(raw: string | undefined): 'en' | 'bg' | 'es' | 'ru' | 'de' {

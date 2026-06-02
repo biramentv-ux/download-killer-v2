@@ -90,6 +90,12 @@ class DownloadRequest(BaseModel):
   source: str = 'unknown'
   format: str = 'mp3'
   quality: str = '320'
+  parent_job_id: str | None = None
+  variant_role: str | None = None
+  sync_key: str | None = None
+  playlist_folder: str | None = None
+  playlist_index: int | None = None
+  local_relpath: str | None = None
 
 
 class SmokeRequest(BaseModel):
@@ -2389,11 +2395,12 @@ def internal_playlist_zip(payload: PlaylistZipRequest) -> PlaylistZipResponse:
   file_count = 0
   try:
     with zipfile.ZipFile(archive_path, mode='w', compression=zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
+      digits = max(2, len(str(len(payload.files))))
       for index, item in enumerate(payload.files, start=1):
         ext = sanitize_archive_component(item.format.lower(), 'mp3') or 'mp3'
         artist = sanitize_archive_component(item.artist, 'Unknown Artist')
         title = sanitize_archive_component(item.title, f'Track {index}')
-        member_name = f'{index:04d} - {artist} - {title}.{ext}'
+        member_name = f'{index:0{digits}d} - {artist} - {title}.{ext}'
 
         request = urllib.request.Request(
           item.download_url,
@@ -2503,6 +2510,12 @@ def internal_download(payload: DownloadRequest) -> DownloadResponse:
   artist = str(selected_info.get('artist') or selected_info.get('uploader') or selected_info.get('channel') or 'Unknown Artist')
   duration_value = selected_info.get('duration')
   duration = int(duration_value) if isinstance(duration_value, (int, float)) else 0
+  display_filename = target.name
+  if payload.local_relpath:
+    requested_name = Path(str(payload.local_relpath).replace('\\', '/')).name
+    requested_stem = Path(requested_name).stem
+    if requested_stem:
+      display_filename = f'{sanitize_archive_component(requested_stem, payload.job_id)}.{audio_format}'
 
   return DownloadResponse(
     download_url=f'{PUBLIC_BASE_URL}/internal/files/{file_id}',
@@ -2514,7 +2527,7 @@ def internal_download(payload: DownloadRequest) -> DownloadResponse:
     resolved_url=selected_url,
     fallback_used=fallback_used,
     mime_type=mime_type,
-    filename=target.name,
+    filename=display_filename,
   )
 
 

@@ -9,6 +9,12 @@ export interface DownloadJob {
   format: AudioFormat;
   quality: AudioQuality;
   fingerprint: string;
+  parentJobId?: string;
+  variantRole?: 'primary' | 'mobile';
+  syncKey?: string;
+  playlistFolder?: string;
+  playlistIndex?: number;
+  localRelpath?: string;
   chatId?: number;
   messageId?: number;
   requestedAt: string;
@@ -107,6 +113,9 @@ export interface Env {
   RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64?: string;
   RELEASE_MANIFEST_CACHE_TTL_SECONDS?: string;
   PLAYLIST_QUEUE_MAX_TRACKS?: string;
+  AUTO_MOBILE_VARIANT_ENABLED?: string;
+  MOBILE_VARIANT_FORMAT?: string;
+  MOBILE_VARIANT_QUALITY?: string;
   PRIVATE_URL_TTL_SECONDS?: string;
   WEBHOOK_HMAC_SECRET?: string;
   WEBHOOK_HMAC_MAX_SKEW_SECONDS?: string;

@@ -304,13 +304,7 @@ export function corsHeaders(request: Request, env: Env): Record<string, string> 
 }
 
 export function jsonOk(request: Request, env: Env, data: unknown, status = 200): Response {
-  return Response.json(data, {
-    status,
-    headers: {
-      ...corsHeaders(request, env),
-      'Content-Type': 'application/json; charset=utf-8',
-    },
-  });
+  return jsonResponse(request, env, data, status);
 }
 
 export function jsonError(
@@ -322,13 +316,66 @@ export function jsonError(
   retryable = false,
 ): Response {
   const payload: ApiErrorBody = { error: { code, message, retryable } };
-  return Response.json(payload, {
-    status,
-    headers: {
-      ...corsHeaders(request, env),
-      'Content-Type': 'application/json; charset=utf-8',
-    },
+  return jsonResponse(request, env, payload, status);
+}
+
+function jsonResponse(request: Request, env: Env, payload: unknown, status: number): Response {
+  const headers = new Headers({
+    ...corsHeaders(request, env),
+    'Content-Type': 'application/json; charset=utf-8',
   });
+  const body = JSON.stringify(payload);
+  const compressed = maybeCompressJsonBody(request, body, headers);
+
+  return new Response(compressed, {
+    status,
+    headers,
+  });
+}
+
+function maybeCompressJsonBody(request: Request, body: string, headers: Headers): BodyInit {
+  const acceptEncoding = request.headers.get('Accept-Encoding')?.toLowerCase() ?? '';
+  appendVary(headers, 'Accept-Encoding');
+
+  if (acceptEncoding.includes('br')) {
+    const stream = tryCompressionStream('br', body);
+    if (stream) {
+      headers.set('Content-Encoding', 'br');
+      return stream;
+    }
+  }
+
+  if (acceptEncoding.includes('gzip')) {
+    const stream = tryCompressionStream('gzip', body);
+    if (stream) {
+      headers.set('Content-Encoding', 'gzip');
+      return stream;
+    }
+  }
+
+  return body;
+}
+
+function tryCompressionStream(format: string, body: string): ReadableStream<Uint8Array> | null {
+  try {
+    if (typeof CompressionStream === 'undefined') return null;
+    const stream = new CompressionStream(format as CompressionFormat);
+    return new Blob([body]).stream().pipeThrough(stream);
+  } catch {
+    return null;
+  }
+}
+
+function appendVary(headers: Headers, value: string): void {
+  const current = headers.get('Vary');
+  if (!current) {
+    headers.set('Vary', value);
+    return;
+  }
+  const parts = current.split(',').map((part) => part.trim().toLowerCase());
+  if (!parts.includes(value.toLowerCase())) {
+    headers.set('Vary', `${current}, ${value}`);
+  }
 }
 
 export function optionsResponse(request: Request, env: Env): Response {
@@ -474,4 +521,37 @@ export function formatFileName(title: string, artist: string, ext: string): stri
   const raw = `${artist} - ${title}`.trim();
   const safeBase = raw.replace(/[^a-zA-Z0-9\-_\.\s]/g, '').replace(/\s+/g, ' ').trim() || 'download';
   return `${safeBase}.${ext}`;
+}
+
+export function sanitizePathComponent(value: string, fallback = 'Folder'): string {
+  const safe = String(value || fallback)
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\.+/g, '.')
+    .replace(/^\.+|\.+$/g, '')
+    .trim()
+    .slice(0, 96);
+  return safe || fallback;
+}
+
+export function formatPlaylistRelPath(
+  playlistTitle: string,
+  index: number,
+  title: string,
+  artist: string,
+  ext: string,
+  totalTracks = 99,
+): { folder: string; filename: string; relpath: string } {
+  const folder = sanitizePathComponent(playlistTitle || 'Playlist', 'Playlist');
+  const digits = Math.max(2, String(Math.max(1, totalTracks)).length);
+  const prefix = String(Math.max(1, index)).padStart(digits, '0');
+  const safeArtist = sanitizePathComponent(artist || 'Unknown Artist', 'Unknown Artist');
+  const safeTitle = sanitizePathComponent(title || `Track ${index}`, `Track ${index}`);
+  const safeExt = sanitizePathComponent(ext || 'mp3', 'mp3').replace(/\./g, '') || 'mp3';
+  const filename = `${prefix} - ${safeArtist} - ${safeTitle}.${safeExt}`;
+  return {
+    folder,
+    filename,
+    relpath: `${folder}/${filename}`,
+  };
 }

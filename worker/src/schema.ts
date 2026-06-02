@@ -1,6 +1,17 @@
 import type { Env } from './types';
 
 let playlistWorkflowSchemaReady: Promise<void> | null = null;
+let downloadJobMetadataSchemaReady: Promise<void> | null = null;
+
+export function ensureDownloadJobMetadataSchema(env: Env): Promise<void> {
+  if (!downloadJobMetadataSchemaReady) {
+    downloadJobMetadataSchemaReady = ensureDownloadJobMetadataSchemaInternal(env).catch((error) => {
+      downloadJobMetadataSchemaReady = null;
+      throw error;
+    });
+  }
+  return downloadJobMetadataSchemaReady;
+}
 
 export function ensurePlaylistWorkflowSchema(env: Env): Promise<void> {
   if (!playlistWorkflowSchemaReady) {
@@ -10,6 +21,31 @@ export function ensurePlaylistWorkflowSchema(env: Env): Promise<void> {
     });
   }
   return playlistWorkflowSchemaReady;
+}
+
+async function ensureDownloadJobMetadataSchemaInternal(env: Env): Promise<void> {
+  const info = await env.DB.prepare('PRAGMA table_info(download_jobs)').all<{ name: string }>();
+  const existing = new Set((info.results ?? []).map((row) => row.name));
+  const requiredColumns: Array<[string, string]> = [
+    ['parent_job_id', 'TEXT'],
+    ['variant_role', "TEXT NOT NULL DEFAULT 'primary'"],
+    ['sync_key', 'TEXT'],
+    ['playlist_folder', 'TEXT'],
+    ['playlist_index', 'INTEGER'],
+    ['local_relpath', 'TEXT'],
+  ];
+
+  for (const [name, definition] of requiredColumns) {
+    if (!existing.has(name)) {
+      await env.DB.prepare(`ALTER TABLE download_jobs ADD COLUMN ${name} ${definition}`).run();
+    }
+  }
+
+  await env.DB.batch([
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_jobs_parent ON download_jobs(parent_job_id)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_jobs_sync_created ON download_jobs(sync_key, created_at DESC)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_jobs_variant_role ON download_jobs(variant_role)'),
+  ]);
 }
 
 async function ensurePlaylistWorkflowSchemaInternal(env: Env): Promise<void> {

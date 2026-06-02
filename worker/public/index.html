@@ -327,7 +327,7 @@
     }
 
     #searchInput {
-      width: calc(100% - 62px);
+      width: calc(100% - 116px);
       height: 54px;
       border: none;
       outline: none;
@@ -984,6 +984,30 @@
       transform: translateY(-2px);
       border-color: rgba(104, 247, 255, 0.58);
       box-shadow: 0 16px 30px rgba(0, 0, 0, 0.22), inset 0 0 0 1px rgba(104, 247, 255, 0.1);
+    }
+
+    #voiceSearchBtn {
+      position: absolute;
+      right: 62px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 44px;
+      height: 44px;
+      border: 1px solid rgba(0, 247, 168, 0.34);
+      border-radius: 12px;
+      color: #d9e8ff;
+      font-size: 1.1rem;
+      cursor: pointer;
+      background: rgba(5, 18, 39, 0.86);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    }
+
+    #voiceSearchBtn:hover,
+    #voiceSearchBtn.listening {
+      transform: translateY(-50%) scale(1.04);
+      color: #032616;
+      background: linear-gradient(140deg, #00f7a8, #00d0ff);
+      box-shadow: 0 9px 16px rgba(0, 204, 178, 0.26);
     }
 
     .archive-track[data-kind="folder"] {
@@ -1930,6 +1954,7 @@
       <aside class="left-pane">
         <div class="search-shell">
           <input id="searchInput" placeholder="Paste URL or search">
+          <button id="voiceSearchBtn" type="button" aria-label="Voice search" title="Voice search">🎙</button>
           <button id="searchBtn" aria-label="Search">⌕</button>
         </div>
 
@@ -2285,6 +2310,10 @@
         legacy_pwa_zip: "Mobile PWA package",
         legacy_bot_zip: "Telegram Bot package",
         search_placeholder: "Paste URL or search",
+        voice_search: "Voice search",
+        voice_search_listening: "Listening...",
+        voice_search_unsupported: "Voice search is not supported in this browser.",
+        voice_search_error: "Voice search failed. Try again.",
         results_title: "RESULTS",
         source_all: "All",
         source_youtube: "YouTube",
@@ -2512,6 +2541,10 @@
         legacy_pwa_zip: "Mobile PWA пакет",
         legacy_bot_zip: "Telegram Bot пакет",
         search_placeholder: "Постави URL или търси",
+        voice_search: "Гласово търсене",
+        voice_search_listening: "Слушам...",
+        voice_search_unsupported: "Гласовото търсене не се поддържа в този браузър.",
+        voice_search_error: "Гласовото търсене не успя. Опитай отново.",
         results_title: "РЕЗУЛТАТИ",
         source_all: "Всички",
         source_youtube: "YouTube",
@@ -2736,6 +2769,10 @@
       stats_recent: "TAREAS RECIENTES",
       studio_open_telegram: "Bot Telegram",
       search_placeholder: "Pega URL o busca",
+      voice_search: "Búsqueda por voz",
+      voice_search_listening: "Escuchando...",
+      voice_search_unsupported: "La búsqueda por voz no es compatible con este navegador.",
+      voice_search_error: "La búsqueda por voz falló. Inténtalo de nuevo.",
       source_all: "Todo",
       source_podcast: "Podcast/RSS",
       batch_pause_all: "Pausar todo",
@@ -2834,6 +2871,10 @@
       stats_recent: "ПОСЛЕДНИЕ ЗАДАЧИ",
       studio_open_telegram: "Telegram бот",
       search_placeholder: "Вставьте URL или выполните поиск",
+      voice_search: "Голосовой поиск",
+      voice_search_listening: "Слушаю...",
+      voice_search_unsupported: "Голосовой поиск не поддерживается в этом браузере.",
+      voice_search_error: "Голосовой поиск не сработал. Попробуйте ещё раз.",
       source_all: "Все",
       source_podcast: "Podcast/RSS",
       batch_pause_all: "Пауза для всех",
@@ -2932,6 +2973,10 @@
       stats_recent: "LETZTE AUFGABEN",
       studio_open_telegram: "Telegram Bot",
       search_placeholder: "URL einfügen oder suchen",
+      voice_search: "Sprachsuche",
+      voice_search_listening: "Höre zu...",
+      voice_search_unsupported: "Sprachsuche wird in diesem Browser nicht unterstützt.",
+      voice_search_error: "Sprachsuche fehlgeschlagen. Erneut versuchen.",
       source_all: "Alle",
       source_podcast: "Podcast/RSS",
       batch_pause_all: "Alle pausieren",
@@ -3062,6 +3107,70 @@
       if (browserLang.startsWith("ru")) return "ru";
       if (browserLang.startsWith("de")) return "de";
       return browserLang.startsWith("bg") ? "bg" : "en";
+    }
+
+    function speechLangForCurrentLocale() {
+      if (currentLang === "bg") return "bg-BG";
+      if (currentLang === "es") return "es-ES";
+      if (currentLang === "ru") return "ru-RU";
+      if (currentLang === "de") return "de-DE";
+      return "en-US";
+    }
+
+    function setupVoiceSearch(button) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        button.classList.add("hidden");
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      let listening = false;
+
+      const stopListening = () => {
+        listening = false;
+        button.classList.remove("listening");
+        button.textContent = "🎙";
+        button.title = translate("voice_search");
+        button.setAttribute("aria-label", translate("voice_search"));
+      };
+
+      recognition.addEventListener("result", (event) => {
+        const transcript = String(event.results?.[0]?.[0]?.transcript || "").trim();
+        if (!transcript) return;
+        const input = document.getElementById("searchInput");
+        if (!input) return;
+        input.value = transcript;
+        void doSearch();
+      });
+      recognition.addEventListener("end", stopListening);
+      recognition.addEventListener("error", () => {
+        stopListening();
+        alert(translate("voice_search_error"));
+      });
+
+      button.addEventListener("click", () => {
+        if (listening) {
+          recognition.stop();
+          stopListening();
+          return;
+        }
+        try {
+          recognition.lang = speechLangForCurrentLocale();
+          recognition.start();
+          listening = true;
+          button.classList.add("listening");
+          button.textContent = "●";
+          button.title = translate("voice_search_listening");
+          button.setAttribute("aria-label", translate("voice_search_listening"));
+        } catch {
+          stopListening();
+          alert(translate("voice_search_unsupported"));
+        }
+      });
     }
 
     function parseVersionParts(raw) {
@@ -3319,6 +3428,11 @@
 
       const searchInput = document.getElementById("searchInput");
       if (searchInput) searchInput.placeholder = translate("search_placeholder");
+      const voiceSearchBtn = document.getElementById("voiceSearchBtn");
+      if (voiceSearchBtn) {
+        voiceSearchBtn.setAttribute("aria-label", translate("voice_search"));
+        voiceSearchBtn.title = translate("voice_search");
+      }
 
       const resultsTitle = document.getElementById("resultsTitle");
       if (resultsTitle) resultsTitle.textContent = translate("results_title");
@@ -4014,9 +4128,12 @@
         box.textContent = translate("offline_warming");
       }
       try {
-        const payload = await apiJson("/history?limit=50&offset=0");
+        const historyPath = syncKey
+          ? `/history?limit=50&offset=0&sync_key=${encodeURIComponent(syncKey)}`
+          : "/history?limit=50&offset=0";
+        const payload = await apiJson(historyPath);
         const history = Array.isArray(payload.history) ? payload.history : [];
-        const urls = ["/api/history?limit=50&offset=0"]
+        const urls = [`/api${historyPath}`]
           .concat(history.map((item) => item.download_url).filter(Boolean))
           .slice(0, 60);
         if ("serviceWorker" in navigator) {
@@ -5006,6 +5123,8 @@
         const useSharedQueue = Boolean(syncKey && /^[a-zA-Z0-9_-]{8,64}$/.test(syncKey));
         const requestBody = {
           key: syncKey,
+          sync_key: syncKey,
+          client_id: "web",
           url: track.url,
           source,
           format: normalizedFormat,
@@ -5249,6 +5368,7 @@
             source: selectedTrack.source || currentSource,
             format: selectedFormat,
             quality: selectedQuality,
+            sync_key: syncKey,
           }),
         });
 
@@ -5836,7 +5956,10 @@
       try {
         meta.dataset.state = "loading";
         meta.textContent = translate("loading_history");
-        const payload = await apiJson("/history?limit=50&offset=0");
+        const historyPath = syncKey
+          ? `/history?limit=50&offset=0&sync_key=${encodeURIComponent(syncKey)}`
+          : "/history?limit=50&offset=0";
+        const payload = await apiJson(historyPath);
         historyRowsCache = Array.isArray(payload.history) ? payload.history : [];
         historyTotalRows = Number(payload.total || historyRowsCache.length);
         hiddenDoneHistoryIds.clear();
@@ -6120,6 +6243,8 @@
     document.getElementById("searchBtn").addEventListener("click", () => {
       void doSearch();
     });
+    const voiceSearchBtn = document.getElementById("voiceSearchBtn");
+    if (voiceSearchBtn) setupVoiceSearch(voiceSearchBtn);
     document.getElementById("searchInput").addEventListener("keydown", (event) => {
       if (event.key === "Enter") void doSearch();
     });
