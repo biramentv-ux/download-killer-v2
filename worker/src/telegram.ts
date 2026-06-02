@@ -15,14 +15,29 @@ import {
 interface TelegramUpdate {
   update_id: number;
   message?: TelegramMessage;
+  channel_post?: TelegramMessage;
+  my_chat_member?: TelegramChatMemberUpdate;
   callback_query?: TelegramCallbackQuery;
+}
+
+interface TelegramChat {
+  id: number;
+  type: string;
+  username?: string;
+  title?: string;
 }
 
 interface TelegramMessage {
   message_id: number;
-  chat: { id: number; type: string; username?: string };
+  chat: TelegramChat;
   from?: { id: number; first_name?: string; username?: string };
   text?: string;
+}
+
+interface TelegramChatMemberUpdate {
+  chat: TelegramChat;
+  from?: { id: number; first_name?: string; username?: string };
+  date?: number;
 }
 
 interface TelegramCallbackQuery {
@@ -61,6 +76,23 @@ interface TelegramSettings {
   defaultSource: string;
   preferArchive: boolean;
   language: BotLanguage;
+  searchResultView: SearchResultView;
+  audioQualityTier: AudioQualityTier;
+  trackCoverImage: boolean;
+  albumCoverImage: boolean;
+  trackCaptionStyle: CaptionStyle;
+  albumCaptionStyle: CaptionStyle;
+  archiveUploads: boolean;
+  useDirectLinks: boolean;
+  spekZipForTracks: boolean;
+  albumLinkPreview: boolean;
+  showQualityInfoInCaptions: boolean;
+  playlistTrackNumbers: boolean;
+  playlistNameAsAlbum: boolean;
+  fileNameTemplate: string;
+  codecConversion: CodecConversionSettings;
+  perServiceQuality: Record<string, string>;
+  channelAutoPublish: boolean;
 }
 
 interface ArchiveRecord {
@@ -86,6 +118,38 @@ const LOSSLESS_QUALITIES: AudioQuality[] = ['lossless', 'best'];
 const LOSSY_QUALITIES: AudioQuality[] = ['best', '320', '256', '192', '128', '96'];
 const SUPPORTED_SOURCES = ['all', 'spotify', 'youtube', 'soundcloud', 'deezer', 'apple', 'podcast'];
 type BotLanguage = 'bg' | 'en' | 'es' | 'ru' | 'de';
+type SearchResultView = 'message' | 'buttons';
+type AudioQualityTier = 'low' | 'high' | 'lossless' | 'hifi';
+type CaptionStyle = 'none' | 'default' | 'detailed' | 'simple' | 'custom';
+
+interface CodecConversionSettings {
+  aacInM4a: string;
+  alacInM4a: string;
+  flac: string;
+}
+
+const BOT_LANGUAGES: BotLanguage[] = ['bg', 'en', 'es', 'ru', 'de'];
+const SEARCH_RESULT_VIEWS: SearchResultView[] = ['message', 'buttons'];
+const AUDIO_QUALITY_TIERS: AudioQualityTier[] = ['low', 'high', 'lossless', 'hifi'];
+const CAPTION_STYLES: CaptionStyle[] = ['none', 'default', 'detailed', 'simple', 'custom'];
+const SERVICE_KEYS = ['amazon', 'apple', 'beatport', 'deezer', 'kkbox', 'qobuz', 'tidal'] as const;
+const SERVICE_QUALITY_PRESETS = ['mp3_320', 'aac_256', 'flac_cd', 'flac_hires', 'flac_24b', 'alac_hires'] as const;
+
+const DEFAULT_CODEC_CONVERSION: CodecConversionSettings = {
+  aacInM4a: 'original',
+  alacInM4a: 'original',
+  flac: 'original',
+};
+
+const DEFAULT_PER_SERVICE_QUALITY: Record<string, string> = {
+  amazon: 'flac_hires',
+  apple: 'alac_hires',
+  beatport: 'flac_cd',
+  deezer: 'flac_cd',
+  kkbox: 'flac_24b',
+  qobuz: 'flac_hires',
+  tidal: 'flac_hires',
+};
 
 const DEFAULT_SETTINGS: TelegramSettings = {
   defaultFormat: 'mp3',
@@ -93,6 +157,23 @@ const DEFAULT_SETTINGS: TelegramSettings = {
   defaultSource: 'all',
   preferArchive: true,
   language: 'bg',
+  searchResultView: 'message',
+  audioQualityTier: 'hifi',
+  trackCoverImage: true,
+  albumCoverImage: true,
+  trackCaptionStyle: 'detailed',
+  albumCaptionStyle: 'detailed',
+  archiveUploads: false,
+  useDirectLinks: true,
+  spekZipForTracks: true,
+  albumLinkPreview: true,
+  showQualityInfoInCaptions: true,
+  playlistTrackNumbers: false,
+  playlistNameAsAlbum: false,
+  fileNameTemplate: '{artist} - {title}',
+  codecConversion: DEFAULT_CODEC_CONVERSION,
+  perServiceQuality: DEFAULT_PER_SERVICE_QUALITY,
+  channelAutoPublish: true,
 };
 
 const MENU_LABELS = {
@@ -117,8 +198,11 @@ export async function handleTelegramUpdate(request: Request, env: Env): Promise<
   }
 
   try {
+    await captureTelegramChannelBinding(update, env);
     if (update.message) {
       await handleMessage(update.message, env);
+    } else if (update.channel_post) {
+      await handleChannelPost(update.channel_post, env);
     } else if (update.callback_query) {
       await handleCallbackQuery(update.callback_query, env);
     }
@@ -127,6 +211,26 @@ export async function handleTelegramUpdate(request: Request, env: Env): Promise<
   }
 
   return Response.json({ ok: true });
+}
+
+async function captureTelegramChannelBinding(update: TelegramUpdate, env: Env): Promise<void> {
+  const chat = update.channel_post?.chat ?? update.my_chat_member?.chat;
+  if (!chat || chat.type !== 'channel') return;
+
+  const configured = String(env.TELEGRAM_DOWNLOAD_CHANNEL_ID ?? '').trim();
+  const channelId = configured || String(chat.id);
+  await env.CACHE.put('tg:download_channel_id', channelId);
+  if (chat.username) {
+    await env.CACHE.put('tg:download_channel_username', `@${chat.username}`);
+  }
+  if (chat.title) {
+    await env.CACHE.put('tg:download_channel_title', chat.title);
+  }
+}
+
+async function handleChannelPost(msg: TelegramMessage, env: Env): Promise<void> {
+  if (msg.chat.type !== 'channel') return;
+  await env.CACHE.put('tg:download_channel_id', String(msg.chat.id));
 }
 
 async function handleMessage(msg: TelegramMessage, env: Env): Promise<void> {
@@ -281,7 +385,18 @@ async function searchAndPresent(chatId: number, query: string, env: Env): Promis
     keyboard.push([{ text: '⚙️ Настройки', callback_data: 's:open' }]);
     keyboard.push([{ text: 'Отказ', callback_data: 'cancel' }]);
 
-    await editOrSend(chatId, loadingId, env, 'Избери песен:', {
+    const chooserText = settings.searchResultView === 'message'
+      ? [
+        'Избери песен:',
+        '',
+        ...combinedResults.slice(0, 10).map((result, index) => {
+          const prefix = result.archive ? '📦 ' : '';
+          return `${index + 1}. ${prefix}${result.artist} - ${result.title} (${sourceLabel(result.source)})`;
+        }),
+      ].join('\n')
+      : 'Избери песен:';
+
+    await editOrSend(chatId, loadingId, env, chooserText, {
       reply_markup: { inline_keyboard: keyboard },
     });
   } catch (error) {
@@ -407,6 +522,66 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
     return;
   }
 
+  if (data === 's:general') {
+    await editSettingsGeneralPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data === 's:view') {
+    await editSettingsSearchViewPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data === 's:lang') {
+    await editSettingsLanguagePanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data === 's:tier') {
+    await editSettingsAudioTierPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data === 's:svcq') {
+    await editSettingsServiceQualityPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data === 's:downloads') {
+    await editSettingsDownloadsPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data === 's:captions') {
+    await editSettingsCaptionsPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data === 's:tcaption') {
+    await editSettingsTrackCaptionPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data === 's:acaption') {
+    await editSettingsAlbumCaptionPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data === 's:codec') {
+    await editSettingsCodecPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data === 's:file') {
+    await editSettingsFileNamingPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data === 's:channel') {
+    await editSettingsChannelPanel(chatId, messageId, env);
+    return;
+  }
+
   if (data === 's:arc') {
     const settings = await getTelegramSettings(chatId, env);
     settings.preferArchive = !settings.preferArchive;
@@ -417,6 +592,41 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
 
   if (data === 's:back') {
     await editSettingsPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data.startsWith('s:setlang:')) {
+    const language = normalizeBotLanguage(data.replace('s:setlang:', ''));
+    const settings = await getTelegramSettings(chatId, env);
+    settings.language = language;
+    await saveTelegramSettings(chatId, settings, env);
+    await editSettingsGeneralPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data.startsWith('s:setview:')) {
+    const view = normalizeSearchResultView(data.replace('s:setview:', ''));
+    const settings = await getTelegramSettings(chatId, env);
+    settings.searchResultView = view;
+    await saveTelegramSettings(chatId, settings, env);
+    await editSettingsGeneralPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data.startsWith('s:settier:')) {
+    const tier = normalizeAudioQualityTier(data.replace('s:settier:', ''));
+    const settings = await getTelegramSettings(chatId, env);
+    settings.audioQualityTier = tier;
+    if ((tier === 'lossless' || tier === 'hifi') && !LOSSLESS_FORMATS.includes(settings.defaultFormat)) {
+      settings.defaultFormat = 'flac';
+    }
+    if (tier === 'low' && LOSSLESS_FORMATS.includes(settings.defaultFormat)) {
+      settings.defaultFormat = 'mp3';
+    }
+    const mapped = qualityFromTier(tier, settings.defaultFormat);
+    settings.defaultQuality = mapped;
+    await saveTelegramSettings(chatId, settings, env);
+    await editSettingsAudioTierPanel(chatId, messageId, env);
     return;
   }
 
@@ -441,6 +651,63 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
       await saveTelegramSettings(chatId, settings, env);
     }
     await editSettingsPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data.startsWith('s:tog:')) {
+    const key = data.replace('s:tog:', '');
+    const settings = await getTelegramSettings(chatId, env);
+    toggleTelegramSetting(settings, key);
+    await saveTelegramSettings(chatId, settings, env);
+    await editSettingsPanelForToggle(chatId, messageId, env, key);
+    return;
+  }
+
+  if (data.startsWith('s:tcap:')) {
+    const style = normalizeCaptionStyle(data.replace('s:tcap:', ''));
+    const settings = await getTelegramSettings(chatId, env);
+    settings.trackCaptionStyle = style;
+    await saveTelegramSettings(chatId, settings, env);
+    await editSettingsTrackCaptionPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data.startsWith('s:acap:')) {
+    const style = normalizeCaptionStyle(data.replace('s:acap:', ''));
+    const settings = await getTelegramSettings(chatId, env);
+    settings.albumCaptionStyle = style;
+    await saveTelegramSettings(chatId, settings, env);
+    await editSettingsAlbumCaptionPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data.startsWith('s:svcq:')) {
+    const [, , service, preset] = data.split(':');
+    if (service && preset && SERVICE_KEYS.includes(service as typeof SERVICE_KEYS[number])) {
+      const settings = await getTelegramSettings(chatId, env);
+      settings.perServiceQuality = {
+        ...settings.perServiceQuality,
+        [service]: normalizeServiceQualityPreset(preset),
+      };
+      await saveTelegramSettings(chatId, settings, env);
+    }
+    await editSettingsServiceQualityPanel(chatId, messageId, env);
+    return;
+  }
+
+  if (data.startsWith('s:codec:')) {
+    const [, , codecKey, value] = data.split(':');
+    const settings = await getTelegramSettings(chatId, env);
+    if (codecKey === 'aac' || codecKey === 'alac' || codecKey === 'flac') {
+      settings.codecConversion = {
+        ...settings.codecConversion,
+        ...(codecKey === 'aac' ? { aacInM4a: normalizeCodecConversion(value) } : {}),
+        ...(codecKey === 'alac' ? { alacInM4a: normalizeCodecConversion(value) } : {}),
+        ...(codecKey === 'flac' ? { flac: normalizeCodecConversion(value) } : {}),
+      };
+      await saveTelegramSettings(chatId, settings, env);
+    }
+    await editSettingsCodecPanel(chatId, messageId, env);
     return;
   }
 
@@ -614,6 +881,25 @@ async function getTelegramSettings(chatId: number, env: Env): Promise<TelegramSe
     defaultSource: normalizeSourceValue(raw?.defaultSource),
     preferArchive: typeof raw?.preferArchive === 'boolean' ? raw.preferArchive : DEFAULT_SETTINGS.preferArchive,
     language: normalizeBotLanguage(raw?.language),
+    searchResultView: normalizeSearchResultView(raw?.searchResultView),
+    audioQualityTier: normalizeAudioQualityTier(raw?.audioQualityTier),
+    trackCoverImage: boolSetting(raw?.trackCoverImage, DEFAULT_SETTINGS.trackCoverImage),
+    albumCoverImage: boolSetting(raw?.albumCoverImage, DEFAULT_SETTINGS.albumCoverImage),
+    trackCaptionStyle: normalizeCaptionStyle(raw?.trackCaptionStyle),
+    albumCaptionStyle: normalizeCaptionStyle(raw?.albumCaptionStyle),
+    archiveUploads: boolSetting(raw?.archiveUploads, DEFAULT_SETTINGS.archiveUploads),
+    useDirectLinks: boolSetting(raw?.useDirectLinks, DEFAULT_SETTINGS.useDirectLinks),
+    spekZipForTracks: boolSetting(raw?.spekZipForTracks, DEFAULT_SETTINGS.spekZipForTracks),
+    albumLinkPreview: boolSetting(raw?.albumLinkPreview, DEFAULT_SETTINGS.albumLinkPreview),
+    showQualityInfoInCaptions: boolSetting(raw?.showQualityInfoInCaptions, DEFAULT_SETTINGS.showQualityInfoInCaptions),
+    playlistTrackNumbers: boolSetting(raw?.playlistTrackNumbers, DEFAULT_SETTINGS.playlistTrackNumbers),
+    playlistNameAsAlbum: boolSetting(raw?.playlistNameAsAlbum, DEFAULT_SETTINGS.playlistNameAsAlbum),
+    fileNameTemplate: typeof raw?.fileNameTemplate === 'string' && raw.fileNameTemplate.trim()
+      ? raw.fileNameTemplate.trim().slice(0, 120)
+      : DEFAULT_SETTINGS.fileNameTemplate,
+    codecConversion: normalizeCodecConversionSettings(raw?.codecConversion),
+    perServiceQuality: normalizePerServiceQuality(raw?.perServiceQuality),
+    channelAutoPublish: boolSetting(raw?.channelAutoPublish, DEFAULT_SETTINGS.channelAutoPublish),
   };
 
   const synced = await getTelegramSyncedPreferences(chatId, env);
@@ -621,6 +907,8 @@ async function getTelegramSettings(chatId: number, env: Env): Promise<TelegramSe
   if (synced.source) merged.defaultSource = normalizeSourceValue(synced.source);
   if (synced.format) merged.defaultFormat = normalizeFormat(synced.format);
   if (synced.quality) merged.defaultQuality = normalizeQuality(synced.quality);
+  if (synced.searchResultView) merged.searchResultView = normalizeSearchResultView(synced.searchResultView);
+  if (synced.audioQualityTier) merged.audioQualityTier = normalizeAudioQualityTier(synced.audioQualityTier);
 
   if (!isValidQualityForFormat(merged.defaultFormat, merged.defaultQuality)) {
     merged.defaultQuality = LOSSLESS_FORMATS.includes(merged.defaultFormat) ? 'lossless' : '320';
@@ -630,26 +918,30 @@ async function getTelegramSettings(chatId: number, env: Env): Promise<TelegramSe
 
 async function saveTelegramSettings(chatId: number, settings: TelegramSettings, env: Env): Promise<void> {
   await env.CACHE.put(`tg:settings:${chatId}`, JSON.stringify(settings), { expirationTtl: 31536000 });
+  await saveTelegramSyncedPreferences(chatId, settings, env);
 }
 
 function settingsText(settings: TelegramSettings): string {
   return [
-    '⚙️ Настройки',
-    `Език: ${languageLabel(settings.language)}`,
-    `Формат по подразбиране: ${settings.defaultFormat.toUpperCase()}`,
-    `Качество по подразбиране: ${settings.defaultQuality}`,
-    `Източник при търсене: ${sourceLabel(settings.defaultSource)}`,
-    `Архив приоритет: ${settings.preferArchive ? 'ВКЛ' : 'ИЗКЛ'}`,
+    '⚙️ Настройки DyrakArmy',
+    '',
+    `🌐 Език: ${languageLabel(settings.language)}`,
+    `🔎 Търсене: ${sourceLabel(settings.defaultSource)} / ${searchResultViewLabel(settings.searchResultView)}`,
+    `🎧 Формат: ${settings.defaultFormat.toUpperCase()} ${settings.defaultQuality}`,
+    `💿 Аудио профил: ${audioTierLabel(settings.audioQualityTier)}`,
+    `📦 Архив приоритет: ${settings.preferArchive ? 'ВКЛ' : 'ИЗКЛ'}`,
+    `📣 Канал: ${settings.channelAutoPublish ? 'публикуване ВКЛ' : 'публикуване ИЗКЛ'}`,
   ].join('\n');
 }
 
 function settingsMainKeyboard(chatId: number, settings: TelegramSettings, env: Env): Array<Array<Record<string, unknown>>> {
   return [
-    [{ text: `🌐 Език: ${languageLabel(settings.language)}`, web_app: { url: buildTelegramMiniAppUrl(chatId, env, settings.language, 'settings') } }],
-    [{ text: `🎧 Формат: ${settings.defaultFormat.toUpperCase()}`, callback_data: 's:fmt' }],
-    [{ text: `🎚 Качество: ${settings.defaultQuality}`, callback_data: 's:q' }],
-    [{ text: `🌐 Източник: ${sourceLabel(settings.defaultSource)}`, callback_data: 's:src' }],
-    [{ text: `📦 Архив: ${settings.preferArchive ? 'ВКЛ' : 'ИЗКЛ'}`, callback_data: 's:arc' }],
+    [{ text: '🧭 General', callback_data: 's:general' }, { text: '🎧 Audio Quality', callback_data: 's:tier' }],
+    [{ text: '🎚 Per-Service Quality', callback_data: 's:svcq' }],
+    [{ text: '📥 Downloads', callback_data: 's:downloads' }, { text: '📝 Captions', callback_data: 's:captions' }],
+    [{ text: '🔁 Codec Conversion', callback_data: 's:codec' }, { text: '📁 File Naming', callback_data: 's:file' }],
+    [{ text: '📣 Telegram канал', callback_data: 's:channel' }],
+    [{ text: '📱 Mini App настройки', web_app: { url: buildTelegramMiniAppUrl(chatId, env, settings.language, 'settings') } }],
     [{ text: 'Затвори', callback_data: 'cancel' }],
   ];
 }
@@ -667,6 +959,56 @@ async function editSettingsPanel(chatId: number, messageId: number, env: Env): P
   const settings = await getTelegramSettings(chatId, env);
   await editOrSend(chatId, messageId, env, settingsText(settings), {
     reply_markup: { inline_keyboard: settingsMainKeyboard(chatId, settings, env) },
+  });
+}
+
+async function editSettingsGeneralPanel(chatId: number, messageId: number, env: Env): Promise<void> {
+  const settings = await getTelegramSettings(chatId, env);
+  await editOrSend(chatId, messageId, env, [
+    '🧭 General',
+    `Език: ${languageLabel(settings.language)}`,
+    `Default Search Service: ${sourceLabel(settings.defaultSource)}`,
+    `Search Result View: ${searchResultViewLabel(settings.searchResultView)}`,
+  ].join('\n'), {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: `🌐 Language: ${languageLabel(settings.language)}`, callback_data: 's:lang' }],
+        [{ text: `🔎 Default Search: ${sourceLabel(settings.defaultSource)}`, callback_data: 's:src' }],
+        [{ text: `⚙️ Result View: ${searchResultViewLabel(settings.searchResultView)}`, callback_data: 's:view' }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
+      ],
+    },
+  });
+}
+
+async function editSettingsLanguagePanel(chatId: number, messageId: number, env: Env): Promise<void> {
+  const settings = await getTelegramSettings(chatId, env);
+  const keyboard = BOT_LANGUAGES.map((language) => [{
+    text: `${languageLabel(language)}${language === settings.language ? ' ✅' : ''}`,
+    callback_data: `s:setlang:${language}`,
+  }]);
+  keyboard.push([{ text: '⬅️ Назад', callback_data: 's:general' }]);
+  await editOrSend(chatId, messageId, env, 'Избери език за бота и Mini App sync:', {
+    reply_markup: { inline_keyboard: keyboard },
+  });
+}
+
+async function editSettingsSearchViewPanel(chatId: number, messageId: number, env: Env): Promise<void> {
+  const settings = await getTelegramSettings(chatId, env);
+  await editOrSend(chatId, messageId, env, [
+    '⚙️ Search Result View',
+    'Message: резултатите са в едно съобщение.',
+    'Buttons: резултатите са като компактни inline бутони.',
+  ].join('\n'), {
+    reply_markup: {
+      inline_keyboard: [
+        ...SEARCH_RESULT_VIEWS.map((view) => [{
+          text: `${searchResultViewLabel(view)}${view === settings.searchResultView ? ' ✅' : ''}`,
+          callback_data: `s:setview:${view}`,
+        }]),
+        [{ text: '⬅️ Назад', callback_data: 's:general' }],
+      ],
+    },
   });
 }
 
@@ -708,6 +1050,32 @@ async function editSettingsQualityPanel(chatId: number, messageId: number, env: 
   });
 }
 
+async function editSettingsAudioTierPanel(chatId: number, messageId: number, env: Env): Promise<void> {
+  const settings = await getTelegramSettings(chatId, env);
+  await editOrSend(chatId, messageId, env, [
+    '🎧 Audio Quality',
+    `Текущ профил: ${audioTierLabel(settings.audioQualityTier)}`,
+    `Формат/качество: ${settings.defaultFormat.toUpperCase()} ${settings.defaultQuality}`,
+    '',
+    'Low: мобилен икономичен режим.',
+    'High: качествен MP3/OPUS режим.',
+    'Lossless: FLAC/WAV при възможност.',
+    'HiFi: максимален профил за услугата.',
+  ].join('\n'), {
+    reply_markup: {
+      inline_keyboard: [
+        AUDIO_QUALITY_TIERS.map((tier) => ({
+          text: `${audioTierLabel(tier)}${tier === settings.audioQualityTier ? ' ✅' : ''}`,
+          callback_data: `s:settier:${tier}`,
+        })),
+        [{ text: `Формат: ${settings.defaultFormat.toUpperCase()}`, callback_data: 's:fmt' }],
+        [{ text: `Качество: ${settings.defaultQuality}`, callback_data: 's:q' }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
+      ],
+    },
+  });
+}
+
 async function editSettingsSourcePanel(chatId: number, messageId: number, env: Env): Promise<void> {
   const settings = await getTelegramSettings(chatId, env);
   const keyboard: Array<Array<{ text: string; callback_data: string }>> = [
@@ -729,6 +1097,154 @@ async function editSettingsSourcePanel(chatId: number, messageId: number, env: E
 
   await editOrSend(chatId, messageId, env, 'Избери източник по подразбиране за търсене:', {
     reply_markup: { inline_keyboard: keyboard },
+  });
+}
+
+async function editSettingsServiceQualityPanel(chatId: number, messageId: number, env: Env): Promise<void> {
+  const settings = await getTelegramSettings(chatId, env);
+  const keyboard: Array<Array<{ text: string; callback_data: string }>> = SERVICE_KEYS.map((service) => {
+    const current = normalizeServiceQualityPreset(settings.perServiceQuality[service]);
+    return [{
+      text: `${serviceLabel(service)}: ${serviceQualityLabel(current)}`,
+      callback_data: `s:svcq:${service}:${nextServiceQualityPreset(current)}`,
+    }];
+  });
+  keyboard.push([{ text: '⬅️ Назад', callback_data: 's:back' }]);
+  await editOrSend(chatId, messageId, env, [
+    '🎚 Per-Service Quality',
+    'Натискането върху ред циклира качеството за конкретната платформа.',
+  ].join('\n'), {
+    reply_markup: { inline_keyboard: keyboard },
+  });
+}
+
+async function editSettingsDownloadsPanel(chatId: number, messageId: number, env: Env): Promise<void> {
+  const settings = await getTelegramSettings(chatId, env);
+  await editOrSend(chatId, messageId, env, [
+    '📥 Downloads',
+    'Настройки за албуми, плейлисти, директни линкове и допълнителни файлове.',
+  ].join('\n'), {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: toggleLabel('📦 Enable Archive Uploads', settings.archiveUploads), callback_data: 's:tog:archiveUploads' }],
+        [{ text: toggleLabel('🔗 Use Direct Links', settings.useDirectLinks), callback_data: 's:tog:useDirectLinks' }],
+        [{ text: toggleLabel('📈 Spek ZIP For Tracks', settings.spekZipForTracks), callback_data: 's:tog:spekZipForTracks' }],
+        [{ text: toggleLabel('💿 Album Link Preview', settings.albumLinkPreview), callback_data: 's:tog:albumLinkPreview' }],
+        [{ text: toggleLabel('ℹ️ Show Quality Info In Captions', settings.showQualityInfoInCaptions), callback_data: 's:tog:showQualityInfoInCaptions' }],
+        [{ text: toggleLabel('🔢 Playlist Position Track Numbers', settings.playlistTrackNumbers), callback_data: 's:tog:playlistTrackNumbers' }],
+        [{ text: toggleLabel('📁 Playlist Name As Album', settings.playlistNameAsAlbum), callback_data: 's:tog:playlistNameAsAlbum' }],
+        [{ text: toggleLabel('📦 Архив приоритет при търсене', settings.preferArchive), callback_data: 's:arc' }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
+      ],
+    },
+  });
+}
+
+async function editSettingsCaptionsPanel(chatId: number, messageId: number, env: Env): Promise<void> {
+  const settings = await getTelegramSettings(chatId, env);
+  await editOrSend(chatId, messageId, env, [
+    '📝 Captions',
+    `Track Caption: ${captionStyleLabel(settings.trackCaptionStyle)}`,
+    `Album Caption: ${captionStyleLabel(settings.albumCaptionStyle)}`,
+  ].join('\n'), {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: toggleLabel('🖼 Track Cover Image', settings.trackCoverImage), callback_data: 's:tog:trackCoverImage' }],
+        [{ text: `🎵 Track Caption: ${captionStyleLabel(settings.trackCaptionStyle)}`, callback_data: 's:tcaption' }],
+        [{ text: toggleLabel('💿 Album Cover Image', settings.albumCoverImage), callback_data: 's:tog:albumCoverImage' }],
+        [{ text: `💿 Album Caption: ${captionStyleLabel(settings.albumCaptionStyle)}`, callback_data: 's:acaption' }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
+      ],
+    },
+  });
+}
+
+async function editSettingsTrackCaptionPanel(chatId: number, messageId: number, env: Env): Promise<void> {
+  const settings = await getTelegramSettings(chatId, env);
+  await editOrSend(chatId, messageId, env, captionPreviewText('track', settings.trackCaptionStyle), {
+    reply_markup: {
+      inline_keyboard: [
+        ...CAPTION_STYLES.map((style) => [{
+          text: `${captionStyleLabel(style)}${style === settings.trackCaptionStyle ? ' ✅' : ''}`,
+          callback_data: `s:tcap:${style}`,
+        }]),
+        [{ text: '⬅️ Назад', callback_data: 's:captions' }],
+      ],
+    },
+  });
+}
+
+async function editSettingsAlbumCaptionPanel(chatId: number, messageId: number, env: Env): Promise<void> {
+  const settings = await getTelegramSettings(chatId, env);
+  await editOrSend(chatId, messageId, env, captionPreviewText('album', settings.albumCaptionStyle), {
+    reply_markup: {
+      inline_keyboard: [
+        ...CAPTION_STYLES.map((style) => [{
+          text: `${captionStyleLabel(style)}${style === settings.albumCaptionStyle ? ' ✅' : ''}`,
+          callback_data: `s:acap:${style}`,
+        }]),
+        [{ text: '⬅️ Назад', callback_data: 's:captions' }],
+      ],
+    },
+  });
+}
+
+async function editSettingsCodecPanel(chatId: number, messageId: number, env: Env): Promise<void> {
+  const settings = await getTelegramSettings(chatId, env);
+  await editOrSend(chatId, messageId, env, [
+    '🔁 Direct-Link Codec Conversion',
+    'Контролира AAC, ALAC и FLAC правилата отделно.',
+  ].join('\n'), {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: `AAC in M4A: ${codecConversionLabel(settings.codecConversion.aacInM4a)}`, callback_data: `s:codec:aac:${nextCodecConversion(settings.codecConversion.aacInM4a)}` }],
+        [{ text: `ALAC in M4A: ${codecConversionLabel(settings.codecConversion.alacInM4a)}`, callback_data: `s:codec:alac:${nextCodecConversion(settings.codecConversion.alacInM4a)}` }],
+        [{ text: `FLAC: ${codecConversionLabel(settings.codecConversion.flac)}`, callback_data: `s:codec:flac:${nextCodecConversion(settings.codecConversion.flac)}` }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
+      ],
+    },
+  });
+}
+
+async function editSettingsFileNamingPanel(chatId: number, messageId: number, env: Env): Promise<void> {
+  const settings = await getTelegramSettings(chatId, env);
+  await editOrSend(chatId, messageId, env, [
+    '📁 File Name Templates',
+    `Шаблон: ${settings.fileNameTemplate}`,
+    '',
+    'Поддържани полета: {artist}, {title}, {album}, {year}, {track}.',
+    'За свободно редактиране отвори Mini App настройките.',
+  ].join('\n'), {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: toggleLabel('🔢 Playlist Position Track Numbers', settings.playlistTrackNumbers), callback_data: 's:tog:playlistTrackNumbers' }],
+        [{ text: toggleLabel('📁 Playlist Name As Album', settings.playlistNameAsAlbum), callback_data: 's:tog:playlistNameAsAlbum' }],
+        [{ text: '📱 Отвори Mini App', web_app: { url: buildTelegramMiniAppUrl(chatId, env, settings.language, 'settings') } }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
+      ],
+    },
+  });
+}
+
+async function editSettingsChannelPanel(chatId: number, messageId: number, env: Env): Promise<void> {
+  const settings = await getTelegramSettings(chatId, env);
+  const channelId = await resolveTelegramDownloadChannelId(env);
+  const channelName = await env.CACHE.get('tg:download_channel_username') ?? await env.CACHE.get('tg:download_channel_title');
+  await editOrSend(chatId, messageId, env, [
+    '📣 Telegram канал',
+    `Статус: ${settings.channelAutoPublish ? 'автоматично публикуване ВКЛ' : 'автоматично публикуване ИЗКЛ'}`,
+    `Канал: ${channelName || channelId || 'няма засечен channel id'}`,
+    '',
+    'При готов файл ботът ще публикува audio/document и бутон за сваляне в канала.',
+    'Ако каналът е частен, изпрати едно тестово съобщение в него след добавяне на бота като администратор, за да се засече chat id.',
+  ].join('\n'), {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: toggleLabel('📣 Auto publish new downloads', settings.channelAutoPublish), callback_data: 's:tog:channelAutoPublish' }],
+        [{ text: '🤖 Отвори бота', url: 'https://t.me/dyrakarmy_bot' }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
+      ],
+    },
   });
 }
 
@@ -860,37 +1376,49 @@ export async function publishTelegramChannelDownload(
   result: DownloaderDownloadResult,
   env: Env,
 ): Promise<void> {
-  const channelId = String(env.TELEGRAM_DOWNLOAD_CHANNEL_ID ?? '').trim();
+  if (String(env.TELEGRAM_CHANNEL_PUBLISH_ENABLED ?? '1').trim() === '0') return;
+
+  const channelId = await resolveTelegramDownloadChannelId(env);
   if (!channelId) return;
 
-  const ttl = readEnvInt(env.DOWNLOAD_TOKEN_TTL_SECONDS, 3600);
-  const token = await createDownloadToken(
-    {
-      jobId: job.id,
-      exp: Math.floor(Date.now() / 1000) + ttl,
-    },
-    env.DOWNLOAD_TOKEN_SECRET,
-  );
-  const link = `${getPublicBaseUrl(env)}/api/file/${encodeURIComponent(token)}`;
-  const text = [
-    '✅ Ново сваляне в DyrakArmy',
-    `${result.artist || 'Неизвестен изпълнител'} - ${result.title || 'Файл'}`,
-    `Източник: ${result.source || job.source} | Формат: ${job.format.toUpperCase()} ${job.quality}`,
-    `${formatDuration(result.duration)} | ${formatFileSize(result.file_size)}`,
-    link,
-  ].join('\n');
+  const settings = job.chatId ? await getTelegramSettings(job.chatId, env) : DEFAULT_SETTINGS;
+  if (!settings.channelAutoPublish) return;
 
-  const sent = await telegramRequest('sendMessage', {
+  const link = await createJobDownloadLink(job.id, env);
+  const title = result.title || 'Файл';
+  const artist = result.artist || 'DyrakArmy';
+  const caption = buildDownloadCaption(job, result, link, settings);
+  const replyMarkup = {
+    inline_keyboard: [
+      [{ text: '⬇️ Свали файла', url: link }, { text: '🤖 DyrakArmy BOT', url: 'https://t.me/dyrakarmy_bot' }],
+    ],
+  };
+
+  const shouldTryAudio = String(env.TELEGRAM_CHANNEL_SEND_AUDIO ?? '1').trim() !== '0';
+  const sent = shouldTryAudio
+    ? await sendAudio(channelId, link, title, artist, result.duration || 0, env, {
+      caption: truncate(caption, 1000),
+      reply_markup: replyMarkup,
+    })
+    : { ok: false, description: 'Audio publishing disabled' };
+
+  if (sent.ok) return;
+
+  const document = await sendDocument(channelId, link, env, {
+    caption: truncate(caption, 1000),
+    reply_markup: replyMarkup,
+  });
+  if (document.ok) return;
+
+  const fallback = await telegramRequest('sendMessage', {
     chat_id: channelId,
-    text,
+    text: caption,
     disable_web_page_preview: false,
-    reply_markup: {
-      inline_keyboard: [[{ text: 'Свали файла', url: link }]],
-    },
+    reply_markup: replyMarkup,
   }, env);
 
-  if (!sent.ok) {
-    console.warn('Telegram channel publish failed', sent.description);
+  if (!fallback.ok) {
+    console.warn('Telegram channel publish failed', fallback.description ?? document.description ?? sent.description);
   }
 }
 
@@ -947,21 +1475,81 @@ async function ensureTelegramCommands(env: Env): Promise<void> {
 async function getTelegramSyncedPreferences(
   chatId: number,
   env: Env,
-): Promise<Partial<{ language: string; source: string; format: string; quality: string }>> {
+): Promise<Partial<{
+  language: string;
+  source: string;
+  format: string;
+  quality: string;
+  searchResultView: string;
+  audioQualityTier: string;
+}>> {
   try {
     const row = await env.DB.prepare('SELECT payload FROM user_preferences WHERE sync_key = ? LIMIT 1')
       .bind(telegramSyncKey(chatId))
       .first<{ payload: string }>();
     if (!row?.payload) return {};
     const payload = JSON.parse(row.payload) as Record<string, unknown>;
+    const telegramSettings = asRecord(payload.telegram_settings) ?? asRecord(payload.telegramSettings);
     return {
       language: typeof payload.language === 'string' ? payload.language : undefined,
       source: typeof payload.source === 'string' ? payload.source : undefined,
       format: typeof payload.format === 'string' ? payload.format : undefined,
       quality: typeof payload.quality === 'string' ? payload.quality : undefined,
+      searchResultView: typeof telegramSettings?.searchResultView === 'string' ? telegramSettings.searchResultView : undefined,
+      audioQualityTier: typeof telegramSettings?.audioQualityTier === 'string' ? telegramSettings.audioQualityTier : undefined,
     };
   } catch {
     return {};
+  }
+}
+
+async function saveTelegramSyncedPreferences(chatId: number, settings: TelegramSettings, env: Env): Promise<void> {
+  const key = telegramSyncKey(chatId);
+  try {
+    let existing: Record<string, unknown> = {};
+    const row = await env.DB.prepare('SELECT payload FROM user_preferences WHERE sync_key = ? LIMIT 1')
+      .bind(key)
+      .first<{ payload: string | null }>();
+    if (row?.payload) {
+      existing = JSON.parse(row.payload) as Record<string, unknown>;
+    }
+
+    const now = new Date().toISOString();
+    const existingFieldTimes = asRecord(existing.field_updated_at) ?? {};
+    const currentRevision = Number(existing.revision ?? 0);
+    const payload = {
+      ...existing,
+      language: settings.language,
+      source: settings.defaultSource,
+      format: settings.defaultFormat,
+      quality: settings.defaultQuality,
+      download_directory: typeof existing.download_directory === 'string' ? existing.download_directory : '',
+      telegram_link_mode: existing.telegram_link_mode === 'download' ? 'download' : 'bot',
+      revision: Number.isFinite(currentRevision) ? currentRevision + 1 : 1,
+      field_updated_at: {
+        language: now,
+        source: now,
+        format: now,
+        quality: now,
+        download_directory: typeof existingFieldTimes.download_directory === 'string' ? existingFieldTimes.download_directory : now,
+        telegram_link_mode: typeof existingFieldTimes.telegram_link_mode === 'string' ? existingFieldTimes.telegram_link_mode : now,
+      },
+      last_writer: 'telegram',
+      updated_at: now,
+      telegram_settings: settings,
+      updated_from: 'telegram',
+    };
+
+    await env.DB.prepare(
+      `INSERT INTO user_preferences (sync_key, payload, updated_at)
+       VALUES (?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(sync_key) DO UPDATE SET
+         payload = excluded.payload,
+         updated_at = CURRENT_TIMESTAMP`,
+    ).bind(key, JSON.stringify(payload)).run();
+    await env.CACHE.put(`prefs:${key}`, JSON.stringify(payload), { expirationTtl: 86400 });
+  } catch (error) {
+    console.warn('Telegram preference sync skipped', error);
   }
 }
 
@@ -1060,15 +1648,15 @@ async function telegramRequest(method: string, body: Record<string, unknown>, en
   }
 }
 
-function sendMessage(chatId: number, env: Env, text: string, extra?: Record<string, unknown>) {
+function sendMessage(chatId: number | string, env: Env, text: string, extra?: Record<string, unknown>) {
   return telegramRequest('sendMessage', { chat_id: chatId, text, ...extra }, env);
 }
 
-function editMessage(chatId: number, messageId: number, env: Env, text: string, extra?: Record<string, unknown>) {
+function editMessage(chatId: number | string, messageId: number, env: Env, text: string, extra?: Record<string, unknown>) {
   return telegramRequest('editMessageText', { chat_id: chatId, message_id: messageId, text, ...extra }, env);
 }
 
-async function editOrSend(chatId: number, messageId: number, env: Env, text: string, extra?: Record<string, unknown>): Promise<TelegramRequestResult> {
+async function editOrSend(chatId: number | string, messageId: number, env: Env, text: string, extra?: Record<string, unknown>): Promise<TelegramRequestResult> {
   const edited = await editMessage(chatId, messageId, env, text, extra);
   if (edited.ok) return edited;
   return sendMessage(chatId, env, text, extra);
@@ -1078,13 +1666,30 @@ function answerCallback(callbackId: string, env: Env, text?: string) {
   return telegramRequest('answerCallbackQuery', { callback_query_id: callbackId, ...(text ? { text } : {}) }, env);
 }
 
-function sendAudio(chatId: number, fileUrl: string, title: string, artist: string, duration: number, env: Env) {
+function sendAudio(
+  chatId: number | string,
+  fileUrl: string,
+  title: string,
+  artist: string,
+  duration: number,
+  env: Env,
+  extra?: Record<string, unknown>,
+) {
   return telegramRequest('sendAudio', {
     chat_id: chatId,
     audio: fileUrl,
     title,
     performer: artist,
     duration,
+    ...extra,
+  }, env);
+}
+
+function sendDocument(chatId: number | string, fileUrl: string, env: Env, extra?: Record<string, unknown>) {
+  return telegramRequest('sendDocument', {
+    chat_id: chatId,
+    document: fileUrl,
+    ...extra,
   }, env);
 }
 
@@ -1146,6 +1751,286 @@ function languageLabel(value: BotLanguage): string {
     de: '🇩🇪 Deutsch',
   };
   return labels[value];
+}
+
+function boolSetting(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function normalizeSearchResultView(input: unknown): SearchResultView {
+  return SEARCH_RESULT_VIEWS.includes(input as SearchResultView)
+    ? input as SearchResultView
+    : DEFAULT_SETTINGS.searchResultView;
+}
+
+function normalizeAudioQualityTier(input: unknown): AudioQualityTier {
+  return AUDIO_QUALITY_TIERS.includes(input as AudioQualityTier)
+    ? input as AudioQualityTier
+    : DEFAULT_SETTINGS.audioQualityTier;
+}
+
+function normalizeCaptionStyle(input: unknown): CaptionStyle {
+  return CAPTION_STYLES.includes(input as CaptionStyle)
+    ? input as CaptionStyle
+    : 'detailed';
+}
+
+function normalizeCodecConversionSettings(input: unknown): CodecConversionSettings {
+  const raw = asRecord(input);
+  return {
+    aacInM4a: normalizeCodecConversion(raw?.aacInM4a),
+    alacInM4a: normalizeCodecConversion(raw?.alacInM4a),
+    flac: normalizeCodecConversion(raw?.flac),
+  };
+}
+
+function normalizeCodecConversion(input: unknown): string {
+  const value = String(input ?? '').toLowerCase();
+  return ['original', 'mp3', 'flac', 'wav'].includes(value) ? value : 'original';
+}
+
+function normalizePerServiceQuality(input: unknown): Record<string, string> {
+  const raw = asRecord(input) ?? {};
+  const normalized: Record<string, string> = {};
+  for (const service of SERVICE_KEYS) {
+    normalized[service] = normalizeServiceQualityPreset(raw[service] ?? DEFAULT_PER_SERVICE_QUALITY[service]);
+  }
+  return normalized;
+}
+
+function normalizeServiceQualityPreset(input: unknown): string {
+  const value = String(input ?? '').toLowerCase();
+  return SERVICE_QUALITY_PRESETS.includes(value as typeof SERVICE_QUALITY_PRESETS[number])
+    ? value
+    : 'flac_cd';
+}
+
+function qualityFromTier(tier: AudioQualityTier, format: AudioFormat): AudioQuality {
+  if (LOSSLESS_FORMATS.includes(format)) {
+    return tier === 'high' || tier === 'low' ? 'best' : 'lossless';
+  }
+  if (tier === 'low') return '128';
+  if (tier === 'high') return '320';
+  if (tier === 'lossless') return 'best';
+  return format === 'opus' ? '256' : '320';
+}
+
+function toggleTelegramSetting(settings: TelegramSettings, key: string): void {
+  switch (key) {
+    case 'archiveUploads':
+      settings.archiveUploads = !settings.archiveUploads;
+      break;
+    case 'useDirectLinks':
+      settings.useDirectLinks = !settings.useDirectLinks;
+      break;
+    case 'spekZipForTracks':
+      settings.spekZipForTracks = !settings.spekZipForTracks;
+      break;
+    case 'albumLinkPreview':
+      settings.albumLinkPreview = !settings.albumLinkPreview;
+      break;
+    case 'showQualityInfoInCaptions':
+      settings.showQualityInfoInCaptions = !settings.showQualityInfoInCaptions;
+      break;
+    case 'playlistTrackNumbers':
+      settings.playlistTrackNumbers = !settings.playlistTrackNumbers;
+      break;
+    case 'playlistNameAsAlbum':
+      settings.playlistNameAsAlbum = !settings.playlistNameAsAlbum;
+      break;
+    case 'trackCoverImage':
+      settings.trackCoverImage = !settings.trackCoverImage;
+      break;
+    case 'albumCoverImage':
+      settings.albumCoverImage = !settings.albumCoverImage;
+      break;
+    case 'channelAutoPublish':
+      settings.channelAutoPublish = !settings.channelAutoPublish;
+      break;
+  }
+}
+
+async function editSettingsPanelForToggle(chatId: number, messageId: number, env: Env, key: string): Promise<void> {
+  if (['archiveUploads', 'useDirectLinks', 'spekZipForTracks', 'albumLinkPreview', 'showQualityInfoInCaptions', 'playlistTrackNumbers', 'playlistNameAsAlbum'].includes(key)) {
+    await editSettingsDownloadsPanel(chatId, messageId, env);
+    return;
+  }
+  if (['trackCoverImage', 'albumCoverImage'].includes(key)) {
+    await editSettingsCaptionsPanel(chatId, messageId, env);
+    return;
+  }
+  if (key === 'channelAutoPublish') {
+    await editSettingsChannelPanel(chatId, messageId, env);
+    return;
+  }
+  await editSettingsPanel(chatId, messageId, env);
+}
+
+function toggleLabel(label: string, enabled: boolean): string {
+  return `${label}: ${enabled ? '✅' : '❌'}`;
+}
+
+function searchResultViewLabel(value: SearchResultView): string {
+  return value === 'buttons' ? 'Buttons' : 'Message';
+}
+
+function audioTierLabel(value: AudioQualityTier): string {
+  const labels: Record<AudioQualityTier, string> = {
+    low: '🔈 Low',
+    high: '🔊 High',
+    lossless: '💿 Lossless',
+    hifi: '🎧 HiFi',
+  };
+  return labels[value];
+}
+
+function captionStyleLabel(value: CaptionStyle): string {
+  const labels: Record<CaptionStyle, string> = {
+    none: 'No Caption',
+    default: 'Default',
+    detailed: 'Detailed',
+    simple: 'Simple',
+    custom: 'Custom template',
+  };
+  return labels[value];
+}
+
+function captionPreviewText(kind: 'track' | 'album', style: CaptionStyle): string {
+  if (style === 'none') {
+    return `${kind === 'track' ? 'Track' : 'Album'} Caption: No Caption\nНяма да се изпраща caption.`;
+  }
+  if (style === 'simple') {
+    return `${kind === 'track' ? 'Track' : 'Album'} Caption: Simple\nNova Echo - City Static`;
+  }
+  if (style === 'custom') {
+    return [
+      `${kind === 'track' ? 'Track' : 'Album'} Caption: Custom template`,
+      'Шаблонът се редактира от Mini App настройките.',
+      'Пример: {artist} - {title} | {format} {quality}',
+    ].join('\n');
+  }
+  if (style === 'default') {
+    return [
+      `${kind === 'track' ? 'Track' : 'Album'} Caption: Default`,
+      '🎧 Album title: City Static',
+      '👤 Artist: Nova Echo',
+      '📅 Release date: May 17, 2024',
+      '🎵 Total tracks: 12',
+      '⏱ Duration: 44m',
+      '🏷 Genre: Indie Electronic',
+      '🏢 Label: Aurora Lane',
+    ].join('\n');
+  }
+  return [
+    `${kind === 'track' ? 'Track' : 'Album'} Caption: Detailed`,
+    '12 track(s)',
+    'Total length: 44m',
+    '',
+    'Main Artists: Nova Echo',
+    'Label: Aurora Lane',
+    'Genre: Indie Electronic',
+    'Detailed mode shows track count, duration, artists, label, and genre.',
+  ].join('\n');
+}
+
+function serviceLabel(service: string): string {
+  const labels: Record<string, string> = {
+    amazon: '📦 Amazon',
+    apple: '🍎 Apple',
+    beatport: '🎛 Beatport',
+    deezer: '🎵 Deezer',
+    kkbox: '🟠 KKbox',
+    qobuz: '🔊 Qobuz',
+    tidal: '🌊 Tidal',
+  };
+  return labels[service] ?? service;
+}
+
+function serviceQualityLabel(value: string): string {
+  const labels: Record<string, string> = {
+    mp3_320: 'MP3 (320kbps)',
+    aac_256: 'AAC (256kbps)',
+    flac_cd: 'FLAC (CD)',
+    flac_hires: 'FLAC (Hi-Res)',
+    flac_24b: 'FLAC (24b)',
+    alac_hires: 'ALAC (Hi-Res)',
+  };
+  return labels[normalizeServiceQualityPreset(value)] ?? 'FLAC (CD)';
+}
+
+function nextServiceQualityPreset(current: string): string {
+  const normalized = normalizeServiceQualityPreset(current);
+  const index = SERVICE_QUALITY_PRESETS.indexOf(normalized as typeof SERVICE_QUALITY_PRESETS[number]);
+  return SERVICE_QUALITY_PRESETS[(index + 1) % SERVICE_QUALITY_PRESETS.length] ?? 'flac_cd';
+}
+
+function codecConversionLabel(value: string): string {
+  const normalized = normalizeCodecConversion(value);
+  return normalized === 'original' ? 'Original' : normalized.toUpperCase();
+}
+
+function nextCodecConversion(current: string): string {
+  const options = ['original', 'mp3', 'flac', 'wav'];
+  const normalized = normalizeCodecConversion(current);
+  const index = options.indexOf(normalized);
+  return options[(index + 1) % options.length] ?? 'original';
+}
+
+async function resolveTelegramDownloadChannelId(env: Env): Promise<string | null> {
+  const configured = String(env.TELEGRAM_DOWNLOAD_CHANNEL_ID ?? '').trim();
+  if (configured) return configured;
+  const cached = await env.CACHE.get('tg:download_channel_id');
+  return cached?.trim() || null;
+}
+
+async function createJobDownloadLink(jobId: string, env: Env): Promise<string> {
+  const ttl = readEnvInt(env.DOWNLOAD_TOKEN_TTL_SECONDS, 3600);
+  const token = await createDownloadToken(
+    {
+      jobId,
+      exp: Math.floor(Date.now() / 1000) + ttl,
+    },
+    env.DOWNLOAD_TOKEN_SECRET,
+  );
+  return `${getPublicBaseUrl(env)}/api/file/${encodeURIComponent(token)}`;
+}
+
+function buildDownloadCaption(
+  job: DownloadJob,
+  result: DownloaderDownloadResult,
+  link: string,
+  settings: TelegramSettings,
+): string {
+  const artist = result.artist || 'Неизвестен изпълнител';
+  const title = result.title || 'Файл';
+  if (settings.trackCaptionStyle === 'none') {
+    return link;
+  }
+  if (settings.trackCaptionStyle === 'simple') {
+    return `${artist} - ${title}\n${link}`;
+  }
+
+  const rows = [
+    '✅ Ново сваляне в DyrakArmy',
+    `🎵 ${artist} - ${title}`,
+    `🌐 Източник: ${sourceLabel(normalizeSourceValue(result.source || job.source))}`,
+    `🎧 Формат: ${job.format.toUpperCase()} ${job.quality}`,
+  ];
+  if (settings.showQualityInfoInCaptions) {
+    rows.push(`⏱ ${formatDuration(result.duration)} | 💾 ${formatFileSize(result.file_size)}`);
+  }
+  if (settings.trackCaptionStyle === 'detailed') {
+    rows.push(`🆔 Job: ${job.id.slice(0, 8)}`);
+    if (result.fallback_used) rows.push('🔁 Fallback mirror used');
+  }
+  rows.push(link);
+  return rows.join('\n');
 }
 
 function normalizeFormat(input: string | undefined): AudioFormat {
