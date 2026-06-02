@@ -43,6 +43,12 @@ class MemoryKv {
   }
 }
 
+class FailingPutKv extends MemoryKv {
+  override async put(): Promise<void> {
+    throw new Error('KV put() limit exceeded for the day.');
+  }
+}
+
 describe('security private URL cache', () => {
   it('stores only a hash value for D1 and resolves plaintext from KV', async () => {
     const kv = new MemoryKv();
@@ -52,6 +58,16 @@ describe('security private URL cache', () => {
     expect(hash).toMatch(/^[a-f0-9]{64}$/);
     expect(hash).not.toContain('example.com');
     await expect(resolvePrivateUrl(env, 'job', 'job-1', hash)).resolves.toBe('https://example.com/song?id=private');
+  });
+
+  it('keeps queue creation non-fatal when private URL KV writes hit quota', async () => {
+    const kv = new FailingPutKv();
+    const env = { CACHE: kv, PRIVATE_URL_TTL_SECONDS: '60' } as unknown as Env;
+
+    const hash = await hashAndCachePrivateUrl(env, 'job', 'job-2', 'https://example.com/song?id=private');
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(hash).not.toContain('example.com');
+    await expect(resolvePrivateUrl(env, 'job', 'job-2', hash)).resolves.toBeNull();
   });
 });
 

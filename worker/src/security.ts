@@ -28,8 +28,16 @@ export async function hashAndCachePrivateUrl(
 
   const hash = await hashPrivateUrl(normalized);
   const ttl = readEnvInt(env.PRIVATE_URL_TTL_SECONDS, DEFAULT_PRIVATE_URL_TTL_SECONDS);
-  await env.CACHE.put(`url:${scope}:${id}`, normalized, { expirationTtl: ttl });
-  await env.CACHE.put(`url:hash:${hash}`, normalized, { expirationTtl: ttl });
+  try {
+    await Promise.all([
+      env.CACHE.put(`url:${scope}:${id}`, normalized, { expirationTtl: ttl }),
+      env.CACHE.put(`url:hash:${hash}`, normalized, { expirationTtl: ttl }),
+    ]);
+  } catch (error) {
+    // D1 must never store private URLs. If KV quota is exhausted, keep the
+    // anonymized hash and let queue messages carry the short-lived plaintext.
+    console.warn('Private URL cache write skipped', error);
+  }
   return hash;
 }
 
