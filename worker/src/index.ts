@@ -22,6 +22,7 @@ import {
 } from './origins';
 import { evaluateOpsAlerts, recordSmokeProbeResult, recordTelemetry } from './telemetry';
 import { cleanupStaleKvKeys, resolvePrivateUrl } from './security';
+import { calculateQueueRetryDelayFromEnv } from './retry';
 
 const MAX_QUEUE_RETRIES = 5;
 const INVIDIOUS_DEFAULT_BASE_URL = 'https://inv.nadeko.net';
@@ -148,14 +149,16 @@ export default {
           });
           message.ack();
         } else {
+          const retryDelaySeconds = calculateQueueRetryDelayFromEnv(env, attempts);
           await markFailed(job.id, env, attempts, 'QUEUE_RETRY', errorText, false);
           await recordTelemetry(env, {
             event: 'queue_retry',
             status: '503',
             code: 'QUEUE_RETRY',
             source: job.source,
+            value: retryDelaySeconds,
           });
-          message.retry({ delaySeconds: Math.min(120, attempts * 20) });
+          message.retry({ delaySeconds: retryDelaySeconds });
         }
       }
     }
