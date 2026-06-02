@@ -209,6 +209,12 @@ class MetadataLookupResponse(BaseModel):
   results: list[MetadataLookupItem]
 
 
+class ArtistDiscographyRequest(BaseModel):
+  artist: str = Field(min_length=1, max_length=200)
+  source: str = 'youtube'
+  limit: int = Field(default=50, ge=1, le=200)
+
+
 class PlaylistResolveRequest(BaseModel):
   url: str = Field(min_length=5, max_length=2000)
   source: str = 'unknown'
@@ -1112,8 +1118,18 @@ def is_url(value: str) -> bool:
     return False
 
 
+def is_ytdlp_search_target(value: str) -> bool:
+  return re.match(r'^ytsearch[0-9]{0,2}:.{2,300}$', str(value or '').strip(), flags=re.I) is not None
+
+
+def is_download_target(value: str) -> bool:
+  return is_url(value) or is_ytdlp_search_target(value)
+
+
 def detect_source(url: str, fallback: str = 'unknown') -> str:
   lower = url.lower()
+  if lower.startswith('ytsearch'):
+    return 'youtube'
   if 'youtube.com' in lower or 'youtu.be' in lower or 'music.youtube.com' in lower:
     return 'youtube'
   if 'spotify.com' in lower:
@@ -1606,6 +1622,77 @@ def lookup_musicbrainz_metadata(query: str, limit: int = 6) -> MetadataLookupRes
     )
 
   return MetadataLookupResponse(results=results)
+
+
+def normalize_discography_search_text(value: str) -> str:
+  return re.sub(r'\s+', ' ', str(value or '').replace('\r', ' ').replace('\n', ' ')).strip()
+
+
+def ytdlp_search_target(artist: str, title: str) -> str:
+  clean_artist = normalize_discography_search_text(artist)[:120] or 'Unknown Artist'
+  clean_title = normalize_discography_search_text(title)[:160] or 'Unknown Title'
+  return f'ytsearch1:{clean_artist} - {clean_title} audio'
+
+
+def lookup_artist_discography(artist: str, limit: int = 50) -> PlaylistResolveResponse:
+  clean_artist = normalize_discography_search_text(artist)
+  if len(clean_artist) < 2:
+    raise RuntimeError('Artist name is required')
+
+  safe_limit = max(1, min(200, int(limit or 50)))
+  encoded_query = urllib.parse.quote(f'artist:"{clean_artist}"')
+  payload = fetch_json(
+    f'https://musicbrainz.org/ws/2/recording?query={encoded_query}&fmt=json&limit={safe_limit}',
+    timeout_seconds=20,
+    headers={
+      'User-Agent': 'DyrakArmyDownloader/8.1 (https://dyrakarmy.online)',
+    },
+  )
+  recordings = payload.get('recordings') if isinstance(payload, dict) else []
+  if not isinstance(recordings, list):
+    recordings = []
+
+  tracks: list[PlaylistTrack] = []
+  seen_titles: set[str] = set()
+  for recording in recordings:
+    if not isinstance(recording, dict):
+      continue
+    title = normalize_discography_search_text(str(recording.get('title') or ''))
+    if not title:
+      continue
+    key = title.lower()
+    if key in seen_titles:
+      continue
+    seen_titles.add(key)
+
+    artists: list[str] = []
+    artist_credit = recording.get('artist-credit')
+    if isinstance(artist_credit, list):
+      for credit in artist_credit:
+        if isinstance(credit, dict):
+          artist_obj = credit.get('artist')
+          if isinstance(artist_obj, dict):
+            name = normalize_discography_search_text(str(artist_obj.get('name') or ''))
+            if name:
+              artists.append(name)
+    track_artist = ', '.join(artists) or clean_artist
+    tracks.append(
+      PlaylistTrack(
+        title=title,
+        artist=track_artist,
+        source='youtube',
+        url=ytdlp_search_target(track_artist, title),
+      )
+    )
+    if len(tracks) >= safe_limit:
+      break
+
+  return PlaylistResolveResponse(
+    title=f'{clean_artist} Discography',
+    source='artist',
+    total=len(tracks),
+    tracks=tracks,
+  )
 
 
 def choose_quality(requested_format: str, requested_quality: str) -> str:
@@ -2229,6 +2316,14 @@ def internal_metadata_lookup(payload: MetadataLookupRequest) -> MetadataLookupRe
     raise HTTPException(status_code=502, detail=f'Metadata lookup failed: {error}') from error
 
 
+@app.post('/internal/artist/discography', response_model=PlaylistResolveResponse, dependencies=[Depends(require_api_key)])
+def internal_artist_discography(payload: ArtistDiscographyRequest) -> PlaylistResolveResponse:
+  try:
+    return lookup_artist_discography(payload.artist, payload.limit)
+  except Exception as error:
+    raise HTTPException(status_code=502, detail=f'Artist discography failed: {error}') from error
+
+
 @app.post('/internal/search', response_model=SearchResponse, dependencies=[Depends(require_api_key)])
 def internal_search(payload: SearchRequest) -> SearchResponse:
   source = (payload.source or 'all').strip().lower()
@@ -2494,8 +2589,8 @@ def internal_download(payload: DownloadRequest) -> DownloadResponse:
     raise HTTPException(status_code=400, detail='Unsupported format')
   if audio_quality not in SUPPORTED_QUALITIES:
     raise HTTPException(status_code=400, detail='Unsupported quality')
-  if not is_url(payload.url):
-    raise HTTPException(status_code=400, detail='Invalid URL')
+  if not is_download_target(payload.url):
+    raise HTTPException(status_code=400, detail='Invalid download target')
 
   attempt_errors: list[str] = []
   selected_output: Path | None = None

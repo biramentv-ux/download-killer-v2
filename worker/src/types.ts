@@ -138,6 +138,8 @@ export interface Env {
   JOB_RETENTION_DAYS?: string;
   JOB_RETENTION_BATCH_SIZE?: string;
   API_JSON_COMPRESSION_ENABLED?: string;
+  SHARE_TOKEN_TTL_SECONDS?: string;
+  ARTIST_DISCOGRAPHY_MAX_TRACKS?: string;
 
   CORS_ORIGINS?: string;
   DOWNLOAD_TOKEN_TTL_SECONDS?: string;

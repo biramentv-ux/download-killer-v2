@@ -23,7 +23,7 @@
     "directory": "./public/",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/telegram/*"]
+    "run_worker_first": ["/api/*", "/telegram/*", "/share/*"]
   },
 
   "observability": {
@@ -95,6 +95,8 @@
     "URL_BLOCKLIST": "localhost,*.localhost,*.local,*.onion",
     "CORS_ORIGINS": "https://dyrakarmy.online,https://www.dyrakarmy.online,https://sounddrop.biramentv.workers.dev,http://localhost:8787,http://localhost:3000",
     "DOWNLOAD_TOKEN_TTL_SECONDS": "3600",
+    "SHARE_TOKEN_TTL_SECONDS": "604800",
+    "ARTIST_DISCOGRAPHY_MAX_TRACKS": "100",
     "SEARCH_CACHE_TTL_SECONDS": "180",
     "DOWNLOAD_DEDUPE_TTL_SECONDS": "120",
     "PUBLIC_BASE_URL": "https://dyrakarmy.online",

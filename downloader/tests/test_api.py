@@ -285,6 +285,43 @@ def test_internal_smoke_success(monkeypatch):
   assert body['title'] == 'Smoke Song'
 
 
+def test_internal_download_accepts_trusted_ytdlp_search_target(monkeypatch, tmp_path):
+  from app import main
+
+  source_dir = tmp_path / 'source'
+  source_dir.mkdir()
+  output = source_dir / 'song.mp3'
+  output.write_bytes(b'audio')
+  monkeypatch.setattr(main, 'STORAGE_DIR', tmp_path / 'storage')
+  monkeypatch.setattr(
+    main,
+    'run_download',
+    lambda _job_id, _url, _format, _quality: (
+      output,
+      {'title': 'Search Song', 'uploader': 'Search Artist', 'duration': 99},
+    ),
+  )
+
+  client = TestClient(app)
+  response = client.post(
+    '/internal/download',
+    json={
+      'job_id': 'job-search-1',
+      'url': 'ytsearch1:Search Artist - Search Song audio',
+      'source': 'youtube',
+      'format': 'mp3',
+      'quality': '320',
+    },
+    headers={'X-API-Key': 'change-me'},
+  )
+
+  assert response.status_code == 200
+  body = response.json()
+  assert body['source'] == 'youtube'
+  assert body['title'] == 'Search Song'
+  assert body['download_url'].endswith('.mp3')
+
+
 def test_internal_preview_success(monkeypatch):
   from app import main
 
@@ -352,6 +389,45 @@ def test_internal_metadata_lookup_success(monkeypatch):
   body = response.json()
   assert body['results'][0]['title'] == 'Metadata Song'
   assert body['results'][0]['year'] == '2020'
+
+
+def test_internal_artist_discography_success(monkeypatch):
+  from app import main
+
+  monkeypatch.setattr(
+    main,
+    'fetch_json',
+    lambda *_args, **_kwargs: {
+      'recordings': [
+        {
+          'title': 'First Song',
+          'artist-credit': [{'artist': {'name': 'Discography Artist'}}],
+        },
+        {
+          'title': 'First Song',
+          'artist-credit': [{'artist': {'name': 'Discography Artist'}}],
+        },
+        {
+          'title': 'Second Song',
+          'artist-credit': [{'artist': {'name': 'Discography Artist'}}],
+        },
+      ],
+    },
+  )
+
+  client = TestClient(app)
+  response = client.post(
+    '/internal/artist/discography',
+    json={'artist': 'Discography Artist', 'limit': 10},
+    headers={'X-API-Key': 'change-me'},
+  )
+
+  assert response.status_code == 200
+  body = response.json()
+  assert body['title'] == 'Discography Artist Discography'
+  assert body['total'] == 2
+  assert body['tracks'][0]['url'].startswith('ytsearch1:')
+  assert body['tracks'][0]['source'] == 'youtube'
 
 
 def test_internal_smoke_fallback_for_spotify(monkeypatch):

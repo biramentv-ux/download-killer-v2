@@ -63,6 +63,10 @@ interface MetadataLookupRequestBody {
   limit?: number;
 }
 
+interface SharePreviewRequestBody {
+  job_id?: string;
+}
+
 interface DownloadRequestBody {
   url: string;
   source?: string;
@@ -128,6 +132,15 @@ interface PlaylistResolveResponse {
   source: string;
   total: number;
   tracks: PlaylistTrack[];
+}
+
+interface ArtistDiscographyRequestBody {
+  artist?: string;
+  source?: string;
+  format?: AudioFormat;
+  quality?: AudioQuality;
+  sync_key?: string;
+  limit?: number;
 }
 
 interface PlaylistResolveResult {
@@ -421,6 +434,20 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
     return handleMetadataLookup(request, env);
   }
 
+  if (path === '/share/preview' && request.method === 'POST') {
+    return handleSharePreview(request, env);
+  }
+
+  const shareCardMatch = path.match(/^\/share\/card\/([^/]+)\.svg$/i);
+  if (shareCardMatch && request.method === 'GET') {
+    return handleShareCard(request, env, decodeURIComponent(shareCardMatch[1]!));
+  }
+
+  const sharePageMatch = path.match(/^\/share\/([^/]+)$/i);
+  if (sharePageMatch && request.method === 'GET') {
+    return handleSharePage(request, env, decodeURIComponent(sharePageMatch[1]!));
+  }
+
   if (path === '/download' && request.method === 'POST') {
     return handleDownload(request, env);
   }
@@ -431,6 +458,10 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
 
   if (path === '/playlist/queue' && request.method === 'POST') {
     return handlePlaylistQueue(request, env);
+  }
+
+  if (path === '/artist/discography/queue' && request.method === 'POST') {
+    return handleArtistDiscographyQueue(request, env);
   }
 
   if (path === '/batch/pause-all' && request.method === 'POST') {
@@ -716,6 +747,141 @@ async function handleMetadataLookup(request: Request, env: Env): Promise<Respons
     const message = error instanceof Error ? error.message : String(error);
     return jsonError(request, env, 'METADATA_LOOKUP_UNREACHABLE', `Metadata lookup is unreachable: ${message.slice(0, 160)}`, 502, true);
   }
+}
+
+async function handleSharePreview(request: Request, env: Env): Promise<Response> {
+  const ip = getClientAddress(request);
+  const rl = await rateLimit(env.CACHE, `share-preview:${ip}`, 20, 60);
+  if (rl.limited) {
+    return jsonError(request, env, 'RATE_LIMITED', 'Too many share preview requests', 429, true);
+  }
+
+  const body = await parseJson<SharePreviewRequestBody>(request);
+  const jobId = String(body?.job_id ?? '').trim();
+  if (!isUuid(jobId)) {
+    return jsonError(request, env, 'INVALID_JOB_ID', 'A valid job_id is required', 400);
+  }
+
+  const row = await getShareJobRecord(env, jobId);
+  if (!row) {
+    return jsonError(request, env, 'JOB_NOT_FOUND', 'Job was not found', 404);
+  }
+
+  const ttl = readEnvInt(env.SHARE_TOKEN_TTL_SECONDS, 7 * 24 * 60 * 60);
+  const token = await createShareToken(jobId, Math.floor(Date.now() / 1000) + ttl, env.DOWNLOAD_TOKEN_SECRET);
+  const base = resolvePublicBaseUrl(request, env);
+  const shareUrl = `${base}/share/${encodeURIComponent(token)}`;
+  const cardImageUrl = `${base}/api/share/card/${encodeURIComponent(token)}.svg`;
+
+  return jsonOk(request, env, {
+    share_url: shareUrl,
+    card_image_url: cardImageUrl,
+    title: shareTitle(row),
+    description: shareDescription(row),
+    expires_in_seconds: ttl,
+  });
+}
+
+async function handleSharePage(request: Request, env: Env, token: string): Promise<Response> {
+  const payload = await verifyShareToken(token, env.DOWNLOAD_TOKEN_SECRET);
+  if (!payload?.shareJobId) {
+    return htmlResponse('<!doctype html><title>DyrakArmy Share</title><p>Invalid or expired share link.</p>', 404);
+  }
+  const row = await getShareJobRecord(env, payload.shareJobId);
+  if (!row) {
+    return htmlResponse('<!doctype html><title>DyrakArmy Share</title><p>Shared track was not found.</p>', 404);
+  }
+
+  const base = resolvePublicBaseUrl(request, env);
+  const title = shareTitle(row);
+  const description = shareDescription(row);
+  const cardImageUrl = `${base}/api/share/card/${encodeURIComponent(token)}.svg`;
+  const appUrl = `${base}/?tab=history`;
+  const hasDownloadTarget = row.status === 'done' && Boolean(row.r2_key || row.result_url);
+  const downloadAvailable = hasDownloadTarget ? await isDownloadTargetAvailable(env, row) : false;
+  const downloadUrl = downloadAvailable ? await buildDownloadUrl(request, env, row.id) : null;
+
+  return htmlResponse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtmlText(title)}</title>
+  <meta name="description" content="${escapeHtmlText(description)}">
+  <meta property="og:type" content="music.song">
+  <meta property="og:site_name" content="DyrakArmy">
+  <meta property="og:title" content="${escapeHtmlText(title)}">
+  <meta property="og:description" content="${escapeHtmlText(description)}">
+  <meta property="og:image" content="${escapeHtmlText(cardImageUrl)}">
+  <meta property="og:url" content="${escapeHtmlText(new URL(request.url).toString())}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${escapeHtmlText(title)}">
+  <meta name="twitter:description" content="${escapeHtmlText(description)}">
+  <meta name="twitter:image" content="${escapeHtmlText(cardImageUrl)}">
+  <style>
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:#02040c;color:#d9e8ff;font-family:Arial,sans-serif}
+    main{width:min(720px,calc(100% - 32px));padding:34px;border:1px solid rgba(0,247,168,.35);border-radius:24px;background:linear-gradient(145deg,rgba(7,15,34,.96),rgba(21,6,37,.94));box-shadow:0 24px 60px rgba(0,0,0,.45)}
+    img{width:100%;border-radius:18px;border:1px solid rgba(255,255,255,.12)}
+    a{display:inline-block;margin:18px 10px 0 0;padding:12px 16px;border-radius:999px;background:#00f7a8;color:#03150f;text-decoration:none;font-weight:700}
+    a.secondary{background:transparent;color:#93c7ff;border:1px solid rgba(147,199,255,.45)}
+  </style>
+</head>
+<body>
+  <main>
+    <img src="${escapeHtmlText(cardImageUrl)}" alt="${escapeHtmlText(title)} preview card">
+    <h1>${escapeHtmlText(title)}</h1>
+    <p>${escapeHtmlText(description)}</p>
+    <a href="${escapeHtmlText(appUrl)}">Open DyrakArmy</a>
+    ${downloadUrl ? `<a class="secondary" href="${escapeHtmlText(downloadUrl)}">Download file</a>` : ''}
+  </main>
+</body>
+</html>`);
+}
+
+async function handleShareCard(request: Request, env: Env, token: string): Promise<Response> {
+  const payload = await verifyShareToken(token, env.DOWNLOAD_TOKEN_SECRET);
+  if (!payload?.shareJobId) {
+    return new Response('Invalid share token', { status: 404 });
+  }
+  const row = await getShareJobRecord(env, payload.shareJobId);
+  if (!row) {
+    return new Response('Shared track was not found', { status: 404 });
+  }
+
+  const title = truncateForCard(shareTitle(row), 62);
+  const description = truncateForCard(shareDescription(row), 92);
+  const status = `${String(row.format || '').toUpperCase()} ${row.quality || ''} / ${row.status}`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#02040c"/>
+      <stop offset="48%" stop-color="#150625"/>
+      <stop offset="100%" stop-color="#042b32"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" x2="1">
+      <stop offset="0%" stop-color="#00f7a8"/>
+      <stop offset="100%" stop-color="#00d0ff"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="16" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="110" cy="90" r="170" fill="#00f7a8" opacity=".18" filter="url(#glow)"/>
+  <circle cx="1110" cy="520" r="220" fill="#00d0ff" opacity=".18" filter="url(#glow)"/>
+  <rect x="72" y="70" width="1056" height="490" rx="36" fill="rgba(7,15,34,.78)" stroke="rgba(133,171,255,.28)"/>
+  <text x="110" y="145" fill="#00f7a8" font-family="Arial, sans-serif" font-size="38" font-weight="700">DyrakArmy</text>
+  <text x="110" y="260" fill="#d9e8ff" font-family="Arial, sans-serif" font-size="58" font-weight="800">${escapeSvgText(title)}</text>
+  <text x="112" y="330" fill="#93a9d2" font-family="Arial, sans-serif" font-size="30">${escapeSvgText(description)}</text>
+  <rect x="110" y="405" width="390" height="66" rx="33" fill="url(#accent)"/>
+  <text x="145" y="449" fill="#03150f" font-family="Arial, sans-serif" font-size="28" font-weight="700">${escapeSvgText(status)}</text>
+  <text x="110" y="520" fill="#7e94c0" font-family="Arial, sans-serif" font-size="25">Listen, download and sync through dyrakarmy.online</text>
+</svg>`;
+
+  return new Response(svg, {
+    headers: {
+      'Content-Type': 'image/svg+xml; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
 }
 
 async function handleDownload(request: Request, env: Env): Promise<Response> {
@@ -1038,7 +1204,9 @@ async function queueDownloadJob(
   const dedupeTtl = readEnvInt(env.DOWNLOAD_DEDUPE_TTL_SECONDS, 120);
   const existing = await getExistingJobByFingerprint(env, fingerprint, dedupeTtl);
   if (existing) {
-    await hashAndCachePrivateUrl(env, 'job', existing.id, url);
+    if (isValidUrl(url)) {
+      await hashAndCachePrivateUrl(env, 'job', existing.id, url);
+    }
     await env.DB.prepare(
       `UPDATE download_jobs
        SET sync_key = COALESCE(sync_key, ?),
@@ -1087,7 +1255,9 @@ async function queueDownloadJob(
   }
 
   const jobId = crypto.randomUUID();
-  const urlHash = await hashAndCachePrivateUrl(env, 'job', jobId, url);
+  const urlHash = isValidUrl(url)
+    ? await hashAndCachePrivateUrl(env, 'job', jobId, url)
+    : await sha256Hex(url);
 
   await env.DB.prepare(
     `INSERT INTO download_jobs (
@@ -1556,6 +1726,128 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
     failed,
     queued: accepted + deduped,
     job_ids: queuedJobIds.slice(0, 100),
+  }, 202);
+}
+
+async function handleArtistDiscographyQueue(request: Request, env: Env): Promise<Response> {
+  await ensurePlaylistWorkflowSchema(env);
+  await ensureDownloadJobMetadataSchema(env);
+  const ip = getClientAddress(request);
+  const rl = await rateLimit(env.CACHE, `artist-discography:${ip}`, 3, 60);
+  if (rl.limited) {
+    return jsonError(request, env, 'RATE_LIMITED', 'Too many artist discography requests', 429, true);
+  }
+
+  const body = await parseJson<ArtistDiscographyRequestBody>(request);
+  const artist = normalizeArtistQuery(body?.artist);
+  if (!artist) {
+    return jsonError(request, env, 'INVALID_ARTIST', 'Artist name is required', 400);
+  }
+  const format = AUDIO_FORMATS.includes(body?.format ?? 'mp3') ? (body?.format ?? 'mp3') : 'mp3';
+  const quality = AUDIO_QUALITIES.includes(body?.quality ?? '320') ? (body?.quality ?? '320') : '320';
+  const source = normalizeSource(body?.source || 'youtube');
+  const syncKey = normalizeOptionalSyncKey(body?.sync_key);
+  if (body?.sync_key && !syncKey) {
+    return jsonError(request, env, 'INVALID_SYNC_KEY', 'Sync key is invalid', 400);
+  }
+
+  const configuredMax = Math.max(1, Math.min(500, readEnvInt(env.ARTIST_DISCOGRAPHY_MAX_TRACKS, 100)));
+  const limit = Math.max(1, Math.min(configuredMax, Number.parseInt(String(body?.limit ?? configuredMax), 10) || configuredMax));
+  const resolved = await fetchArtistDiscography(env, artist, source, limit);
+  if (!resolved.payload || !Array.isArray(resolved.payload.tracks)) {
+    return jsonError(
+      request,
+      env,
+      resolved.errorCode ?? 'ARTIST_DISCOGRAPHY_FAILED',
+      resolved.errorMessage ?? 'Artist discography provider failed',
+      502,
+      resolved.retryable,
+    );
+  }
+  if (!resolved.payload.tracks.length) {
+    return jsonError(request, env, 'ARTIST_DISCOGRAPHY_EMPTY', 'No tracks found for this artist', 404);
+  }
+
+  const workflowId = crypto.randomUUID();
+  const workflowSource = `artist:${artist}`;
+  const workflowSourceHash = await sha256Hex(workflowSource);
+  const tracks = resolved.payload.tracks.slice(0, limit);
+  const playlistTitle = resolved.payload.title || `${artist} Discography`;
+  const playlistFolder = formatPlaylistRelPath(playlistTitle, 1, 'Track', artist, format, tracks.length).folder;
+
+  await env.DB.prepare(
+    `INSERT INTO playlist_workflows (
+      workflow_id, source_url, source, status, phase, total_tracks,
+      queued_count, processing_count, done_count, failed_count, deduped_count,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, 'processing', 'queued', 0, 0, 0, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+  ).bind(workflowId, workflowSourceHash, 'artist').run();
+
+  let accepted = 0;
+  let deduped = 0;
+  let failed = 0;
+  const jobIds: string[] = [];
+
+  for (let index = 0; index < tracks.length; index += 1) {
+    const track = tracks[index]!;
+    const title = String(track.title || '').trim() || `Track ${index + 1}`;
+    const trackArtist = String(track.artist || '').trim() || artist;
+    const target = String(track.url || '').trim();
+    if (!isAllowedDiscographyTarget(target, env)) {
+      failed += 1;
+      continue;
+    }
+
+    const pathInfo = formatPlaylistRelPath(playlistFolder, index + 1, title, trackArtist, format, tracks.length);
+    const queued = await queueDownloadJob(env, {
+      url: target,
+      source: track.source || 'youtube',
+      format,
+      quality,
+      title,
+      artist: trackArtist,
+      syncKey,
+      playlistFolder: pathInfo.folder,
+      playlistIndex: index + 1,
+      localRelpath: pathInfo.relpath,
+    });
+    jobIds.push(queued.jobId);
+    if (queued.deduped) {
+      deduped += 1;
+    } else {
+      accepted += 1;
+    }
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO playlist_workflow_jobs (workflow_id, job_id, is_deduped)
+       VALUES (?, ?, ?)`,
+    ).bind(workflowId, queued.jobId, queued.deduped ? 1 : 0).run();
+  }
+
+  const rollup = await syncPlaylistWorkflowRollup(env, workflowId, tracks.length);
+  const finalStatus = deriveWorkflowStatus(rollup, tracks.length);
+  const finalPhase = deriveWorkflowPhase(finalStatus, rollup);
+
+  await recordTelemetry(env, {
+    event: 'artist_discography_queued',
+    status: finalStatus === 'failed' ? '500' : '202',
+    source,
+    value: tracks.length,
+    code: artist,
+  });
+
+  return jsonOk(request, env, {
+    workflow_id: workflowId,
+    status: finalStatus,
+    phase: finalPhase,
+    playlist_title: playlistTitle,
+    artist,
+    source: resolved.payload.source || source,
+    total: tracks.length,
+    accepted,
+    deduped,
+    failed,
+    queued: accepted + deduped,
+    job_ids: jobIds.slice(0, 100),
   }, 202);
 }
 
@@ -2813,6 +3105,144 @@ function resolvePublicBaseUrl(request: Request, env: Env): string {
   if (configured) return configured;
   const requestUrl = new URL(request.url);
   return requestUrl.origin;
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+interface ShareTokenPayload {
+  shareJobId: string;
+  exp: number;
+}
+
+const apiTextEncoder = new TextEncoder();
+const apiTextDecoder = new TextDecoder();
+
+function apiBase64UrlEncode(value: string | Uint8Array): string {
+  const bytes = typeof value === 'string' ? apiTextEncoder.encode(value) : value;
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function apiBase64UrlDecode(input: string): Uint8Array {
+  const padded = input.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - input.length % 4) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function apiHmacSha256(secret: string, message: string): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    apiTextEncoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  return new Uint8Array(await crypto.subtle.sign('HMAC', key, apiTextEncoder.encode(message)));
+}
+
+async function createShareToken(jobId: string, exp: number, secret: string): Promise<string> {
+  const header = apiBase64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body = apiBase64UrlEncode(JSON.stringify({ shareJobId: jobId, exp }));
+  const unsigned = `${header}.${body}`;
+  const signature = apiBase64UrlEncode(await apiHmacSha256(secret, unsigned));
+  return `${unsigned}.${signature}`;
+}
+
+async function verifyShareToken(token: string, secret: string): Promise<ShareTokenPayload | null> {
+  const [header, body, signature] = token.split('.');
+  if (!header || !body || !signature) return null;
+  const unsigned = `${header}.${body}`;
+  const expected = apiBase64UrlEncode(await apiHmacSha256(secret, unsigned));
+  if (expected !== signature) return null;
+  try {
+    const payload = JSON.parse(apiTextDecoder.decode(apiBase64UrlDecode(body))) as Partial<ShareTokenPayload>;
+    if (!payload.shareJobId || !payload.exp || payload.exp * 1000 <= Date.now()) return null;
+    return { shareJobId: String(payload.shareJobId), exp: Number(payload.exp) };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeArtistQuery(raw: string | undefined): string {
+  const value = String(raw ?? '')
+    .replace(/[\x00-\x1F\x7F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (value.length < 2 || value.length > 200) return '';
+  return value;
+}
+
+function isYtDlpSearchTarget(value: string): boolean {
+  return /^ytsearch(?:\d{0,2})?:[^\r\n]{2,300}$/i.test(value);
+}
+
+function isAllowedDiscographyTarget(value: string, env: Env): boolean {
+  if (isYtDlpSearchTarget(value)) return true;
+  if (!isValidUrl(value)) return false;
+  return validateDownloadUrlPolicy(value, env).allowed;
+}
+
+type ShareJobRecord = Pick<
+  JobRecord,
+  'id' | 'source' | 'format' | 'quality' | 'status' | 'title' | 'artist' | 'duration' | 'file_size' | 'result_url' | 'r2_key' | 'created_at'
+>;
+
+async function getShareJobRecord(env: Env, jobId: string): Promise<ShareJobRecord | null> {
+  return env.DB.prepare(
+    `SELECT id, source, format, quality, status, title, artist, duration, file_size, result_url, r2_key, created_at
+     FROM download_jobs
+     WHERE id = ?
+     LIMIT 1`,
+  ).bind(jobId).first<ShareJobRecord>();
+}
+
+function shareTitle(row: ShareJobRecord): string {
+  const artist = String(row.artist || 'Unknown Artist').trim();
+  const title = String(row.title || 'Unknown Track').trim();
+  return `${artist} - ${title}`;
+}
+
+function shareDescription(row: ShareJobRecord): string {
+  const format = String(row.format || '').toUpperCase();
+  const quality = String(row.quality || '').trim();
+  const source = String(row.source || 'unknown').trim();
+  const status = String(row.status || 'queued').trim();
+  const parts = [source, format && quality ? `${format} ${quality}` : format || quality, status]
+    .filter(Boolean);
+  return `Shared from DyrakArmy: ${parts.join(' / ')}`;
+}
+
+function escapeHtmlText(value: string): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeSvgText(value: string): string {
+  return escapeHtmlText(value).replace(/\n/g, ' ');
+}
+
+function truncateForCard(value: string, max: number): string {
+  const clean = String(value || '').replace(/\s+/g, ' ').trim();
+  return clean.length > max ? `${clean.slice(0, Math.max(0, max - 1)).trim()}…` : clean;
+}
+
+function htmlResponse(body: string, status = 200): Response {
+  return new Response(body, {
+    status,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'public, max-age=300',
+    },
+  });
 }
 
 function normalizeVersionTag(raw: string | undefined, fallback: string): string {
@@ -4505,6 +4935,68 @@ async function fetchPlaylistResolve(
       payload: null,
       errorCode: 'PLAYLIST_RESOLVE_REQUEST_FAILED',
       errorMessage: 'Playlist provider is temporarily unreachable',
+      retryable: true,
+    };
+  }
+}
+
+async function fetchArtistDiscography(
+  env: Env,
+  artist: string,
+  source: string,
+  limit: number,
+): Promise<PlaylistResolveResult> {
+  try {
+    const startedAt = Date.now();
+    const failover = await fetchDownloaderWithFailover(env, '/internal/artist/discography', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': env.DOWNLOADER_API_KEY,
+      },
+      body: JSON.stringify({
+        artist,
+        source,
+        limit,
+      }),
+    });
+    const response = failover.response;
+    await recordTelemetry(env, {
+      event: 'downloader_artist_discography',
+      status: String(response.status),
+      source,
+      origin: failover.origin.baseUrl,
+      latency_ms: Date.now() - startedAt,
+      code: failover.switched ? 'FAILOVER_SWITCHED' : 'PRIMARY_OK',
+    });
+    if (!response.ok) {
+      const details = await response.text();
+      return {
+        payload: null,
+        errorCode: 'ARTIST_DISCOGRAPHY_FAILED',
+        errorMessage: details.slice(0, 240) || 'Artist discography provider failed',
+        retryable: response.status >= 500,
+      };
+    }
+    const payload = await response.json<PlaylistResolveResponse>();
+    if (!payload || !Array.isArray(payload.tracks)) {
+      return {
+        payload: null,
+        errorCode: 'ARTIST_DISCOGRAPHY_INVALID_PAYLOAD',
+        errorMessage: 'Artist discography provider returned an invalid payload',
+        retryable: true,
+      };
+    }
+    return {
+      payload,
+      retryable: false,
+    };
+  } catch (error) {
+    console.error('Artist discography request failed', error);
+    return {
+      payload: null,
+      errorCode: 'ARTIST_DISCOGRAPHY_UNREACHABLE',
+      errorMessage: 'Artist discography provider is temporarily unreachable',
       retryable: true,
     };
   }

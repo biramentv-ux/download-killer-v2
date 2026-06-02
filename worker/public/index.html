@@ -2518,6 +2518,12 @@
         shared_queue_requires_key: "Set a sync key to use shared queue.",
         shared_queue_loaded: "Loaded {count} shared queue items.",
         shared_queue_empty: "No shared queue items yet.",
+        share_track: "Share",
+        share_ready: "Share link ready.",
+        share_failed: "Share failed: {message}",
+        artist_discography: "Artist discography",
+        artist_discography_queued: "Queued {queued}/{total} tracks from {artist}.",
+        artist_discography_failed: "Discography failed: {message}",
 	      },
       bg: {
         tab_download: "Сваляне",
@@ -2759,6 +2765,12 @@
         shared_queue_requires_key: "Задай sync ключ, за да ползваш споделена опашка.",
         shared_queue_loaded: "Заредени {count} елемента в споделената опашка.",
         shared_queue_empty: "Още няма елементи в споделената опашка.",
+        share_track: "Сподели",
+        share_ready: "Линкът за споделяне е готов.",
+        share_failed: "Споделянето не успя: {message}",
+        artist_discography: "Дискография на изпълнител",
+        artist_discography_queued: "Добавени {queued}/{total} песни от {artist}.",
+        artist_discography_failed: "Дискографията не успя: {message}",
 	      },
 	    };
 
@@ -5122,6 +5134,12 @@
       return `<button class="item-link item-action" data-action="${action}" data-url="${downloadUrl}" data-filename="${suggestedName}">${label}</button>`;
     }
 
+    function shareActionMarkup(jobId) {
+      const id = String(jobId || "").trim();
+      if (!id) return "";
+      return `<button class="item-link item-action" data-action="share-job" data-job-id="${escapeHtml(id)}">${translate("share_track")}</button>`;
+    }
+
     function audioPreviewMarkup(streamUrl) {
       if (!streamUrl) return "";
       return `
@@ -5207,6 +5225,47 @@
           const filename = node.dataset.filename || "download.bin";
           if (!url) return;
           await downloadFileInBrowser(url, filename);
+        });
+      });
+    }
+
+    async function shareJob(jobId) {
+      const id = String(jobId || "").trim();
+      if (!id) return;
+      try {
+        const payload = await apiJson("/share/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: id }),
+        });
+        const shareUrl = String(payload.share_url || "").trim();
+        if (!shareUrl) throw new Error("Missing share URL");
+        if (navigator.share) {
+          await navigator.share({
+            title: payload.title || "DyrakArmy",
+            text: payload.description || "",
+            url: shareUrl,
+          });
+          return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(shareUrl);
+          alert(translate("share_ready"));
+          return;
+        }
+        window.open(shareUrl, "_blank", "noopener,noreferrer");
+      } catch (error) {
+        alert(translate("share_failed", { message: error.message || String(error) }));
+      }
+    }
+
+    function bindShareActionButtons(scope) {
+      const root = scope || document;
+      root.querySelectorAll("[data-action='share-job']").forEach((node) => {
+        if (node.dataset.bound === "1") return;
+        node.dataset.bound = "1";
+        node.addEventListener("click", async () => {
+          await shareJob(node.dataset.jobId || "");
         });
       });
     }
@@ -5419,6 +5478,7 @@
         <div class="pill-grid" id="qualityRow"></div>
 
         <button id="queueBtn">${queueLabel} (${selectedFormat.toUpperCase()} ${selectedQuality})</button>
+        ${selectedTrack.artist && !playlistMode ? `<button id="artistDiscographyBtn" class="action-btn" type="button">${translate("artist_discography")}</button>` : ""}
 
         <div class="label">${translate("queue_label")}</div>
         <div id="queueList" class="queue-list"></div>
@@ -5458,6 +5518,12 @@
       document.getElementById("queueBtn").addEventListener("click", () => {
         void queueSelectedTrackByMode();
       });
+      const artistDiscographyBtn = document.getElementById("artistDiscographyBtn");
+      if (artistDiscographyBtn) {
+        artistDiscographyBtn.addEventListener("click", () => {
+          void queueArtistDiscography();
+        });
+      }
       applyVersionGate();
       renderQueue();
     }
@@ -5819,6 +5885,63 @@
       }
     }
 
+    async function queueArtistDiscography() {
+      if (!selectedTrack || !selectedTrack.artist) return;
+      try {
+        const payload = await apiJson("/artist/discography/queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            artist: selectedTrack.artist,
+            source: selectedTrack.source || currentSource || "youtube",
+            format: selectedFormat,
+            quality: selectedQuality,
+            sync_key: syncKey,
+            limit: 50,
+          }),
+        });
+
+        const workflowId = String(payload.workflow_id || "");
+        if (!workflowId) return;
+        const queued = Number(payload.queued || payload.accepted || 0);
+        const total = Number(payload.total || queued);
+        queueJobs.set(workflowId, {
+          id: workflowId,
+          workflowId,
+          title: payload.playlist_title || `${selectedTrack.artist} Discography`,
+          artist: translate("artist_discography_queued", {
+            queued,
+            total,
+            artist: selectedTrack.artist,
+          }),
+          format: selectedFormat,
+          quality: selectedQuality,
+          source: payload.source || "artist",
+          url: "",
+          status: payload.status || "processing",
+          controlState: "active",
+          totalTracks: total,
+          queuedCount: queued,
+          processingCount: 0,
+          doneCount: 0,
+          failedCount: Number(payload.failed || 0),
+          dedupedCount: Number(payload.deduped || 0),
+          workflowPhase: String(payload.phase || "queued_tracks"),
+          archiveStatus: null,
+          archiveUrl: null,
+          archiveError: null,
+          downloadUrl: null,
+          streamUrl: null,
+          error: null,
+          createdAt: Date.now(),
+        });
+        renderQueue();
+        subscribeToWorkflow(workflowId);
+      } catch (error) {
+        alert(translate("artist_discography_failed", { message: error.message || String(error) }));
+      }
+    }
+
     async function queueBatchDownloads() {
       if (versionBlocked) {
         alert(translate("update_required", { min: CLIENT_MIN_VERSIONS.web || "?", current: WEB_CLIENT_VERSION }));
@@ -6030,6 +6153,7 @@
             ${isWorkflowJob(job) && job.archiveError ? `<div class="item-error">${translate("workflow_archive_failed", { message: job.archiveError })}</div>` : ""}
             ${isWorkflowJob(job) ? `<a class="item-link" target="_blank" rel="noreferrer" href="${API_BASE}/playlist/workflow/${encodeURIComponent(job.workflowId)}">${translate("workflow_link")}</a>` : ""}
             ${isWorkflowJob(job) ? workflowActionsMarkup(job) : ""}
+            ${!isWorkflowJob(job) ? shareActionMarkup(job.id) : ""}
             ${!isWorkflowJob(job) && job.status === "queued" && job.url ? `<button class="item-link item-action" data-action="pause-job" data-job-id="${job.id}">${translate("queue_pause")}</button>` : ""}
             ${!isWorkflowJob(job) && job.status === "paused" && job.url ? `<button class="item-link item-action" data-action="resume-job" data-job-id="${job.id}">${translate("queue_resume")}</button>` : ""}
             ${!isWorkflowJob(job) && job.status === "failed" && job.url ? `<button class="item-link item-action" data-action="retry-job" data-job-id="${job.id}">${translate("queue_retry")}</button>` : ""}
@@ -6040,6 +6164,7 @@
       `).join("");
 
       bindDownloadActionButtons(list);
+      bindShareActionButtons(list);
       list.querySelectorAll("[data-action='retry-job']").forEach((node) => {
         if (node.dataset.bound === "1") return;
         node.dataset.bound = "1";
@@ -6339,10 +6464,12 @@
           <div class="item-meta">${row.created_at || ""}</div>
           ${row.download_url ? downloadActionMarkup(row.download_url, translate("download"), buildSuggestedFileName(row.title || translate("unknown_track"), row.artist || translate("unknown_artist"), row.format || "mp3")) : ""}
           ${row.stream_url ? audioPreviewMarkup(row.stream_url) : ""}
+          ${shareActionMarkup(row.id)}
         </div>
       `).join("");
 
       bindDownloadActionButtons(list);
+      bindShareActionButtons(list);
     }
 
     async function loadHistory() {
@@ -6893,6 +7020,7 @@
 	      renderPicker();
 	      renderQueue();
       bindDownloadActionButtons(document);
+      bindShareActionButtons(document);
     });
 	    window.addEventListener("beforeunload", () => {
       for (const workflowId of workflowPollers.keys()) {

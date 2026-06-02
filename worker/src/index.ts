@@ -65,6 +65,10 @@ export default {
         return downloadRouter(request, env);
       }
 
+      if (pathname.startsWith('/share/')) {
+        return downloadRouter(request, env);
+      }
+
       return env.ASSETS.fetch(request);
     } catch (error) {
       console.error('Unhandled fetch error', error);
