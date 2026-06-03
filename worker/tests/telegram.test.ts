@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { handleTelegramUpdate, publishTelegramChannelDownload } from '../src/telegram';
+import { backfillTelegramChannelPublishes, handleTelegramUpdate, publishTelegramChannelDownload } from '../src/telegram';
 import type { DownloadJob, DownloaderDownloadResult, Env } from '../src/types';
 import { createJobFingerprint } from '../src/utils';
 
@@ -50,10 +50,20 @@ class FakeStatement {
       const fingerprint = String(this.values[0] ?? '');
       return (this.db.completedJobs.get(fingerprint) ?? null) as T | null;
     }
+    if (this.sql.includes('FROM telegram_channel_publishes')) {
+      const jobId = String(this.values[0] ?? '');
+      return (this.db.channelPublishes.get(jobId) ?? null) as T | null;
+    }
     return null;
   }
 
   async all<T>(): Promise<{ results: T[] }> {
+    if (this.sql.includes('FROM download_jobs j') && this.sql.includes('telegram_channel_publishes')) {
+      return {
+        results: this.db.completedTelegramRows
+          .filter((row) => this.db.channelPublishes.get(String(row.id))?.status !== 'published') as T[],
+      };
+    }
     return { results: [] };
   }
 
@@ -64,6 +74,18 @@ class FakeStatement {
       const payload = String(this.values[1] ?? '');
       if (key && payload) this.db.preferences.set(key, payload);
     }
+    if (this.sql.includes('INSERT INTO telegram_channel_publishes')) {
+      const jobId = String(this.values[0] ?? '');
+      const current = this.db.channelPublishes.get(jobId);
+      this.db.channelPublishes.set(jobId, {
+        job_id: jobId,
+        status: String(this.values[1] ?? ''),
+        method: String(this.values[2] ?? ''),
+        channel_id: String(this.values[3] ?? ''),
+        attempts: Number(current?.attempts ?? 0) + 1,
+        description: String(this.values[4] ?? ''),
+      });
+    }
     return { success: true };
   }
 }
@@ -71,10 +93,16 @@ class FakeStatement {
 class FakeD1 {
   preferences = new Map<string, string>();
   completedJobs = new Map<string, Record<string, unknown>>();
+  channelPublishes = new Map<string, Record<string, unknown>>();
+  completedTelegramRows: Array<Record<string, unknown>> = [];
   runs: Array<{ sql: string; values: unknown[] }> = [];
 
   prepare(sql: string): FakeStatement {
     return new FakeStatement(this, sql);
+  }
+
+  async batch(statements: FakeStatement[]): Promise<Array<{ success: boolean }>> {
+    return Promise.all(statements.map((statement) => statement.run()));
   }
 }
 
@@ -251,6 +279,48 @@ describe('Telegram channel publishing', () => {
     expect(result.ok).toBe(true);
     expect(result.method).toBe('skipped');
     expect(calls.some((call) => call.method === 'sendAudio')).toBe(false);
+  });
+
+  it('does not publish the same Telegram-origin job twice after a successful channel publish', async () => {
+    const { env, calls, db } = createTelegramTestContext();
+    env.TELEGRAM_DOWNLOAD_CHANNEL_ID = '-1003904304047';
+
+    const first = await publishTelegramChannelDownload(createDownloadJob(), createDownloadResult(), env);
+    const second = await publishTelegramChannelDownload(createDownloadJob(), createDownloadResult(), env);
+
+    expect(first.method).toBe('sendAudio');
+    expect(second.method).toBe('skipped');
+    expect(second.description).toBe('Already published');
+    expect(calls.filter((call) => call.method === 'sendAudio' && call.body.chat_id === '-1003904304047')).toHaveLength(1);
+    expect(db.channelPublishes.get('00000000-0000-4000-8000-000000000001')?.status).toBe('published');
+  });
+
+  it('backfills completed Telegram-origin jobs that missed channel publishing', async () => {
+    const { env, calls, db } = createTelegramTestContext();
+    env.TELEGRAM_DOWNLOAD_CHANNEL_ID = '-1003904304047';
+    db.completedTelegramRows.push({
+      id: '00000000-0000-4000-8000-000000000099',
+      url: 'hashed-url',
+      source: 'youtube',
+      format: 'mp3',
+      quality: '320',
+      fingerprint: 'fp-backfill',
+      chat_id: 123,
+      message_id: 77,
+      sync_key: 'tg_123',
+      created_at: '2026-06-03T00:00:00Z',
+      title: 'Backfill Track',
+      artist: 'Backfill Artist',
+      duration: 181,
+      file_size: 123456,
+      result_url: 'https://files.example/backfill.mp3',
+    });
+
+    const published = await backfillTelegramChannelPublishes(env, 10);
+
+    expect(published).toBe(1);
+    expect(calls.some((call) => call.method === 'sendAudio' && call.body.chat_id === '-1003904304047')).toBe(true);
+    expect(db.channelPublishes.get('00000000-0000-4000-8000-000000000099')?.status).toBe('published');
   });
 
   it('captures forwarded channel media posts even when they have no text', async () => {

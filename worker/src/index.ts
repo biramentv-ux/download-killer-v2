@@ -7,6 +7,7 @@ import { downloadRouter } from './api';
 import { enqueueHistoryEvent, processHistoryEventBatch } from './history';
 import { ensureDeadLetterSchema, ensurePlaylistWorkflowSchema } from './schema';
 import {
+  backfillTelegramChannelPublishes,
   handleTelegramUpdate,
   notifyTelegramComplete,
   notifyTelegramFailure,
@@ -193,6 +194,7 @@ export default {
     }
 
     await runDownloaderSmokeChecks(env);
+    const telegramBackfillPublished = await backfillTelegramChannelPublishes(env);
 
     await evaluateOpsAlerts(env);
     const cleanup = await cleanupStaleKvKeys(env);
@@ -207,6 +209,7 @@ export default {
         controller.cron,
         `kv_cleanup_scanned=${cleanup.scanned}`,
         `kv_cleanup_deleted=${cleanup.deleted}`,
+        `telegram_channel_backfill=${telegramBackfillPublished}`,
         retention
           ? `retention_jobs=${retention.jobs_deleted};retention_r2=${retention.r2_keys_deleted}`
           : 'retention_skipped=cron',

@@ -55,6 +55,21 @@ CREATE TABLE IF NOT EXISTS job_history_events (
 CREATE INDEX IF NOT EXISTS idx_job_history_events_job_created ON job_history_events(job_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_job_history_events_created ON job_history_events(created_at DESC);
 
+CREATE TABLE IF NOT EXISTS telegram_channel_publishes (
+  job_id           TEXT PRIMARY KEY,
+  status           TEXT NOT NULL, -- published | failed
+  method           TEXT,          -- sendAudio | sendDocument | sendMessage | skipped
+  channel_id       TEXT,
+  attempts         INTEGER NOT NULL DEFAULT 0,
+  description      TEXT,
+  first_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_attempt_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  published_at     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_tg_channel_publishes_status ON telegram_channel_publishes(status);
+CREATE INDEX IF NOT EXISTS idx_tg_channel_publishes_last_attempt ON telegram_channel_publishes(last_attempt_at DESC);
+
 CREATE TABLE IF NOT EXISTS playlist_workflows (
   workflow_id       TEXT PRIMARY KEY,
   source_url        TEXT NOT NULL,

@@ -68,6 +68,13 @@ interface TelegramChannelPublishResult {
   description?: string;
 }
 
+interface TelegramChannelPublishRecord {
+  status?: string | null;
+  method?: string | null;
+  channel_id?: string | null;
+  attempts?: number | null;
+}
+
 interface SearchResultPayload {
   title: string;
   artist: string;
@@ -127,6 +134,24 @@ interface CompletedFingerprintJob {
   file_size: number | null;
 }
 
+interface CompletedTelegramChannelJobRow {
+  id: string;
+  url: string | null;
+  source: string | null;
+  format: AudioFormat;
+  quality: AudioQuality;
+  fingerprint: string | null;
+  chat_id: number | null;
+  message_id: number | null;
+  sync_key: string | null;
+  created_at: string | null;
+  title: string | null;
+  artist: string | null;
+  duration: number | null;
+  file_size: number | null;
+  result_url: string | null;
+}
+
 const SUPPORTED_FORMATS: AudioFormat[] = ['mp3', 'flac', 'ogg', 'm4a', 'opus', 'wav'];
 const LOSSLESS_FORMATS: AudioFormat[] = ['flac', 'wav'];
 const LOSSLESS_QUALITIES: AudioQuality[] = ['lossless', 'best'];
@@ -149,6 +174,9 @@ const AUDIO_QUALITY_TIERS: AudioQualityTier[] = ['low', 'high', 'lossless', 'hif
 const CAPTION_STYLES: CaptionStyle[] = ['none', 'default', 'detailed', 'simple', 'custom'];
 const SERVICE_KEYS = ['amazon', 'apple', 'beatport', 'deezer', 'kkbox', 'qobuz', 'tidal'] as const;
 const SERVICE_QUALITY_PRESETS = ['mp3_320', 'aac_256', 'flac_cd', 'flac_hires', 'flac_24b', 'alac_hires'] as const;
+const TELEGRAM_CHANNEL_PUBLISH_BACKFILL_LIMIT = 25;
+
+let telegramChannelPublishSchemaReady: Promise<void> | null = null;
 
 const DEFAULT_CODEC_CONVERSION: CodecConversionSettings = {
   aacInM4a: 'original',
@@ -1527,6 +1555,55 @@ export async function notifyTelegramComplete(job: DownloadJob, result: Downloade
   }
 }
 
+export async function backfillTelegramChannelPublishes(env: Env, limit = TELEGRAM_CHANNEL_PUBLISH_BACKFILL_LIMIT): Promise<number> {
+  if (String(env.TELEGRAM_CHANNEL_PUBLISH_ENABLED ?? '1').trim() === '0') return 0;
+  await ensureTelegramChannelPublishSchema(env);
+
+  const rows = await env.DB.prepare(
+    `SELECT
+       j.id, j.url, j.source, j.format, j.quality, j.fingerprint, j.chat_id, j.message_id,
+       j.sync_key, j.created_at, j.title, j.artist, j.duration, j.file_size, j.result_url
+     FROM download_jobs j
+     LEFT JOIN telegram_channel_publishes p
+       ON p.job_id = j.id AND p.status = 'published'
+     WHERE j.status = 'done'
+       AND j.chat_id IS NOT NULL
+       AND p.job_id IS NULL
+     ORDER BY COALESCE(j.finished_at, j.updated_at, j.created_at) DESC
+     LIMIT ?`,
+  ).bind(Math.max(1, Math.min(100, limit))).all<CompletedTelegramChannelJobRow>();
+
+  let published = 0;
+  for (const row of rows.results ?? []) {
+    if (!row.chat_id) continue;
+    const result = await publishTelegramChannelDownload(
+      {
+        id: row.id,
+        url: row.url ?? '',
+        source: normalizeSourceValue(row.source ?? undefined),
+        format: normalizeFormat(row.format),
+        quality: normalizeQuality(row.quality),
+        fingerprint: row.fingerprint ?? row.id,
+        syncKey: row.sync_key ?? undefined,
+        chatId: row.chat_id,
+        messageId: row.message_id ?? undefined,
+        requestedAt: row.created_at ?? new Date().toISOString(),
+      },
+      {
+        download_url: row.result_url ?? '',
+        title: row.title ?? 'Файл',
+        artist: row.artist ?? 'DyrakArmy',
+        duration: Number(row.duration ?? 0),
+        file_size: Number(row.file_size ?? 0),
+        source: normalizeSourceValue(row.source ?? undefined),
+      },
+      env,
+    );
+    if (result.ok && result.method !== 'skipped') published += 1;
+  }
+  return published;
+}
+
 export async function publishTelegramChannelDownload(
   job: DownloadJob,
   result: DownloaderDownloadResult,
@@ -1536,10 +1613,25 @@ export async function publishTelegramChannelDownload(
     return { ok: true, method: 'skipped', description: 'Channel publishing disabled' };
   }
 
+  const trackPublish = Boolean(job.chatId);
+  if (trackPublish) {
+    await ensureTelegramChannelPublishSchema(env);
+    const existing = await getTelegramChannelPublishRecord(env, job.id);
+    if (existing?.status === 'published') {
+      return {
+        ok: true,
+        method: 'skipped',
+        channelId: existing.channel_id ?? undefined,
+        description: 'Already published',
+      };
+    }
+  }
+
   const channelId = await resolveTelegramDownloadChannelId(env);
   if (!channelId) {
     const skipped = { ok: false, method: 'skipped' as const, description: 'Missing Telegram channel id' };
     await recordTelegramChannelPublish(env, skipped);
+    if (trackPublish) await recordTelegramJobChannelPublish(env, job, skipped);
     return skipped;
   }
 
@@ -1570,6 +1662,7 @@ export async function publishTelegramChannelDownload(
   if (sent.ok) {
     const ok = { ok: true, method: 'sendAudio' as const, channelId, description: 'published audio' };
     await recordTelegramChannelPublish(env, ok);
+    if (trackPublish) await recordTelegramJobChannelPublish(env, job, ok);
     return ok;
   }
 
@@ -1580,6 +1673,7 @@ export async function publishTelegramChannelDownload(
   if (document.ok) {
     const ok = { ok: true, method: 'sendDocument' as const, channelId, description: sent.description ?? 'published document' };
     await recordTelegramChannelPublish(env, ok);
+    if (trackPublish) await recordTelegramJobChannelPublish(env, job, ok);
     return ok;
   }
 
@@ -1600,6 +1694,7 @@ export async function publishTelegramChannelDownload(
     description: fallback.description ?? document.description ?? sent.description ?? 'Telegram channel publish failed',
   };
   await recordTelegramChannelPublish(env, status);
+  if (trackPublish) await recordTelegramJobChannelPublish(env, job, status);
   return status;
 }
 
@@ -2311,6 +2406,77 @@ async function recordTelegramChannelPublish(env: Env, result: TelegramChannelPub
     `${payload.at}: ${result.description ?? 'Telegram channel publish failed'}`,
     { expirationTtl: 604800 },
   );
+}
+
+async function ensureTelegramChannelPublishSchema(env: Env): Promise<void> {
+  if (!telegramChannelPublishSchemaReady) {
+    telegramChannelPublishSchemaReady = (async () => {
+      await env.DB.prepare(
+        `CREATE TABLE IF NOT EXISTS telegram_channel_publishes (
+          job_id          TEXT PRIMARY KEY,
+          status          TEXT NOT NULL,
+          method          TEXT,
+          channel_id      TEXT,
+          attempts        INTEGER NOT NULL DEFAULT 0,
+          description     TEXT,
+          first_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          last_attempt_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          published_at     TEXT
+        )`,
+      ).run();
+      await env.DB.batch([
+        env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_tg_channel_publishes_status ON telegram_channel_publishes(status)'),
+        env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_tg_channel_publishes_last_attempt ON telegram_channel_publishes(last_attempt_at DESC)'),
+      ]);
+    })().catch((error) => {
+      telegramChannelPublishSchemaReady = null;
+      throw error;
+    });
+  }
+  await telegramChannelPublishSchemaReady;
+}
+
+async function getTelegramChannelPublishRecord(
+  env: Env,
+  jobId: string,
+): Promise<TelegramChannelPublishRecord | null> {
+  await ensureTelegramChannelPublishSchema(env);
+  return env.DB.prepare(
+    `SELECT status, method, channel_id, attempts
+     FROM telegram_channel_publishes
+     WHERE job_id = ?
+     LIMIT 1`,
+  ).bind(jobId).first<TelegramChannelPublishRecord>();
+}
+
+async function recordTelegramJobChannelPublish(
+  env: Env,
+  job: DownloadJob,
+  result: TelegramChannelPublishResult,
+): Promise<void> {
+  await ensureTelegramChannelPublishSchema(env);
+  const status = result.ok && result.method !== 'skipped' ? 'published' : 'failed';
+  const publishedAt = status === 'published' ? new Date().toISOString() : null;
+  await env.DB.prepare(
+    `INSERT INTO telegram_channel_publishes (
+       job_id, status, method, channel_id, attempts, description, first_attempt_at, last_attempt_at, published_at
+     ) VALUES (?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
+     ON CONFLICT(job_id) DO UPDATE SET
+       status = excluded.status,
+       method = excluded.method,
+       channel_id = excluded.channel_id,
+       attempts = telegram_channel_publishes.attempts + 1,
+       description = excluded.description,
+       last_attempt_at = CURRENT_TIMESTAMP,
+       published_at = COALESCE(excluded.published_at, telegram_channel_publishes.published_at)`,
+  ).bind(
+    job.id,
+    status,
+    result.method ?? 'skipped',
+    result.channelId ?? null,
+    result.description?.slice(0, 500) ?? null,
+    publishedAt,
+  ).run();
 }
 
 async function createJobDownloadLink(jobId: string, env: Env): Promise<string> {
