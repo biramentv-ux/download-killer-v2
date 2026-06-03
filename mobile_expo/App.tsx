@@ -27,6 +27,8 @@ interface RuntimeConfig {
   downloads?: {
     windows_exe?: string;
     macos_portable?: string;
+    mobile_ios_package?: string;
+    mobile_android_package?: string;
     extension_chrome?: string;
     extension_firefox?: string;
   };
@@ -434,6 +436,8 @@ export default function App() {
   const [downloads, setDownloads] = useState({
     windows: `${DEFAULT_API_BASE}/downloads/DyrakArmyDesktop.exe`,
     mac: `${DEFAULT_API_BASE}/downloads/DyrakArmyDesktop-macOS.zip`,
+    ios: `${DEFAULT_API_BASE}/downloads/DyrakArmy-Mobile-iOS-Expo.zip`,
+    android: `${DEFAULT_API_BASE}/downloads/DyrakArmy-Mobile-Android-Expo.zip`,
     chrome: `${DEFAULT_API_BASE}/downloads/DyrakArmy-Extension-Chrome.zip`,
     firefox: `${DEFAULT_API_BASE}/downloads/DyrakArmy-Extension-Firefox.zip`,
   });
@@ -514,6 +518,8 @@ export default function App() {
     setDownloads({
       windows: d.windows_exe || `${base}/downloads/DyrakArmyDesktop.exe`,
       mac: d.macos_portable || `${base}/downloads/DyrakArmyDesktop-macOS.zip`,
+      ios: d.mobile_ios_package || `${base}/downloads/DyrakArmy-Mobile-iOS-Expo.zip`,
+      android: d.mobile_android_package || `${base}/downloads/DyrakArmy-Mobile-Android-Expo.zip`,
       chrome: d.extension_chrome || `${base}/downloads/DyrakArmy-Extension-Chrome.zip`,
       firefox: d.extension_firefox || `${base}/downloads/DyrakArmy-Extension-Firefox.zip`,
     });
@@ -805,6 +811,8 @@ export default function App() {
                 <Button label={tr('openTelegram')} onPress={openTelegram} />
                 <Button label="Windows EXE" onPress={() => void Linking.openURL(downloads.windows)} />
                 <Button label="macOS Portable" onPress={() => void Linking.openURL(downloads.mac)} />
+                <Button label="iOS App Store Package" onPress={() => void Linking.openURL(downloads.ios)} />
+                <Button label="Android Play Package" onPress={() => void Linking.openURL(downloads.android)} />
                 <Button label="Chrome Extension" onPress={() => void Linking.openURL(downloads.chrome)} />
                 <Button label="Firefox Extension" onPress={() => void Linking.openURL(downloads.firefox)} />
               </Panel>

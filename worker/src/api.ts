@@ -297,7 +297,7 @@ interface OpsAuthContext {
 }
 
 interface ReleaseArtifactEntry {
-  id: 'desktop_windows' | 'desktop_macos' | 'extension_chrome' | 'extension_firefox';
+  id: 'desktop_windows' | 'desktop_macos' | 'mobile_ios' | 'mobile_android' | 'extension_chrome' | 'extension_firefox';
   filename: string;
   path: string;
   url: string;
@@ -305,7 +305,7 @@ interface ReleaseArtifactEntry {
   bytes: number;
   version: string;
   minimum_supported: string;
-  platform: 'windows' | 'macos' | 'extension';
+  platform: 'windows' | 'macos' | 'ios' | 'android' | 'extension';
 }
 
 const AUDIO_FORMATS: AudioFormat[] = ['mp3', 'flac', 'ogg', 'm4a', 'opus', 'wav'];
@@ -344,6 +344,18 @@ const RELEASE_ARTIFACTS: Array<{
     filename: 'DyrakArmyDesktop-macOS.zip',
     path: '/downloads/DyrakArmyDesktop-macOS.zip',
     platform: 'macos',
+  },
+  {
+    id: 'mobile_ios',
+    filename: 'DyrakArmy-Mobile-iOS-Expo.zip',
+    path: '/downloads/DyrakArmy-Mobile-iOS-Expo.zip',
+    platform: 'ios',
+  },
+  {
+    id: 'mobile_android',
+    filename: 'DyrakArmy-Mobile-Android-Expo.zip',
+    path: '/downloads/DyrakArmy-Mobile-Android-Expo.zip',
+    platform: 'android',
   },
   {
     id: 'extension_chrome',
@@ -3359,13 +3371,17 @@ async function maybeSignReleasePayload(
 async function buildReleaseArtifacts(base: string, env: Env): Promise<ReleaseArtifactEntry[]> {
   const minDesktopWindows = normalizeVersionTag(env.MIN_CLIENT_DESKTOP_WINDOWS, '7.2.0');
   const minDesktopMacos = normalizeVersionTag(env.MIN_CLIENT_DESKTOP_MACOS, '7.2.0');
+  const minMobileExpo = normalizeVersionTag(env.MIN_CLIENT_MOBILE_EXPO, '1.0.0');
   const minExtension = normalizeVersionTag(env.MIN_CLIENT_EXTENSION, '1.0.0');
   const latestDesktopWindows = normalizeVersionTag(env.LATEST_DESKTOP_WINDOWS_VERSION, minDesktopWindows);
   const latestDesktopMacos = normalizeVersionTag(env.LATEST_DESKTOP_MACOS_VERSION, minDesktopMacos);
+  const latestMobileExpo = normalizeVersionTag(env.LATEST_MOBILE_EXPO_VERSION, minMobileExpo);
   const latestExtension = normalizeVersionTag(env.LATEST_EXTENSION_VERSION, minExtension);
   const versionByArtifact: Record<ReleaseArtifactEntry['id'], { latest: string; minimum: string }> = {
     desktop_windows: { latest: latestDesktopWindows, minimum: minDesktopWindows },
     desktop_macos: { latest: latestDesktopMacos, minimum: minDesktopMacos },
+    mobile_ios: { latest: latestMobileExpo, minimum: minMobileExpo },
+    mobile_android: { latest: latestMobileExpo, minimum: minMobileExpo },
     extension_chrome: { latest: latestExtension, minimum: minExtension },
     extension_firefox: { latest: latestExtension, minimum: minExtension },
   };
@@ -3456,6 +3472,8 @@ function buildUpdatesPayload(base: string, env: Env): Record<string, unknown> {
       minimum_supported: minMobileExpo,
       latest: latestMobileExpo,
       update_url: `${base}/`,
+      ios_package_url: `${base}/downloads/DyrakArmy-Mobile-iOS-Expo.zip`,
+      android_package_url: `${base}/downloads/DyrakArmy-Mobile-Android-Expo.zip`,
     },
     extension: {
       minimum_supported: minExtension,
@@ -3502,6 +3520,8 @@ async function handleRuntimeConfig(request: Request, env: Env): Promise<Response
     downloads: {
       windows_exe: `${base}/downloads/DyrakArmyDesktop.exe`,
       macos_portable: `${base}/downloads/DyrakArmyDesktop-macOS.zip`,
+      mobile_ios_package: `${base}/downloads/DyrakArmy-Mobile-iOS-Expo.zip`,
+      mobile_android_package: `${base}/downloads/DyrakArmy-Mobile-Android-Expo.zip`,
       extension_chrome: `${base}/downloads/DyrakArmy-Extension-Chrome.zip`,
       extension_firefox: `${base}/downloads/DyrakArmy-Extension-Firefox.zip`,
     },

@@ -16,8 +16,25 @@
       "bundleIdentifier": "online.dyrakarmy.mobile",
       "buildNumber": "2",
       "supportsTablet": true,
+      "associatedDomains": [
+        "applinks:dyrakarmy.online",
+        "applinks:www.dyrakarmy.online"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyTracking": false,
+        "NSPrivacyTrackingDomains": [],
+        "NSPrivacyCollectedDataTypes": [],
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          }
+        ]
       }
     },
     "android": {

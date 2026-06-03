@@ -2438,6 +2438,8 @@
     const QUALITY_LOSSLESS = ["lossless", "best"];
     let WINDOWS_EXE_URL = "/downloads/DyrakArmyDesktop.exe";
     let MACOS_ZIP_URL = "/downloads/DyrakArmyDesktop-macOS.zip";
+    let ANDROID_NATIVE_PACKAGE_URL = "/downloads/DyrakArmy-Mobile-Android-Expo.zip";
+    let IOS_NATIVE_PACKAGE_URL = "/downloads/DyrakArmy-Mobile-iOS-Expo.zip";
     let CHROME_EXTENSION_ZIP_URL = "/downloads/DyrakArmy-Extension-Chrome.zip";
 	    let FIREFOX_EXTENSION_ZIP_URL = "/downloads/DyrakArmy-Extension-Firefox.zip";
 	    const TELEGRAM_FALLBACK_LINK = {
@@ -2539,8 +2541,8 @@
         sync_link_copied: "Sync link copied.",
         sync_link_copy_failed: "Could not copy automatically. Use this link:",
         install_mobile: "Install Mobile App",
-        install_android: "Install Android App",
-        install_ios: "Install iOS App",
+        install_android: "Download Android App Package",
+        install_ios: "Download iOS App Package",
         desktop_open_web: "Open Web Version",
         desktop_mode_hint: "Desktop wrapper mode active: downloads are saved directly to your folders.",
         telegram_open: "Open Telegram Bot",
@@ -2590,8 +2592,8 @@
         health_idle: "Not checked yet.",
         health_ok: "Status: OK | Service: {service}",
         health_failed: "Health check failed: {message}",
-	        mobile_help: "iPhone/iPad: tap Share, then Add to Home Screen.",
-	        mobile_help_generic: "Use your browser menu and choose Install app / Add to Home Screen.",
+	        mobile_help: "Native package is not available yet. Use TestFlight/App Store after the iOS build is submitted.",
+	        mobile_help_generic: "Native package is not available yet. Use the web app while a store build is prepared.",
 	        mobile_mode_hint: "Mobile mode: open this page on Android/iOS and use Install/Add to Home Screen.",
 	        sync_label: "Sync key: {key} | Language sync: {lang}",
 	        ops_token_placeholder: "OPS read token",
@@ -2786,8 +2788,8 @@
         sync_link_copied: "Sync линкът е копиран.",
         sync_link_copy_failed: "Неуспешно автоматично копиране. Използвай този линк:",
         install_mobile: "Инсталирай мобилно приложение",
-        install_android: "Инсталирай Android приложение",
-        install_ios: "Инсталирай iOS приложение",
+        install_android: "Свали Android App пакет",
+        install_ios: "Свали iOS App пакет",
         desktop_open_web: "Отвори web версията",
         desktop_mode_hint: "Desktop режимът е активен: свалянията се записват директно в избраните папки.",
         telegram_open: "Отвори Telegram бота",
@@ -2837,8 +2839,8 @@
         health_idle: "Все още не е проверено.",
         health_ok: "Статус: OK | Услуга: {service}",
         health_failed: "Проверката се провали: {message}",
-	        mobile_help: "За iPhone/iPad: Share -> Add to Home Screen.",
-	        mobile_help_generic: "От менюто на браузъра избери Install app / Add to Home Screen.",
+	        mobile_help: "Native пакетът още не е наличен. Използвай TestFlight/App Store след качване на iOS build.",
+	        mobile_help_generic: "Native пакетът още не е наличен. Използвай web версията докато се подготви store build.",
 	        mobile_mode_hint: "Мобилен режим: отвори страницата на Android/iOS и избери Install/Add to Home Screen.",
 	        sync_label: "Sync ключ: {key} | Език sync: {lang}",
 	        ops_token_placeholder: "OPS read token",
@@ -3010,8 +3012,8 @@
       check_health: "Comprobar API",
       copy_sync_link: "Copiar enlace Sync",
       install_mobile: "Instalar app móvil",
-      install_android: "Instalar app Android",
-      install_ios: "Instalar app iOS",
+      install_android: "Descargar paquete Android",
+      install_ios: "Descargar paquete iOS",
       desktop_open_web: "Abrir versión web",
       telegram_open: "Abrir bot de Telegram",
       telegram_download: "Descargar por Telegram",
@@ -3128,8 +3130,8 @@
       check_health: "Проверить API",
       copy_sync_link: "Копировать Sync ссылку",
       install_mobile: "Установить мобильное приложение",
-      install_android: "Установить Android приложение",
-      install_ios: "Установить iOS приложение",
+      install_android: "Скачать пакет Android",
+      install_ios: "Скачать пакет iOS",
       desktop_open_web: "Открыть web версию",
       telegram_open: "Открыть Telegram бота",
       telegram_download: "Скачать через Telegram",
@@ -3246,8 +3248,8 @@
       check_health: "API prüfen",
       copy_sync_link: "Sync-Link kopieren",
       install_mobile: "Mobile App installieren",
-      install_android: "Android App installieren",
-      install_ios: "iOS App installieren",
+      install_android: "Android-Paket herunterladen",
+      install_ios: "iOS-Paket herunterladen",
       desktop_open_web: "Web-Version öffnen",
       telegram_open: "Telegram Bot öffnen",
       telegram_download: "Per Telegram herunterladen",
@@ -4112,6 +4114,8 @@
       const downloads = config.downloads || {};
       if (typeof downloads.windows_exe === "string" && downloads.windows_exe) WINDOWS_EXE_URL = downloads.windows_exe;
       if (typeof downloads.macos_portable === "string" && downloads.macos_portable) MACOS_ZIP_URL = downloads.macos_portable;
+      if (typeof downloads.mobile_android_package === "string" && downloads.mobile_android_package) ANDROID_NATIVE_PACKAGE_URL = downloads.mobile_android_package;
+      if (typeof downloads.mobile_ios_package === "string" && downloads.mobile_ios_package) IOS_NATIVE_PACKAGE_URL = downloads.mobile_ios_package;
       if (typeof downloads.extension_chrome === "string" && downloads.extension_chrome) CHROME_EXTENSION_ZIP_URL = downloads.extension_chrome;
       if (typeof downloads.extension_firefox === "string" && downloads.extension_firefox) FIREFOX_EXTENSION_ZIP_URL = downloads.extension_firefox;
 
@@ -5126,20 +5130,12 @@
         primaryBtn.setAttribute("download", "");
       } else if (platform === "android") {
         primaryBtn.textContent = translate("install_android");
-        primaryBtn.href = "#";
-        primaryBtn.removeAttribute("download");
-        primaryBtn.onclick = (event) => {
-          event.preventDefault();
-          installFromButton("android");
-        };
+        primaryBtn.href = ANDROID_NATIVE_PACKAGE_URL;
+        primaryBtn.setAttribute("download", "");
       } else if (platform === "ios") {
         primaryBtn.textContent = translate("install_ios");
-        primaryBtn.href = "#";
-        primaryBtn.removeAttribute("download");
-        primaryBtn.onclick = (event) => {
-          event.preventDefault();
-          installFromButton("ios");
-        };
+        primaryBtn.href = IOS_NATIVE_PACKAGE_URL;
+        primaryBtn.setAttribute("download", "");
       } else {
         primaryBtn.textContent = translate("install_mobile");
         primaryBtn.href = buildSyncUrl("/");
@@ -5198,6 +5194,16 @@
     }
 
     async function installFromButton(target) {
+      if (target === "android" && ANDROID_NATIVE_PACKAGE_URL) {
+        window.location.href = ANDROID_NATIVE_PACKAGE_URL;
+        return;
+      }
+
+      if (target === "ios" && IOS_NATIVE_PACKAGE_URL) {
+        window.location.href = IOS_NATIVE_PACKAGE_URL;
+        return;
+      }
+
       if (deferredInstallPrompt && (target === "android" || target === "mobile")) {
         deferredInstallPrompt.prompt();
         await deferredInstallPrompt.userChoice.catch(() => null);
