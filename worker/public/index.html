@@ -2314,6 +2314,8 @@
           <div class="inline-row" id="platformDownloads">
             <a class="exe-link" id="windowsDownloadBtn" href="/downloads/DyrakArmyDesktop.exe" download>Download Windows EXE</a>
             <a class="exe-link" id="macDownloadBtn" href="/downloads/DyrakArmyDesktop-macOS.zip" download>Download macOS Portable</a>
+            <a class="exe-link" id="linuxX64DownloadBtn" href="/downloads/DyrakArmyDesktop-linux-x64.zip" download>Download Linux x64</a>
+            <a class="exe-link" id="linuxArm64DownloadBtn" href="/downloads/DyrakArmyDesktop-linux-arm64.zip" download>Download Linux ARM64</a>
             <button class="action-btn mobile-install-btn hidden" id="installAppBtn">Install Mobile App</button>
             <button class="action-btn mobile-install-btn" id="androidInstallBtn">Install Android App</button>
             <button class="action-btn mobile-install-btn" id="iosInstallBtn">Install iOS App</button>
@@ -2438,6 +2440,8 @@
     const QUALITY_LOSSLESS = ["lossless", "best"];
     let WINDOWS_EXE_URL = "/downloads/DyrakArmyDesktop.exe";
     let MACOS_ZIP_URL = "/downloads/DyrakArmyDesktop-macOS.zip";
+    let LINUX_X64_ZIP_URL = "/downloads/DyrakArmyDesktop-linux-x64.zip";
+    let LINUX_ARM64_ZIP_URL = "/downloads/DyrakArmyDesktop-linux-arm64.zip";
     let ANDROID_NATIVE_PACKAGE_URL = "/downloads/DyrakArmy-Mobile-Android-Expo.zip";
     let IOS_NATIVE_PACKAGE_URL = "/downloads/DyrakArmy-Mobile-iOS-Expo.zip";
     let CHROME_EXTENSION_ZIP_URL = "/downloads/DyrakArmy-Extension-Chrome.zip";
@@ -2551,6 +2555,8 @@
         windows_download: "Download Windows EXE",
         quick_windows_exe: "Windows EXE",
         mac_download: "Download macOS Portable",
+        linux_x64_download: "Download Linux x64",
+        linux_arm64_download: "Download Linux ARM64",
         chrome_extension_download: "Download Chrome Extension",
         firefox_extension_download: "Download Firefox Extension",
         extension_help: "Install the extension ZIP in browser developer mode for right-click and popup downloads.",
@@ -2798,6 +2804,8 @@
         windows_download: "Свали Windows EXE",
         quick_windows_exe: "Windows EXE",
         mac_download: "Свали macOS Portable",
+        linux_x64_download: "Свали Linux x64",
+        linux_arm64_download: "Свали Linux ARM64",
         chrome_extension_download: "Свали Chrome разширение",
         firefox_extension_download: "Свали Firefox разширение",
         extension_help: "Инсталирай ZIP файла през developer mode в браузъра за сваляне от popup и десен бутон.",
@@ -3020,6 +3028,8 @@
       quick_telegram: "Bot Telegram",
       windows_download: "Descargar Windows EXE",
       mac_download: "Descargar macOS Portable",
+      linux_x64_download: "Descargar Linux x64",
+      linux_arm64_download: "Descargar Linux ARM64",
       chrome_extension_download: "Descargar extensión Chrome",
       firefox_extension_download: "Descargar extensión Firefox",
       queue_download: "Poner en cola",
@@ -3138,6 +3148,8 @@
       quick_telegram: "Telegram бот",
       windows_download: "Скачать Windows EXE",
       mac_download: "Скачать macOS Portable",
+      linux_x64_download: "Скачать Linux x64",
+      linux_arm64_download: "Скачать Linux ARM64",
       chrome_extension_download: "Скачать расширение Chrome",
       firefox_extension_download: "Скачать расширение Firefox",
       queue_download: "Добавить в очередь",
@@ -3256,6 +3268,8 @@
       quick_telegram: "Telegram Bot",
       windows_download: "Windows EXE herunterladen",
       mac_download: "macOS Portable herunterladen",
+      linux_x64_download: "Linux x64 herunterladen",
+      linux_arm64_download: "Linux ARM64 herunterladen",
       chrome_extension_download: "Chrome-Erweiterung herunterladen",
       firefox_extension_download: "Firefox-Erweiterung herunterladen",
 	      queue_download: "Zur Warteschlange",
@@ -4051,6 +4065,7 @@
       if (ua.includes("android")) return "android";
       if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod")) return "ios";
       if (ua.includes("mac os") || ua.includes("macintosh")) return "macos";
+      if (ua.includes("linux") || ua.includes("x11")) return "linux";
       return "other";
     }
 
@@ -4114,6 +4129,8 @@
       const downloads = config.downloads || {};
       if (typeof downloads.windows_exe === "string" && downloads.windows_exe) WINDOWS_EXE_URL = downloads.windows_exe;
       if (typeof downloads.macos_portable === "string" && downloads.macos_portable) MACOS_ZIP_URL = downloads.macos_portable;
+      if (typeof downloads.linux_x64_portable === "string" && downloads.linux_x64_portable) LINUX_X64_ZIP_URL = downloads.linux_x64_portable;
+      if (typeof downloads.linux_arm64_portable === "string" && downloads.linux_arm64_portable) LINUX_ARM64_ZIP_URL = downloads.linux_arm64_portable;
       if (typeof downloads.mobile_android_package === "string" && downloads.mobile_android_package) ANDROID_NATIVE_PACKAGE_URL = downloads.mobile_android_package;
       if (typeof downloads.mobile_ios_package === "string" && downloads.mobile_ios_package) IOS_NATIVE_PACKAGE_URL = downloads.mobile_ios_package;
       if (typeof downloads.extension_chrome === "string" && downloads.extension_chrome) CHROME_EXTENSION_ZIP_URL = downloads.extension_chrome;
@@ -5073,6 +5090,8 @@
       const primaryBtn = document.getElementById("primaryPlatformBtn");
       const windowsBtn = document.getElementById("windowsDownloadBtn");
       const macBtn = document.getElementById("macDownloadBtn");
+      const linuxX64Btn = document.getElementById("linuxX64DownloadBtn");
+      const linuxArm64Btn = document.getElementById("linuxArm64DownloadBtn");
       const androidBtn = document.getElementById("androidInstallBtn");
       const iosBtn = document.getElementById("iosInstallBtn");
       const installBtn = document.getElementById("installAppBtn");
@@ -5088,6 +5107,14 @@
       if (macBtn) {
         macBtn.textContent = translate("mac_download");
         macBtn.href = MACOS_ZIP_URL;
+      }
+      if (linuxX64Btn) {
+        linuxX64Btn.textContent = translate("linux_x64_download");
+        linuxX64Btn.href = LINUX_X64_ZIP_URL;
+      }
+      if (linuxArm64Btn) {
+        linuxArm64Btn.textContent = translate("linux_arm64_download");
+        linuxArm64Btn.href = LINUX_ARM64_ZIP_URL;
       }
       if (androidBtn) androidBtn.textContent = translate("install_android");
       if (iosBtn) iosBtn.textContent = translate("install_ios");
@@ -5127,6 +5154,10 @@
       } else if (platform === "macos") {
         primaryBtn.textContent = translate("mac_download");
         primaryBtn.href = MACOS_ZIP_URL;
+        primaryBtn.setAttribute("download", "");
+      } else if (platform === "linux") {
+        primaryBtn.textContent = translate("linux_x64_download");
+        primaryBtn.href = LINUX_X64_ZIP_URL;
         primaryBtn.setAttribute("download", "");
       } else if (platform === "android") {
         primaryBtn.textContent = translate("install_android");

@@ -354,6 +354,22 @@ class ArchiveBrowseResponse(BaseModel):
   parent_path: str | None = None
 
 
+class ArchivePackRequest(BaseModel):
+  file_ids: list[str] = Field(min_length=1, max_length=200)
+  archive_format: str = '7z'
+  title: str = 'archive-selection'
+
+
+class ArchivePackResponse(BaseModel):
+  download_url: str
+  filename: str
+  file_size: int
+  file_count: int
+  archive_format: str
+  requested_format: str
+  fallback_used: bool = False
+
+
 def require_api_key(x_api_key: str | None = Header(default=None, alias='X-API-Key')) -> None:
   if x_api_key != API_KEY:
     raise HTTPException(status_code=401, detail='Invalid API key')
@@ -781,6 +797,83 @@ def find_archive_path(file_id: str) -> Path | None:
     except Exception:
       continue
   return None
+
+
+def normalize_archive_pack_format(raw: str) -> str:
+  value = (raw or '7z').strip().lower()
+  return '7z' if value == '7z' else 'zip'
+
+
+def find_7z_binary() -> str | None:
+  for candidate in ('7z', '7za', '7zz'):
+    found = shutil.which(candidate)
+    if found:
+      return found
+  return None
+
+
+def archive_pack_member_name(path: Path, index: int, total: int) -> str:
+  digits = max(2, len(str(total)))
+  stem = sanitize_archive_component(path.stem, f'file-{index}')
+  suffix = sanitize_archive_component(path.suffix.lstrip('.'), 'bin')
+  return f'{index:0{digits}d} - {stem}.{suffix}'
+
+
+def resolve_archive_pack_paths(file_ids: list[str]) -> list[Path]:
+  seen: set[str] = set()
+  paths: list[Path] = []
+  for raw_id in file_ids:
+    file_id = str(raw_id or '').strip().lower()
+    if not file_id or file_id in seen:
+      continue
+    seen.add(file_id)
+    target = find_archive_path(file_id)
+    if not target or not target.exists() or not target.is_file():
+      raise HTTPException(status_code=404, detail=f'Archive file not found: {file_id[:10]}')
+    if target.suffix.lower() not in ARCHIVE_ALLOWED_FILE_EXTENSIONS:
+      raise HTTPException(status_code=400, detail=f'Archive file type is not allowed: {target.name}')
+    paths.append(target)
+  if not paths:
+    raise HTTPException(status_code=400, detail='Archive pack needs at least one existing file')
+  return paths
+
+
+def build_archive_zip(paths: list[Path], archive_path: Path) -> int:
+  file_count = 0
+  with zipfile.ZipFile(archive_path, mode='w', compression=zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
+    total = len(paths)
+    for index, path in enumerate(paths, start=1):
+      zf.write(path, archive_pack_member_name(path, index, total))
+      file_count += 1
+  return file_count
+
+
+def build_archive_7z(paths: list[Path], archive_path: Path, seven_zip: str) -> int:
+  with tempfile.TemporaryDirectory(prefix='archive-pack-', dir=str(WORK_DIR)) as tmp_raw:
+    tmp_dir = Path(tmp_raw)
+    staged_paths: list[Path] = []
+    total = len(paths)
+    for index, source in enumerate(paths, start=1):
+      staged = tmp_dir / archive_pack_member_name(source, index, total)
+      try:
+        os.link(source, staged)
+      except Exception:
+        shutil.copy2(source, staged)
+      staged_paths.append(staged)
+
+    command = [seven_zip, 'a', '-t7z', '-mx=5', str(archive_path), *[str(path.name) for path in staged_paths]]
+    completed = subprocess.run(
+      command,
+      cwd=str(tmp_dir),
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      text=True,
+      timeout=600,
+      check=False,
+    )
+    if completed.returncode != 0:
+      raise RuntimeError((completed.stderr or completed.stdout or '7z failed').strip()[:500])
+    return len(staged_paths)
 
 
 def utc_now_iso() -> str:
@@ -2373,6 +2466,48 @@ def internal_archive_file(file_id: str) -> FileResponse:
     path=target,
     media_type=mimetypes.guess_type(target.name)[0] or 'application/octet-stream',
     filename=target.name,
+  )
+
+
+@app.post('/internal/archive/pack', response_model=ArchivePackResponse, dependencies=[Depends(require_api_key)])
+def internal_archive_pack(payload: ArchivePackRequest) -> ArchivePackResponse:
+  paths = resolve_archive_pack_paths(payload.file_ids)
+  requested_format = normalize_archive_pack_format(payload.archive_format)
+  actual_format = requested_format
+  fallback_used = False
+  seven_zip = find_7z_binary() if requested_format == '7z' else None
+  if requested_format == '7z' and not seven_zip:
+    actual_format = 'zip'
+    fallback_used = True
+
+  title = sanitize_archive_component(payload.title, 'archive-selection')
+  archive_file_name = f'{title}-{uuid.uuid4().hex[:8]}.{actual_format}'
+  archive_path = STORAGE_DIR / archive_file_name
+
+  try:
+    if actual_format == '7z':
+      if not seven_zip:
+        raise RuntimeError('7z binary disappeared before packing')
+      file_count = build_archive_7z(paths, archive_path, seven_zip)
+    else:
+      file_count = build_archive_zip(paths, archive_path)
+  except Exception as error:
+    archive_path.unlink(missing_ok=True)
+    raise HTTPException(status_code=502, detail=f'Archive pack failed: {error}') from error
+
+  if file_count == 0 or not archive_path.exists():
+    archive_path.unlink(missing_ok=True)
+    raise HTTPException(status_code=400, detail='No files were packed')
+
+  stat = archive_path.stat()
+  return ArchivePackResponse(
+    download_url=f'{PUBLIC_BASE_URL}/internal/files/{archive_file_name}',
+    filename=archive_file_name,
+    file_size=stat.st_size,
+    file_count=file_count,
+    archive_format=actual_format,
+    requested_format=requested_format,
+    fallback_used=fallback_used,
   )
 
 

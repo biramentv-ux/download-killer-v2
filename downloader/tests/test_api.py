@@ -1,3 +1,4 @@
+import zipfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -641,3 +642,45 @@ def test_archive_browse_returns_folders_and_images(monkeypatch, tmp_path):
   )
   assert file_response.status_code == 200
   assert file_response.content == b'\xff\xd8\xff\xd9'
+
+
+def test_archive_pack_falls_back_to_zip_when_7z_missing(monkeypatch, tmp_path):
+  from app import main
+
+  first = tmp_path / 'Artist - One.flac'
+  second = tmp_path / 'Artist - Two.mp3'
+  first.write_bytes(b'one')
+  second.write_bytes(b'two')
+
+  monkeypatch.setattr(main, 'ARCHIVE_DIRS_RAW', str(tmp_path))
+  monkeypatch.setattr(main, 'STORAGE_DIR', tmp_path)
+  monkeypatch.setattr(main, 'WORK_DIR', tmp_path)
+  monkeypatch.setattr(main, 'find_7z_binary', lambda: None)
+  main.ARCHIVE_CACHE['items'] = []
+  main.ARCHIVE_CACHE['created_at'] = 0
+  main.ARCHIVE_PATH_INDEX.clear()
+
+  client = TestClient(app)
+  response = client.post(
+    '/internal/archive/pack',
+    json={
+      'file_ids': [main.archive_file_id(first), main.archive_file_id(second)],
+      'archive_format': '7z',
+      'title': 'telegram-selected',
+    },
+    headers={'X-API-Key': 'change-me'},
+  )
+
+  assert response.status_code == 200
+  body = response.json()
+  assert body['file_count'] == 2
+  assert body['archive_format'] == 'zip'
+  assert body['requested_format'] == '7z'
+  assert body['fallback_used'] is True
+
+  archive_path = tmp_path / Path(body['download_url']).name
+  assert archive_path.exists()
+  with zipfile.ZipFile(archive_path) as zf:
+    names = zf.namelist()
+  assert any(name.endswith('Artist - One.flac') for name in names)
+  assert any(name.endswith('Artist - Two.mp3') for name in names)

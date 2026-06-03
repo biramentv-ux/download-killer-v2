@@ -297,7 +297,15 @@ interface OpsAuthContext {
 }
 
 interface ReleaseArtifactEntry {
-  id: 'desktop_windows' | 'desktop_macos' | 'mobile_ios' | 'mobile_android' | 'extension_chrome' | 'extension_firefox';
+  id:
+    | 'desktop_windows'
+    | 'desktop_macos'
+    | 'desktop_linux_x64'
+    | 'desktop_linux_arm64'
+    | 'mobile_ios'
+    | 'mobile_android'
+    | 'extension_chrome'
+    | 'extension_firefox';
   filename: string;
   path: string;
   url: string;
@@ -305,7 +313,7 @@ interface ReleaseArtifactEntry {
   bytes: number;
   version: string;
   minimum_supported: string;
-  platform: 'windows' | 'macos' | 'ios' | 'android' | 'extension';
+  platform: 'windows' | 'macos' | 'linux' | 'ios' | 'android' | 'extension';
 }
 
 const AUDIO_FORMATS: AudioFormat[] = ['mp3', 'flac', 'ogg', 'm4a', 'opus', 'wav'];
@@ -344,6 +352,18 @@ const RELEASE_ARTIFACTS: Array<{
     filename: 'DyrakArmyDesktop-macOS.zip',
     path: '/downloads/DyrakArmyDesktop-macOS.zip',
     platform: 'macos',
+  },
+  {
+    id: 'desktop_linux_x64',
+    filename: 'DyrakArmyDesktop-linux-x64.zip',
+    path: '/downloads/DyrakArmyDesktop-linux-x64.zip',
+    platform: 'linux',
+  },
+  {
+    id: 'desktop_linux_arm64',
+    filename: 'DyrakArmyDesktop-linux-arm64.zip',
+    path: '/downloads/DyrakArmyDesktop-linux-arm64.zip',
+    platform: 'linux',
   },
   {
     id: 'mobile_ios',
@@ -570,9 +590,18 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
     return handleArchiveBrowse(request, env);
   }
 
+  if (path === '/archive/pack' && request.method === 'POST') {
+    return handleArchivePack(request, env);
+  }
+
   const archiveFileMatch = path.match(/^\/archive\/file\/([a-f0-9]{64})$/i);
   if (archiveFileMatch && request.method === 'GET') {
     return handleArchiveFile(request, env, archiveFileMatch[1]!);
+  }
+
+  const archivePackedFileMatch = path.match(/^\/archive\/packed\/([^/]+)$/i);
+  if (archivePackedFileMatch && (request.method === 'GET' || request.method === 'HEAD')) {
+    return handleArchivePackedFile(request, env, decodeURIComponent(archivePackedFileMatch[1]!));
   }
 
   if (path.startsWith('/file/') && request.method === 'GET') {
@@ -3128,6 +3157,133 @@ async function handleArchiveFile(request: Request, env: Env, fileId: string): Pr
   }
 }
 
+async function handleArchivePack(request: Request, env: Env): Promise<Response> {
+  const body = await parseJson<{
+    file_ids?: unknown;
+    archive_format?: unknown;
+    title?: unknown;
+  }>(request);
+  const rawIds = Array.isArray(body?.file_ids) ? body.file_ids : [];
+  const fileIds = rawIds
+    .map((value) => String(value ?? '').trim().toLowerCase())
+    .filter((value, index, arr) => /^[a-f0-9]{64}$/.test(value) && arr.indexOf(value) === index)
+    .slice(0, 200);
+  if (!fileIds.length) {
+    return jsonError(request, env, 'ARCHIVE_PACK_EMPTY', 'Select at least one archive file', 400);
+  }
+
+  const archiveFormat = String(body?.archive_format ?? '7z').trim().toLowerCase() === 'zip' ? 'zip' : '7z';
+  const title = String(body?.title ?? 'telegram-selected').trim().slice(0, 120) || 'telegram-selected';
+
+  try {
+    const startedAt = Date.now();
+    const failover = await fetchDownloaderWithFailover(env, '/internal/archive/pack', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': env.DOWNLOADER_API_KEY,
+      },
+      body: JSON.stringify({
+        file_ids: fileIds,
+        archive_format: archiveFormat,
+        title,
+      }),
+    });
+    const response = failover.response;
+    await recordTelemetry(env, {
+      event: 'archive_pack',
+      status: String(response.status),
+      origin: failover.origin.baseUrl,
+      latency_ms: Date.now() - startedAt,
+      code: failover.switched ? 'FAILOVER_SWITCHED' : 'PRIMARY_OK',
+    });
+    if (!response.ok) {
+      const details = await response.text();
+      return jsonError(request, env, 'ARCHIVE_PACK_FAILED', details.slice(0, 240) || 'Archive pack failed', 502, true);
+    }
+    const payload = await response.json() as {
+      filename?: string;
+      file_size?: number;
+      file_count?: number;
+      archive_format?: string;
+      requested_format?: string;
+      fallback_used?: boolean;
+    };
+    const filename = safePackedArchiveFilename(String(payload.filename ?? ''));
+    if (!filename) {
+      return jsonError(request, env, 'ARCHIVE_PACK_BAD_FILENAME', 'Archive pack returned invalid filename', 502, true);
+    }
+    return jsonOk(request, env, {
+      download_url: `${resolvePublicBaseUrl(request, env)}/api/archive/packed/${encodeURIComponent(filename)}`,
+      filename,
+      file_size: Number(payload.file_size ?? 0),
+      file_count: Number(payload.file_count ?? fileIds.length),
+      archive_format: String(payload.archive_format ?? archiveFormat),
+      requested_format: String(payload.requested_format ?? archiveFormat),
+      fallback_used: Boolean(payload.fallback_used),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return jsonError(request, env, 'ARCHIVE_PACK_UNREACHABLE', `Archive pack provider is unreachable: ${message.slice(0, 160)}`, 502, true);
+  }
+}
+
+async function handleArchivePackedFile(request: Request, env: Env, rawFilename: string): Promise<Response> {
+  const filename = safePackedArchiveFilename(rawFilename);
+  if (!filename) {
+    return jsonError(request, env, 'ARCHIVE_PACKED_FILE_INVALID', 'Invalid archive filename', 400);
+  }
+
+  const headers: Record<string, string> = {
+    'X-API-Key': env.DOWNLOADER_API_KEY,
+  };
+  const range = request.headers.get('range');
+  if (range) headers.Range = range;
+  try {
+    const failover = await fetchDownloaderWithFailover(env, `/internal/files/${encodeURIComponent(filename)}`, {
+      method: 'GET',
+      headers,
+    });
+    const upstream = failover.response;
+    await recordTelemetry(env, {
+      event: 'archive_packed_file',
+      status: String(upstream.status),
+      origin: failover.origin.baseUrl,
+      code: failover.switched ? 'FAILOVER_SWITCHED' : 'PRIMARY_OK',
+    });
+    if (!upstream.ok || !upstream.body) {
+      const details = await upstream.text();
+      return jsonError(request, env, 'ARCHIVE_PACKED_FILE_FAILED', details.slice(0, 240) || 'Packed archive is unavailable', upstream.status === 404 ? 404 : 502, true);
+    }
+    const responseHeaders = new Headers(corsHeaders(request, env));
+    for (const name of [
+      'content-type',
+      'content-length',
+      'content-range',
+      'accept-ranges',
+      'etag',
+      'last-modified',
+      'cache-control',
+    ]) {
+      const value = upstream.headers.get(name);
+      if (value) responseHeaders.set(name, value);
+    }
+    responseHeaders.set('content-disposition', `attachment; filename="${filename.replace(/"/g, '')}"`);
+    return new Response(request.method === 'HEAD' ? null : upstream.body, { status: upstream.status, headers: responseHeaders });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return jsonError(request, env, 'ARCHIVE_PACKED_FILE_UNREACHABLE', `Packed archive provider is unreachable: ${message.slice(0, 160)}`, 502, true);
+  }
+}
+
+function safePackedArchiveFilename(raw: string): string | null {
+  const decoded = raw.trim();
+  const leaf = decoded.split(/[\\/]/).pop() ?? '';
+  if (!leaf || leaf.includes('..')) return null;
+  if (!/^[a-zA-Z0-9._\-\s]+\.(zip|7z)$/i.test(leaf)) return null;
+  return leaf;
+}
+
 function resolvePublicBaseUrl(request: Request, env: Env): string {
   const configured = (env.PUBLIC_BASE_URL ?? '').trim().replace(/\/+$/g, '');
   if (configured) return configured;
@@ -3380,6 +3536,8 @@ async function buildReleaseArtifacts(base: string, env: Env): Promise<ReleaseArt
   const versionByArtifact: Record<ReleaseArtifactEntry['id'], { latest: string; minimum: string }> = {
     desktop_windows: { latest: latestDesktopWindows, minimum: minDesktopWindows },
     desktop_macos: { latest: latestDesktopMacos, minimum: minDesktopMacos },
+    desktop_linux_x64: { latest: latestDesktopWindows, minimum: minDesktopWindows },
+    desktop_linux_arm64: { latest: latestDesktopWindows, minimum: minDesktopWindows },
     mobile_ios: { latest: latestMobileExpo, minimum: minMobileExpo },
     mobile_android: { latest: latestMobileExpo, minimum: minMobileExpo },
     extension_chrome: { latest: latestExtension, minimum: minExtension },
@@ -3468,6 +3626,12 @@ function buildUpdatesPayload(base: string, env: Env): Record<string, unknown> {
       latest: latestDesktopMacos,
       download_url: `${base}/downloads/DyrakArmyDesktop-macOS.zip`,
     },
+    desktop_linux: {
+      minimum_supported: minDesktopWindows,
+      latest: latestDesktopWindows,
+      x64_url: `${base}/downloads/DyrakArmyDesktop-linux-x64.zip`,
+      arm64_url: `${base}/downloads/DyrakArmyDesktop-linux-arm64.zip`,
+    },
     mobile_expo: {
       minimum_supported: minMobileExpo,
       latest: latestMobileExpo,
@@ -3520,6 +3684,8 @@ async function handleRuntimeConfig(request: Request, env: Env): Promise<Response
     downloads: {
       windows_exe: `${base}/downloads/DyrakArmyDesktop.exe`,
       macos_portable: `${base}/downloads/DyrakArmyDesktop-macOS.zip`,
+      linux_x64_portable: `${base}/downloads/DyrakArmyDesktop-linux-x64.zip`,
+      linux_arm64_portable: `${base}/downloads/DyrakArmyDesktop-linux-arm64.zip`,
       mobile_ios_package: `${base}/downloads/DyrakArmy-Mobile-iOS-Expo.zip`,
       mobile_android_package: `${base}/downloads/DyrakArmy-Mobile-Android-Expo.zip`,
       extension_chrome: `${base}/downloads/DyrakArmy-Extension-Chrome.zip`,

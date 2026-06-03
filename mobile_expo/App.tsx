@@ -27,6 +27,8 @@ interface RuntimeConfig {
   downloads?: {
     windows_exe?: string;
     macos_portable?: string;
+    linux_x64_portable?: string;
+    linux_arm64_portable?: string;
     mobile_ios_package?: string;
     mobile_android_package?: string;
     extension_chrome?: string;
@@ -436,6 +438,8 @@ export default function App() {
   const [downloads, setDownloads] = useState({
     windows: `${DEFAULT_API_BASE}/downloads/DyrakArmyDesktop.exe`,
     mac: `${DEFAULT_API_BASE}/downloads/DyrakArmyDesktop-macOS.zip`,
+    linuxX64: `${DEFAULT_API_BASE}/downloads/DyrakArmyDesktop-linux-x64.zip`,
+    linuxArm64: `${DEFAULT_API_BASE}/downloads/DyrakArmyDesktop-linux-arm64.zip`,
     ios: `${DEFAULT_API_BASE}/downloads/DyrakArmy-Mobile-iOS-Expo.zip`,
     android: `${DEFAULT_API_BASE}/downloads/DyrakArmy-Mobile-Android-Expo.zip`,
     chrome: `${DEFAULT_API_BASE}/downloads/DyrakArmy-Extension-Chrome.zip`,
@@ -518,6 +522,8 @@ export default function App() {
     setDownloads({
       windows: d.windows_exe || `${base}/downloads/DyrakArmyDesktop.exe`,
       mac: d.macos_portable || `${base}/downloads/DyrakArmyDesktop-macOS.zip`,
+      linuxX64: d.linux_x64_portable || `${base}/downloads/DyrakArmyDesktop-linux-x64.zip`,
+      linuxArm64: d.linux_arm64_portable || `${base}/downloads/DyrakArmyDesktop-linux-arm64.zip`,
       ios: d.mobile_ios_package || `${base}/downloads/DyrakArmy-Mobile-iOS-Expo.zip`,
       android: d.mobile_android_package || `${base}/downloads/DyrakArmy-Mobile-Android-Expo.zip`,
       chrome: d.extension_chrome || `${base}/downloads/DyrakArmy-Extension-Chrome.zip`,
@@ -811,6 +817,8 @@ export default function App() {
                 <Button label={tr('openTelegram')} onPress={openTelegram} />
                 <Button label="Windows EXE" onPress={() => void Linking.openURL(downloads.windows)} />
                 <Button label="macOS Portable" onPress={() => void Linking.openURL(downloads.mac)} />
+                <Button label="Linux x64 Portable" onPress={() => void Linking.openURL(downloads.linuxX64)} />
+                <Button label="Linux ARM64 Portable" onPress={() => void Linking.openURL(downloads.linuxArm64)} />
                 <Button label="iOS App Store Package" onPress={() => void Linking.openURL(downloads.ios)} />
                 <Button label="Android Play Package" onPress={() => void Linking.openURL(downloads.android)} />
                 <Button label="Chrome Extension" onPress={() => void Linking.openURL(downloads.chrome)} />
