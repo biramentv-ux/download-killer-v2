@@ -292,7 +292,20 @@ export async function fetchDownloaderWithFailover(
 
 async function readErrorPreview(response: Response): Promise<string> {
   try {
-    return (await response.clone().text()).replace(/\s+/g, ' ').trim().slice(0, 500);
+    const text = (await response.clone().text()).replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    try {
+      const parsed = JSON.parse(text) as { detail?: unknown; error?: { message?: unknown } };
+      const detail = typeof parsed.detail === 'string'
+        ? parsed.detail
+        : typeof parsed.error?.message === 'string'
+          ? parsed.error.message
+          : '';
+      if (detail) return detail.replace(/\s+/g, ' ').trim().slice(0, 900);
+    } catch {
+      // Fall back to the raw body below.
+    }
+    return text.slice(0, 900);
   } catch {
     return '';
   }
