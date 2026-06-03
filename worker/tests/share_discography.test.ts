@@ -243,6 +243,14 @@ describe('share preview cards', () => {
     expect(card.headers.get('Content-Type')).toContain('image/svg+xml');
     await expect(card.text()).resolves.toContain('DyrakArmy');
 
+    const pageHead = await downloadRouter(new Request(payload.share_url, { method: 'HEAD' }), env);
+    expect(pageHead.status).toBe(200);
+    expect(pageHead.headers.get('Content-Type')).toContain('text/html');
+
+    const cardHead = await downloadRouter(new Request(payload.card_image_url, { method: 'HEAD' }), env);
+    expect(cardHead.status).toBe(200);
+    expect(cardHead.headers.get('Content-Type')).toContain('image/svg+xml');
+
     const token = payload.share_url.split('/share/')[1]!;
     const fileAttempt = await downloadRouter(new Request(`https://dyrakarmy.online/api/file/${token}`), env);
     expect(fileAttempt.status).not.toBe(200);

@@ -439,12 +439,12 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
   }
 
   const shareCardMatch = path.match(/^\/share\/card\/([^/]+)\.svg$/i);
-  if (shareCardMatch && request.method === 'GET') {
+  if (shareCardMatch && (request.method === 'GET' || request.method === 'HEAD')) {
     return handleShareCard(request, env, decodeURIComponent(shareCardMatch[1]!));
   }
 
   const sharePageMatch = path.match(/^\/share\/([^/]+)$/i);
-  if (sharePageMatch && request.method === 'GET') {
+  if (sharePageMatch && (request.method === 'GET' || request.method === 'HEAD')) {
     return handleSharePage(request, env, decodeURIComponent(sharePageMatch[1]!));
   }
 
