@@ -1,4 +1,4 @@
-// SoundDrop v7 Cloudflare Worker configuration
+// DyrakArmy Cloudflare Worker configuration
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "sounddrop",

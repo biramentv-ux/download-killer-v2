@@ -1,4 +1,4 @@
-# SoundDrop v7
+# DyrakArmy
 
 Cloudflare Worker backend + external downloader service (FastAPI + yt-dlp + ffmpeg).
 

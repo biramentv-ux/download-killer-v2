@@ -702,7 +702,6 @@ export default function App() {
               <Text selectable style={styles.title}>{tr('title')}</Text>
               <Text selectable style={styles.subtitle}>{tr('subtitle')}</Text>
             </View>
-            <Text style={styles.badge}>v{APP_VERSION}</Text>
           </View>
 
           {blocked ? (

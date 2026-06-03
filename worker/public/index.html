@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DyrakArmy v7</title>
+  <title>DyrakArmy</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#150625">
   <meta name="mobile-web-app-capable" content="yes">
@@ -1895,6 +1895,188 @@
       box-shadow: 0 0 18px rgba(255, 71, 214, 0.3);
     }
 
+    body.device-mobile {
+      padding: 0;
+      background-attachment: scroll;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+
+    body.device-mobile .app {
+      width: 100%;
+      min-height: 100svh;
+      border-radius: 0;
+      border-left: 0;
+      border-right: 0;
+    }
+
+    body.device-mobile .app::before {
+      top: 84px;
+    }
+
+    body.device-mobile .topbar {
+      position: sticky;
+      top: 0;
+      min-height: auto;
+      padding: max(10px, env(safe-area-inset-top)) 10px 10px;
+      gap: 10px;
+    }
+
+    body.device-mobile .brand {
+      font-size: clamp(1.65rem, 11vw, 2.25rem);
+      letter-spacing: -0.06em;
+      max-width: calc(100vw - 92px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    body.device-mobile .logo-box {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      flex: 0 0 40px;
+    }
+
+    body.device-mobile .tabs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      width: 100%;
+      gap: 7px;
+    }
+
+    body.device-mobile .tab,
+    body.device-mobile .topbar-exe,
+    body.device-mobile .lang-btn,
+    body.device-mobile .action-btn,
+    body.device-mobile .exe-link {
+      min-height: 42px;
+      height: auto;
+      min-width: 0;
+      padding: 0 8px;
+      font-size: 0.72rem;
+      white-space: normal;
+      line-height: 1.15;
+    }
+
+    body.device-mobile .lang-switch {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      width: 100%;
+      gap: 6px;
+      justify-content: stretch;
+    }
+
+    body.device-mobile .lang-btn {
+      width: 100%;
+    }
+
+    body.device-mobile .main,
+    body.device-mobile .archive-layout,
+    body.device-mobile .studio-grid,
+    body.device-mobile .stats-columns {
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    body.device-mobile .left-pane,
+    body.device-mobile .right-pane,
+    body.device-mobile .tab-panel,
+    body.device-mobile .surface-card {
+      padding: 12px;
+    }
+
+    body.device-mobile .search-shell,
+    body.device-mobile .archive-toolbar,
+    body.device-mobile .studio-input-row,
+    body.device-mobile .history-filter-row,
+    body.device-mobile .sync-actions,
+    body.device-mobile .workflow-actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      width: 100%;
+    }
+
+    body.device-mobile #searchInput,
+    body.device-mobile .ops-input,
+    body.device-mobile select,
+    body.device-mobile input,
+    body.device-mobile textarea {
+      width: 100%;
+      min-width: 0 !important;
+      max-width: 100%;
+      font-size: 16px;
+    }
+
+    body.device-mobile .source-grid,
+    body.device-mobile .pill-grid,
+    body.device-mobile .settings-grid,
+    body.device-mobile .platform-grid,
+    body.device-mobile .stats-grid {
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    body.device-mobile .results-pane,
+    body.device-mobile #results,
+    body.device-mobile #queueList,
+    body.device-mobile #historyList,
+    body.device-mobile #archiveList {
+      max-height: none;
+      min-height: 0;
+      overflow: visible;
+    }
+
+    body.device-mobile .picker-empty {
+      min-height: 220px;
+      padding: 18px;
+    }
+
+    body.device-mobile .archive-track-head,
+    body.device-mobile .studio-hero,
+    body.device-mobile .studio-card-head,
+    body.device-mobile .stats-bar-head {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    body.device-mobile .archive-meta-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    body.device-tablet .app {
+      max-width: 100%;
+    }
+
+    body.device-tablet .main,
+    body.device-tablet .archive-layout {
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    body.device-desktop .app {
+      width: min(100%, 1680px);
+    }
+
+    body.orientation-landscape.device-mobile .tabs {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    @media (max-width: 520px) {
+      .topbar-exe {
+        display: none;
+      }
+
+      body.device-mobile .tabs {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      body.device-mobile .tab:nth-child(5) {
+        grid-column: 1 / -1;
+      }
+
+      body.device-mobile .lang-switch {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
     @keyframes retroShift {
       0% { filter: hue-rotate(0deg) saturate(1); }
       100% { filter: hue-rotate(-10deg) saturate(1.09); }
@@ -1930,7 +2112,6 @@
           <span class="logo-fallback">DA</span>
         </div>
         <div class="brand">Dyrak<span class="drop">Army</span></div>
-        <span class="badge">v7</span>
       </div>
       <nav class="tabs">
         <button class="tab active" data-tab="download" id="tabDownload">Download</button>
@@ -3820,6 +4001,28 @@
       const box = document.getElementById("syncBox");
       if (!box) return;
       box.textContent = translate("sync_label", { key: syncKey, lang: currentLang.toUpperCase() });
+    }
+
+    function detectDeviceProfile() {
+      const ua = navigator.userAgent || "";
+      const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+      const width = Math.min(window.innerWidth || 0, screen.width || window.innerWidth || 0);
+      const platform = detectPlatform();
+      if (platform === "android" || platform === "ios" || width <= 760 || (coarse && width <= 900)) return "mobile";
+      if (coarse || width <= 1180) return "tablet";
+      if (/tablet|ipad/i.test(ua)) return "tablet";
+      return "desktop";
+    }
+
+    function applyDeviceProfile() {
+      const profile = detectDeviceProfile();
+      document.body.classList.toggle("device-mobile", profile === "mobile");
+      document.body.classList.toggle("device-tablet", profile === "tablet");
+      document.body.classList.toggle("device-desktop", profile === "desktop");
+      document.body.classList.toggle("orientation-landscape", window.innerWidth > window.innerHeight);
+      document.body.classList.toggle("orientation-portrait", window.innerWidth <= window.innerHeight);
+      document.documentElement.dataset.device = profile;
+      document.documentElement.dataset.platform = detectPlatform();
     }
 
     function isIosDevice() {
@@ -7012,7 +7215,13 @@
       bindDownloadActionButtons(document);
       bindShareActionButtons(document);
     });
-	    window.addEventListener("beforeunload", () => {
+	    window.addEventListener("resize", () => {
+      applyDeviceProfile();
+    }, { passive: true });
+    window.addEventListener("orientationchange", () => {
+      setTimeout(applyDeviceProfile, 80);
+    });
+    window.addEventListener("beforeunload", () => {
       for (const workflowId of workflowPollers.keys()) {
         closeWorkflowPoller(workflowId);
       }
@@ -7023,6 +7232,7 @@
     });
 
 	    async function initializeApp() {
+      applyDeviceProfile();
       bindTabs();
       bindSourcePills();
       bindLanguageSwitch();

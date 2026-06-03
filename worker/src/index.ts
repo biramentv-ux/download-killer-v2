@@ -1,5 +1,5 @@
 /**
- * DyrakArmy v7 Worker
+ * DyrakArmy Worker
  * Public API + queue consumer + Telegram webhook
  */
 
