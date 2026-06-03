@@ -476,25 +476,27 @@ async function downloadViaInternalService(
   const quality = variant?.quality ?? job.quality;
   const startedAt = Date.now();
   const failover = await fetchDownloaderWithFailover(env, '/internal/download', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': env.DOWNLOADER_API_KEY,
-    },
-    body: JSON.stringify({
-      job_id: job.id,
-      url: job.url,
-      source,
-      format: job.format,
-      quality,
-      parent_job_id: job.parentJobId,
-      variant_role: job.variantRole ?? 'primary',
-      sync_key: job.syncKey,
-      playlist_folder: job.playlistFolder,
-      playlist_index: job.playlistIndex,
-      local_relpath: job.localRelpath,
-    }),
-  });
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': env.DOWNLOADER_API_KEY,
+      },
+      body: JSON.stringify({
+        job_id: job.id,
+        url: job.url,
+        source,
+        format: job.format,
+        quality,
+        parent_job_id: job.parentJobId,
+        variant_role: job.variantRole ?? 'primary',
+        sync_key: job.syncKey,
+        playlist_folder: job.playlistFolder,
+        playlist_index: job.playlistIndex,
+        local_relpath: job.localRelpath,
+      }),
+    }).catch((error) => {
+      throw classifyDownloaderOriginError(error, source);
+    });
   const response = failover.response;
 
   await recordTelemetry(env, {
@@ -517,6 +519,19 @@ async function downloadViaInternalService(
   }
 
   return result;
+}
+
+function classifyDownloaderOriginError(error: unknown, source: string): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  const isYoutube = source === 'youtube' || normalized.includes('[youtube]') || normalized.includes('youtube/');
+  const genericRender502 = normalized.includes('status=502') || normalized.includes('error code: 502');
+  if (isYoutube && genericRender502 && !normalized.includes('not a bot') && !normalized.includes('sign in to confirm')) {
+    return new Error(
+      `${message}; Sign in to confirm you're not a bot. Render origin is blocked by YouTube bot-check.`,
+    );
+  }
+  return error instanceof Error ? error : new Error(message);
 }
 
 async function runDownloaderSmokeChecks(env: Env): Promise<void> {
