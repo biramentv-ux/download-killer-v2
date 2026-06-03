@@ -450,9 +450,11 @@ def archive_track_from_cache(data: dict[str, Any]) -> ArchiveTrack | None:
 
 def parse_filename_metadata(path: Path) -> tuple[str, str]:
   stem = re.sub(r'^\d+[\s._-]+', '', path.stem).strip()
-  if ' - ' in stem:
-    title, artist = stem.rsplit(' - ', 1)
-    return title.strip() or stem, artist.strip() or 'Unknown Artist'
+  parts = [part.strip() for part in re.split(r'\s+-\s+', stem) if part.strip()]
+  if len(parts) >= 2:
+    artist = parts[0]
+    title = ' - '.join(parts[1:])
+    return title or stem, artist or 'Unknown Artist'
   return stem or path.name, 'Unknown Artist'
 
 

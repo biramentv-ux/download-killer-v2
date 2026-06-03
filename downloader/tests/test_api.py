@@ -78,6 +78,28 @@ def test_internal_file_serves_existing_file(tmp_path, monkeypatch):
   assert response.content == b'audio'
 
 
+def test_parse_filename_metadata_prefers_artist_title_pattern():
+  from app import main
+
+  title, artist = main.parse_filename_metadata(Path('Audio Influenza - The Storm - RestlessLegsSound Remix.flac'))
+
+  assert artist == 'Audio Influenza'
+  assert title == 'The Storm - RestlessLegsSound Remix'
+
+
+def test_archive_track_uses_filename_when_tags_missing(tmp_path, monkeypatch):
+  from app import main
+
+  sample = tmp_path / 'Audio Influenza - The Storm - RestlessLegsSound Remix.flac'
+  sample.write_bytes(b'audio')
+  monkeypatch.setattr(main, 'ffprobe_metadata', lambda _path: {'format': {}, 'streams': []})
+
+  track = main.archive_track_from_path(sample)
+
+  assert track.artist == 'Audio Influenza'
+  assert track.title == 'The Storm - RestlessLegsSound Remix'
+
+
 def test_playlist_resolve_works_with_mock(monkeypatch):
   from app import main
 

@@ -2044,10 +2044,9 @@
             <button class="action-btn" id="archiveBackBtn">Back</button>
             <div class="archive-path-pill" id="archivePathLabel">/</div>
             <input id="archiveSearchInput" class="ops-input" type="text" autocomplete="off" placeholder="Search local archive...">
-            <button class="action-btn" id="archiveLocalFolderBtn">Choose Telegram folder</button>
+            <div class="archive-path-pill" id="archiveSourceBadge">Server archive</div>
             <button class="action-btn" id="archiveSearchBtn">Search</button>
             <button class="action-btn" id="archiveRefreshBtn">Refresh</button>
-            <input id="archiveFolderInput" class="hidden" type="file" webkitdirectory directory multiple accept="audio/*,image/*,.mp3,.flac,.wav,.m4a,.ogg,.opus,.aac,.alac,.jpg,.jpeg,.png,.webp,.gif,.bmp">
           </div>
           <div id="archiveMeta" class="soft">Archive not loaded.</div>
           <div id="archiveList"></div>
@@ -2468,13 +2467,13 @@
         queue_action_failed: "Queue action failed: {message}",
         file_unavailable_hint: "File is no longer available. Use Retry.",
         archive_title: "ARCHIVE",
-        archive_search_placeholder: "Search local archive...",
+        archive_search_placeholder: "Search server archive...",
         archive_search: "Search",
         archive_refresh: "Refresh",
-        archive_choose_folder: "Choose Telegram folder",
-        archive_local_loaded: "Local folder loaded {count} / total {total}",
-        archive_local_hint: "Choose your Telegram Desktop download folder to browse local audio, images and subfolders.",
-        archive_local_unsupported: "This browser cannot open a folder directly. Use Chrome/Edge or select files with the fallback picker.",
+        archive_choose_folder: "Server archive",
+        archive_local_loaded: "Server archive loaded {count} / total {total}",
+        archive_local_hint: "The archive is read only from the configured server Telegram Desktop folder. Mobile browsers never choose a local folder.",
+        archive_local_unsupported: "Local folder selection is disabled. The archive is read only from the configured server folder.",
         archive_remote_error: "Cloud archive unavailable",
         archive_back: "Back",
         archive_path_root: "Root",
@@ -2715,13 +2714,13 @@
         queue_action_failed: "Грешка при действие в опашката: {message}",
         file_unavailable_hint: "Файлът вече не е наличен. Използвай Повтори.",
         archive_title: "АРХИВ",
-        archive_search_placeholder: "Търси в локалния архив...",
+        archive_search_placeholder: "Търси в архивната папка...",
         archive_search: "Търси",
         archive_refresh: "Обнови",
-        archive_choose_folder: "Избери Telegram папка",
-        archive_local_loaded: "Локална папка: заредени {count} / общо {total}",
-        archive_local_hint: "Избери Telegram Desktop download папката, за да разглеждаш локални песни, снимки и подпапки.",
-        archive_local_unsupported: "Този браузър не може да отвори папка директно. Използвай Chrome/Edge или избери файлове чрез fallback прозореца.",
+        archive_choose_folder: "Server архив",
+        archive_local_loaded: "Архивна папка: заредени {count} / общо {total}",
+        archive_local_hint: "Архивът се чете само от предварително зададената Telegram Desktop папка на сървър/origin. Телефонът не избира локална папка.",
+        archive_local_unsupported: "Изборът на локална папка е изключен. Архивът се чете само от зададената server/origin папка.",
         archive_remote_error: "Cloud архивът е недостъпен",
         archive_back: "Назад",
         archive_path_root: "Начало",
@@ -3573,8 +3572,8 @@
       if (archiveSearchInput) archiveSearchInput.placeholder = translate("archive_search_placeholder");
       const archiveSearchBtn = document.getElementById("archiveSearchBtn");
       if (archiveSearchBtn) archiveSearchBtn.textContent = translate("archive_search");
-      const archiveLocalFolderBtn = document.getElementById("archiveLocalFolderBtn");
-      if (archiveLocalFolderBtn) archiveLocalFolderBtn.textContent = translate("archive_choose_folder");
+      const archiveSourceBadge = document.getElementById("archiveSourceBadge");
+      if (archiveSourceBadge) archiveSourceBadge.textContent = translate("archive_choose_folder");
       const archiveRefreshBtn = document.getElementById("archiveRefreshBtn");
       if (archiveRefreshBtn) archiveRefreshBtn.textContent = translate("archive_refresh");
       const archiveBackBtn = document.getElementById("archiveBackBtn");
@@ -4023,6 +4022,40 @@
       return { artist: "", title: clean || String(name || "Track") };
     }
 
+    function cleanArchiveDisplayValue(value) {
+      const cleaned = String(value || "")
+        .replace(/\.[a-z0-9]{2,5}$/i, "")
+        .replace(/[_]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!cleaned) return "";
+      const lower = cleaned.toLowerCase();
+      if (["unknown", "unknown artist", "unknown title", "untitled", "\u0431\u0435\u0437 \u0437\u0430\u0433\u043b\u0430\u0432\u0438\u0435", "\u043d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043d", "\u043d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043d \u0438\u0437\u043f\u044a\u043b\u043d\u0438\u0442\u0435\u043b"].includes(lower)) return "";
+      if (cleaned.includes("????")) return "";
+      return cleaned;
+    }
+
+    function normalizeArchiveDisplayItem(item) {
+      if (!item || typeof item !== "object") return item;
+      const kind = String(item.kind || "audio");
+      if (kind === "folder") return item;
+      const fileName = cleanArchiveDisplayValue(item.filename)
+        || cleanArchiveDisplayValue(item.name)
+        || cleanArchiveDisplayValue(String(item.relative_path || "").split("/").pop());
+      const parsed = parseArchiveLocalName(fileName);
+      if (kind === "image") {
+        return {
+          ...item,
+          title: cleanArchiveDisplayValue(item.title) || parsed.title || fileName || item.name || translate("archive_image"),
+        };
+      }
+      return {
+        ...item,
+        title: cleanArchiveDisplayValue(item.title) || parsed.title || fileName || "Track",
+        artist: cleanArchiveDisplayValue(item.artist) || parsed.artist || "",
+      };
+    }
+
     function archiveQualityFromExtension(ext) {
       if (["flac", "wav", "alac", "aiff", "aif"].includes(ext)) return "lossless";
       if (["mp3", "m4a", "ogg", "opus", "aac"].includes(ext)) return "best";
@@ -4177,42 +4210,15 @@
 
     async function chooseLocalArchiveFolder() {
       const meta = document.getElementById("archiveMeta");
-      try {
-        if ("showDirectoryPicker" in window) {
-          let handle;
-          try {
-            handle = await window.showDirectoryPicker({ mode: "read", startIn: "downloads" });
-          } catch (error) {
-            if (error && error.name !== "TypeError") throw error;
-            handle = await window.showDirectoryPicker({ mode: "read" });
-          }
-          archiveDirectoryHandle = handle;
-          archiveLocalMode = true;
-          archiveBrowsePath = "";
-          archiveLocalEntries = [];
-          clearArchiveObjectUrls();
-          await loadArchive(true);
-          return;
-        }
-
-        const input = document.getElementById("archiveFolderInput");
-        if (input) {
-          input.value = "";
-          input.click();
-          return;
-        }
-
-        if (meta) {
-          meta.dataset.state = "error";
-          meta.textContent = translate("archive_local_unsupported");
-        }
-      } catch (error) {
-        if (error && error.name === "AbortError") return;
-        if (meta) {
-          meta.dataset.state = "error";
-          meta.textContent = `${translate("archive_local_unsupported")} ${error.message || String(error)}`;
-        }
+      archiveLocalMode = false;
+      archiveDirectoryHandle = null;
+      archiveLocalEntries = [];
+      clearArchiveObjectUrls();
+      if (meta) {
+        meta.dataset.state = "idle";
+        meta.textContent = translate("archive_local_hint");
       }
+      await loadArchive(true);
     }
 
     function handleArchiveFolderInput(fileList) {
@@ -4340,11 +4346,7 @@
       const meta = document.getElementById("archiveMeta");
       const list = document.getElementById("archiveList");
       if (!meta || !list) return;
-
-      if (archiveLocalMode) {
-        await loadLocalArchive(refresh);
-        return;
-      }
+      archiveLocalMode = false;
 
       const query = String(input && input.value ? input.value : "").trim();
       meta.dataset.state = "loading";
@@ -4356,7 +4358,7 @@
         if (refresh) params.set("refresh", "1");
         const payload = await apiJson(`/archive/browse?${params.toString()}`);
         archiveBrowsePath = String(payload.path || archiveBrowsePath || "");
-        archiveTracksCache = Array.isArray(payload.items) ? payload.items : [];
+        archiveTracksCache = (Array.isArray(payload.items) ? payload.items : []).map(normalizeArchiveDisplayItem);
         archiveTotalRows = Number(payload.total || archiveTracksCache.length);
         meta.dataset.state = "loaded";
         meta.textContent = translate("archive_loaded", { count: archiveTracksCache.length, total: archiveTotalRows });
@@ -4428,7 +4430,7 @@
       void player.play().catch(() => null);
       if (title) {
         title.dataset.trackId = String(track.id || "");
-        title.textContent = `${track.title || track.filename || "Track"}`;
+        title.textContent = `${archiveItemTitle(track)}`;
       }
       if (meta) {
         meta.dataset.trackId = String(track.id || "");
@@ -6815,18 +6817,6 @@
       if (archiveRefreshBtn) {
         archiveRefreshBtn.addEventListener("click", () => {
           void loadArchive(true);
-        });
-      }
-      const archiveLocalFolderBtn = document.getElementById("archiveLocalFolderBtn");
-      if (archiveLocalFolderBtn) {
-        archiveLocalFolderBtn.addEventListener("click", () => {
-          void chooseLocalArchiveFolder();
-        });
-      }
-      const archiveFolderInput = document.getElementById("archiveFolderInput");
-      if (archiveFolderInput) {
-        archiveFolderInput.addEventListener("change", () => {
-          handleArchiveFolderInput(archiveFolderInput.files);
         });
       }
       const archiveBackBtn = document.getElementById("archiveBackBtn");

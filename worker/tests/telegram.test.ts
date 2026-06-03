@@ -15,6 +15,11 @@ interface TelegramCall {
   body: Record<string, unknown>;
 }
 
+interface TelegramTestOptions {
+  archiveTracks?: Array<Record<string, unknown>>;
+  archiveTotal?: number;
+}
+
 class MemoryKv {
   store = new Map<string, string>();
 
@@ -492,14 +497,87 @@ describe('Telegram channel publishing', () => {
       messageId: 77,
     });
   });
+
+  it('renders server archive filenames instead of unknown fallback names', async () => {
+    const { env, calls } = createTelegramTestContext({
+      archiveTotal: 1341,
+      archiveTracks: [
+        {
+          id: 'archive-track-1',
+          kind: 'audio',
+          filename: 'Audio Influenza - The Storm - RestlessLegsSound Remix.flac',
+          size_bytes: 182455000,
+          format: 'FLAC',
+        },
+      ],
+    });
+
+    await handleTelegramUpdate(telegramRequest({
+      update_id: 16,
+      message: {
+        message_id: 88,
+        chat: { id: 123, type: 'private' },
+        text: '/archive',
+      },
+    }), env);
+
+    const archiveMessage = calls.find((call) => call.method === 'sendMessage' && String(call.body.text ?? '').includes('Audio Influenza'));
+    expect(archiveMessage).toBeTruthy();
+    const text = String(archiveMessage?.body.text ?? '');
+    expect(text).toContain('Audio Influenza - The Storm - RestlessLegsSound Remix');
+    expect(text).not.toContain('\u041d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043d - \u0411\u0435\u0437 \u0437\u0430\u0433\u043b\u0430\u0432\u0438\u0435');
+  });
+
+  it('sends direct archive files without queueing a new downloader job', async () => {
+    const { env, calls, kv, queueMessages } = createTelegramTestContext();
+    const archiveUrl = 'https://dyrakarmy.online/api/archive/file/archive-track-1';
+    await kv.put('tg:url:archivekey', archiveUrl);
+    await kv.put('tg:result:archivekey', JSON.stringify({
+      url: archiveUrl,
+      title: 'The Storm - RestlessLegsSound Remix',
+      artist: 'Audio Influenza',
+      source: 'archive',
+      archive: true,
+      directArchiveFile: true,
+      archiveFileId: 'archive-track-1',
+      duration: 469,
+      fileSize: 182455000,
+    }));
+
+    await handleTelegramUpdate(telegramRequest({
+      update_id: 17,
+      callback_query: {
+        id: 'cb-archive-download',
+        from: { id: 123, first_name: 'Tester' },
+        message: { message_id: 77, chat: { id: 123, type: 'private' } },
+        data: 'dl:archivekey:mp3:320',
+      },
+    }), env);
+
+    expect(queueMessages).toHaveLength(0);
+    expect(calls.some((call) => call.method === 'sendAudio' && call.body.chat_id === 123 && call.body.audio === archiveUrl)).toBe(true);
+  });
 });
 
-function createTelegramTestContext(): { env: Env; calls: TelegramCall[]; kv: MemoryKv; db: FakeD1; queueMessages: DownloadJob[] } {
+function createTelegramTestContext(options: TelegramTestOptions = {}): { env: Env; calls: TelegramCall[]; kv: MemoryKv; db: FakeD1; queueMessages: DownloadJob[] } {
   const kv = new MemoryKv();
   const db = new FakeD1();
   const calls: TelegramCall[] = [];
   const queueMessages: DownloadJob[] = [];
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes('/internal/archive')) {
+      const tracks = options.archiveTracks ?? [];
+      return new Response(JSON.stringify({ tracks, total: options.archiveTotal ?? tracks.length }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (url.includes('/internal/search')) {
+      return new Response(JSON.stringify({ results: [] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const method = String(input).split('/').pop() ?? 'unknown';
     const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
     calls.push({ method, body });

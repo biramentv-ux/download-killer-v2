@@ -101,6 +101,11 @@ interface CachedPickerResult {
   artist: string;
   source: string;
   archive: boolean;
+  directArchiveFile?: boolean;
+  archiveFileId?: string;
+  duration?: number;
+  fileSize?: number;
+  formatLabel?: string | null;
   botUsername?: string | null;
 }
 
@@ -136,6 +141,21 @@ interface ArchiveRecord {
   title: string | null;
   artist: string | null;
   bot_username: string | null;
+}
+
+interface ServerArchiveRecord {
+  id: string;
+  kind: string;
+  title?: string | null;
+  artist?: string | null;
+  filename?: string | null;
+  name?: string | null;
+  relative_path?: string | null;
+  duration?: number | null;
+  size_bytes?: number | null;
+  format?: string | null;
+  quality?: string | null;
+  stream_url?: string | null;
 }
 
 interface CompletedFingerprintJob {
@@ -408,19 +428,31 @@ async function searchAndPresent(chatId: number, query: string, env: Env): Promis
     const seen = new Set<string>();
 
     if (settings.preferArchive) {
-      const archiveRows = await lookupArchiveByQuery(query, 6, env);
-      for (const row of archiveRows) {
-        const normalizedUrl = normalizeArchiveUrl(row.source_url);
-        if (!normalizedUrl || seen.has(normalizedUrl)) continue;
-        seen.add(normalizedUrl);
-        combinedResults.push({
-          url: row.source_url,
-          title: row.title?.trim() || 'Архивен запис',
-          artist: row.artist?.trim() || 'Неизвестен изпълнител',
-          source: normalizeSourceValue(row.source || detectSourceFromUrl(row.source_url)),
-          archive: true,
-          botUsername: row.bot_username,
-        });
+      const serverArchiveRows = await searchServerArchiveRows(query, 6, env);
+      for (const result of serverArchiveRows) {
+        const key = normalizeArchiveUrl(result.url) || result.archiveFileId || result.url;
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        combinedResults.push(result);
+      }
+
+      const remainingArchiveLimit = Math.max(0, 6 - serverArchiveRows.length);
+      if (remainingArchiveLimit > 0) {
+        const archiveRows = await lookupArchiveByQuery(query, remainingArchiveLimit, env);
+        for (const row of archiveRows) {
+          const normalizedUrl = normalizeArchiveUrl(row.source_url);
+          if (!normalizedUrl || seen.has(normalizedUrl)) continue;
+          seen.add(normalizedUrl);
+          const display = displayArchiveRecord(row);
+          combinedResults.push({
+            url: row.source_url,
+            title: display.title,
+            artist: display.artist,
+            source: normalizeSourceValue(row.source || detectSourceFromUrl(row.source_url)),
+            archive: true,
+            botUsername: row.bot_username,
+          });
+        }
       }
     }
 
@@ -885,6 +917,75 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
   }
 }
 
+async function sendDirectArchiveFileFromTelegram(
+  chatId: number,
+  messageId: number,
+  cached: CachedPickerResult,
+  env: Env,
+): Promise<void> {
+  const link = cached.url.startsWith('http') ? cached.url : `${getPublicBaseUrl(env)}${cached.url}`;
+  const title = cleanArchiveDisplayText(cached.title) || '\u0410\u0440\u0445\u0438\u0432\u0435\u043d \u0444\u0430\u0439\u043b';
+  const artist = cleanArchiveDisplayText(cached.artist) || '\u0410\u0440\u0445\u0438\u0432';
+  const duration = Number(cached.duration ?? 0);
+  const size = Number(cached.fileSize ?? 0);
+  const caption = [
+    '\u{1F4E6} \u0413\u043e\u0442\u043e\u0432 \u0444\u0430\u0439\u043b \u043e\u0442 \u0430\u0440\u0445\u0438\u0432\u0430',
+    `${artist} - ${title}`,
+    `${formatDuration(duration)} | ${formatFileSize(size)}`,
+    link,
+  ].join('\n');
+
+  await editOrSend(chatId, messageId, env, caption, downloadLinkMarkup(link));
+  const sent = await sendAudio(chatId, link, title, artist, duration, env);
+  if (!sent.ok) {
+    const document = await sendDocument(chatId, link, env, { caption: truncate(`${artist} - ${title}`, 900) });
+    if (!document.ok) {
+      await sendMessage(chatId, env, `\u0418\u0437\u043f\u043e\u043b\u0437\u0432\u0430\u0439 \u043b\u0438\u043d\u043a\u0430:\n${link}`);
+    }
+  }
+
+  if (String(env.TELEGRAM_CHANNEL_PUBLISH_ENABLED ?? '1').trim() === '0') return;
+  const channelId = await resolveTelegramDownloadChannelId(env);
+  if (!channelId) return;
+
+  const replyMarkup = {
+    inline_keyboard: [[
+      { text: '\u2B07\uFE0F \u0421\u0432\u0430\u043b\u0438 \u0444\u0430\u0439\u043b\u0430', url: link },
+      { text: '\u{1F916} DyrakArmy BOT', url: 'https://t.me/dyrakarmy_bot' },
+    ]],
+  };
+  const channelCaption = ['\u{1F4E6} \u0410\u0440\u0445\u0438\u0432', `${artist} - ${title}`, link].join('\n');
+  const channelAudio = await sendAudio(channelId, link, title, artist, duration, env, {
+    caption: truncate(channelCaption, 1000),
+    reply_markup: replyMarkup,
+  });
+  if (channelAudio.ok) {
+    await recordTelegramChannelPublish(env, { ok: true, method: 'sendAudio', channelId, description: 'published archive audio' });
+    return;
+  }
+  const channelDocument = await sendDocument(channelId, link, env, {
+    caption: truncate(channelCaption, 1000),
+    reply_markup: replyMarkup,
+  });
+  if (channelDocument.ok) {
+    await recordTelegramChannelPublish(env, { ok: true, method: 'sendDocument', channelId, description: 'published archive document' });
+    return;
+  }
+
+  const channelMessage = await telegramRequest('sendMessage', {
+    chat_id: channelId,
+    text: channelCaption,
+    disable_web_page_preview: false,
+    reply_markup: replyMarkup,
+  }, env);
+  await recordTelegramChannelPublish(env, {
+    ok: channelMessage.ok,
+    method: 'sendMessage',
+    channelId,
+    description: channelMessage.description ?? channelDocument.description ?? channelAudio.description ?? 'archive channel publish attempted',
+  });
+}
+
 async function queueJobFromSelection(
   chatId: number,
   messageId: number,
@@ -894,12 +995,17 @@ async function queueJobFromSelection(
   quality: AudioQuality,
   env: Env,
 ): Promise<void> {
+  const cached = await env.CACHE.get(`tg:result:${cacheKey}`, { type: 'json' }) as CachedPickerResult | null;
+  if (cached?.directArchiveFile && cached.archiveFileId) {
+    await sendDirectArchiveFileFromTelegram(chatId, messageId, cached, env);
+    return;
+  }
+
   const policy = validateDownloadUrlPolicy(url, env);
   if (!policy.allowed) {
     await editOrSend(chatId, messageId, env, `URL е блокиран: ${policy.message ?? 'domain policy'}`);
     return;
   }
-  const cached = await env.CACHE.get(`tg:result:${cacheKey}`, { type: 'json' }) as CachedPickerResult | null;
   const source = normalizeSourceValue(cached?.source || detectSourceFromUrl(url));
   const fingerprint = await createJobFingerprint(url, format, quality);
   const syncKey = telegramSyncKey(chatId);
@@ -1523,16 +1629,92 @@ async function editArchivePanel(chatId: number, messageId: number, env: Env): Pr
 }
 
 async function buildArchivePanelText(env: Env): Promise<string> {
+  const serverArchive = await getServerArchiveLatestRows(5, env);
+  if (serverArchive.available && (serverArchive.total > 0 || serverArchive.rows.length > 0)) {
+    const rows = serverArchive.rows.map((row, index) => {
+      const display = displayServerArchiveRecord(row);
+      return `${index + 1}. ${display.artist} - ${display.title}`;
+    });
+    return [
+      '\u{1F4E6} \u0410\u0440\u0445\u0438\u0432',
+      `\u0417\u0430\u043f\u0438\u0441\u0438: ${serverArchive.total}`,
+      '\u0421\u0430\u043c\u043e server/origin Telegram Desktop \u043f\u0430\u043f\u043a\u0430. \u0422\u0435\u043b\u0435\u0444\u043e\u043d\u044a\u0442 \u043d\u0435 \u0438\u0437\u0431\u0438\u0440\u0430 \u043b\u043e\u043a\u0430\u043b\u043d\u0430 \u043f\u0430\u043f\u043a\u0430.',
+      rows.length ? '\n\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438 \u0437\u0430\u043f\u0438\u0441\u0438:' : '',
+      ...rows,
+    ].filter(Boolean).join('\n');
+  }
+
   const count = await getArchiveCount(env);
   const latest = await lookupLatestArchiveRows(5, env);
-  const rows = latest.map((row, index) => `${index + 1}. ${(row.artist || 'Неизвестен')} - ${(row.title || 'Без заглавие')}`);
+  const rows = latest.map((row, index) => {
+    const display = displayArchiveRecord(row);
+    return `${index + 1}. ${display.artist} - ${display.title}`;
+  });
   return [
-    '📦 Архив',
-    `Записи: ${count}`,
-    'Търсенето първо проверява архива и после онлайн източниците.',
-    rows.length ? '\nПоследни записи:' : '',
+    '\u{1F4E6} \u0410\u0440\u0445\u0438\u0432',
+    `\u0417\u0430\u043f\u0438\u0441\u0438: ${count}`,
+    '\u0422\u044a\u0440\u0441\u0435\u043d\u0435\u0442\u043e \u043f\u044a\u0440\u0432\u043e \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0432\u0430 \u0430\u0440\u0445\u0438\u0432\u0430.',
+    'Live server archive unavailable; showing fallback Telegram export index.',
+    rows.length ? '\n\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438 \u0437\u0430\u043f\u0438\u0441\u0438:' : '',
     ...rows,
   ].filter(Boolean).join('\n');
+}
+
+async function getServerArchiveLatestRows(limit: number, env: Env): Promise<{ available: boolean; rows: ServerArchiveRecord[]; total: number }> {
+  try {
+    const failover = await fetchDownloaderWithFailover(env, `/internal/archive?limit=${Math.max(1, Math.min(20, limit))}&offset=0`, {
+      method: 'GET',
+      headers: { 'X-API-Key': env.DOWNLOADER_API_KEY },
+    });
+    if (!failover.response.ok) return { available: false, rows: [], total: 0 };
+    const payload = await failover.response.json() as { tracks?: ServerArchiveRecord[]; total?: number };
+    const rows = (Array.isArray(payload.tracks) ? payload.tracks : [])
+      .filter((row) => String(row.id ?? '').trim())
+      .slice(0, Math.max(1, Math.min(20, limit)));
+    return { available: true, rows, total: Number(payload.total ?? rows.length) };
+  } catch {
+    return { available: false, rows: [], total: 0 };
+  }
+}
+
+async function searchServerArchiveRows(query: string, limit: number, env: Env): Promise<CachedPickerResult[]> {
+  const q = String(query || '').trim().slice(0, 160);
+  if (!q) return [];
+  try {
+    const params = new URLSearchParams({
+      query: q,
+      limit: String(Math.max(1, Math.min(20, limit))),
+      offset: '0',
+    });
+    const failover = await fetchDownloaderWithFailover(env, `/internal/archive?${params.toString()}`, {
+      method: 'GET',
+      headers: { 'X-API-Key': env.DOWNLOADER_API_KEY },
+    });
+    if (!failover.response.ok) return [];
+    const payload = await failover.response.json() as { tracks?: ServerArchiveRecord[] };
+    return (Array.isArray(payload.tracks) ? payload.tracks : [])
+      .filter((row) => String(row.id ?? '').trim())
+      .slice(0, Math.max(1, Math.min(20, limit)))
+      .map((row) => {
+        const display = displayServerArchiveRecord(row);
+        const fileId = String(row.id ?? '').trim();
+        return {
+          url: `${getPublicBaseUrl(env)}/api/archive/file/${encodeURIComponent(fileId)}`,
+          title: display.title,
+          artist: display.artist,
+          source: 'archive',
+          archive: true,
+          directArchiveFile: true,
+          archiveFileId: fileId,
+          duration: Number(row.duration ?? 0),
+          fileSize: Number(row.size_bytes ?? 0),
+          formatLabel: row.format ?? null,
+          botUsername: null,
+        };
+      });
+  } catch {
+    return [];
+  }
 }
 
 export async function notifyTelegramComplete(job: DownloadJob, result: DownloaderDownloadResult, env: Env): Promise<void> {
@@ -2633,22 +2815,90 @@ function sourceChoiceLabel(value: string, selected: string): string {
 
 function sourceLabel(value: string): string {
   const map: Record<string, string> = {
-    all: 'Всички',
+    all: '\u0412\u0441\u0438\u0447\u043a\u0438',
     spotify: 'Spotify',
     youtube: 'YouTube',
     soundcloud: 'SoundCloud',
     deezer: 'Deezer',
     apple: 'Apple Music',
     podcast: 'Podcast/RSS',
+    archive: '\u0410\u0440\u0445\u0438\u0432',
   };
-  return map[value] ?? 'Всички';
+  return map[value] ?? '\u0412\u0441\u0438\u0447\u043a\u0438';
 }
 
 function formatArchiveMeta(row: ArchiveRecord): string {
-  const title = row.title?.trim() || 'Неизвестно заглавие';
-  const artist = row.artist?.trim() || 'Неизвестен изпълнител';
-  const bot = row.bot_username ? `@${row.bot_username}` : 'архив';
-  return `${artist} - ${title}\nИзточник: ${sourceLabel(normalizeSourceValue(row.source))}\nЗапис: ${bot}`;
+  const display = displayArchiveRecord(row);
+  const bot = row.bot_username ? `@${row.bot_username}` : '\u0430\u0440\u0445\u0438\u0432';
+  return `${display.artist} - ${display.title}\n\u0418\u0437\u0442\u043e\u0447\u043d\u0438\u043a: ${sourceLabel(normalizeSourceValue(row.source))}\n\u0417\u0430\u043f\u0438\u0441: ${bot}`;
+}
+
+function displayArchiveRecord(row: ArchiveRecord): { artist: string; title: string } {
+  const parsed = parseArchiveDisplayName(inferTitleFromArchiveUrl(row.source_url));
+  const title = cleanArchiveDisplayText(row.title)
+    || parsed.title
+    || inferTitleFromArchiveUrl(row.source_url)
+    || '\u0410\u0440\u0445\u0438\u0432\u0435\u043d \u0437\u0430\u043f\u0438\u0441';
+  const artist = cleanArchiveDisplayText(row.artist)
+    || parsed.artist
+    || sourceLabel(normalizeSourceValue(row.source || detectSourceFromUrl(row.source_url)));
+  return { artist, title };
+}
+
+function displayServerArchiveRecord(row: ServerArchiveRecord): { artist: string; title: string } {
+  const rawName = cleanArchiveDisplayText(row.filename)
+    || cleanArchiveDisplayText(row.name)
+    || cleanArchiveDisplayText(row.relative_path?.split('/').pop())
+    || '';
+  const parsed = parseArchiveDisplayName(rawName);
+  const title = cleanArchiveDisplayText(row.title) || parsed.title || rawName || '\u0410\u0440\u0445\u0438\u0432\u0435\u043d \u0444\u0430\u0439\u043b';
+  const artist = cleanArchiveDisplayText(row.artist) || parsed.artist || '\u0410\u0440\u0445\u0438\u0432';
+  return { artist, title };
+}
+
+function cleanArchiveDisplayText(value: string | null | undefined): string {
+  const cleaned = String(value ?? '')
+    .replace(/\.[a-z0-9]{2,5}$/i, '')
+    .replace(/[_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return '';
+  const lower = cleaned.toLowerCase();
+  if (
+    lower === 'unknown'
+    || lower === 'unknown artist'
+    || lower === 'unknown title'
+    || lower === 'untitled'
+    || lower === '\u0431\u0435\u0437 \u0437\u0430\u0433\u043b\u0430\u0432\u0438\u0435'
+    || lower === '\u043d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043d'
+    || lower === '\u043d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043d \u0438\u0437\u043f\u044a\u043b\u043d\u0438\u0442\u0435\u043b'
+  ) return '';
+  if (cleaned.includes('????')) return '';
+  return cleaned;
+}
+
+function parseArchiveDisplayName(name: string): { artist: string; title: string } {
+  const cleaned = cleanArchiveDisplayText(name.replace(/^\d+[\s._-]+/, ''));
+  if (!cleaned) return { artist: '', title: '' };
+  const parts = cleaned.split(/\s+-\s+/).map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    return {
+      artist: parts[0] ?? '',
+      title: parts.slice(1).join(' - '),
+    };
+  }
+  return { artist: '', title: cleaned };
+}
+
+function inferTitleFromArchiveUrl(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    const last = parts[parts.length - 1] ?? parsed.hostname;
+    return cleanArchiveDisplayText(decodeURIComponent(last.replace(/[-_]+/g, ' '))) || parsed.hostname;
+  } catch {
+    return '';
+  }
 }
 
 function normalizeArchiveUrl(rawUrl: string): string {
