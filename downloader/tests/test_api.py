@@ -430,6 +430,48 @@ def test_internal_artist_discography_success(monkeypatch):
   assert body['tracks'][0]['source'] == 'youtube'
 
 
+def test_internal_artist_discography_falls_back_when_metadata_provider_fails(monkeypatch):
+  from app import main
+
+  monkeypatch.setattr(main, 'fetch_json', lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError('SSL EOF')))
+  monkeypatch.setattr(
+    main,
+    'make_ydl_search',
+    lambda _query, _limit: [
+      main.SearchItem(
+        id='yt-1',
+        title='Fallback Song',
+        artist='Fallback Artist',
+        duration=123,
+        source='youtube',
+        url='https://www.youtube.com/watch?v=abc123def45',
+      ),
+      main.SearchItem(
+        id='yt-1-dup',
+        title='Fallback Song',
+        artist='Fallback Artist',
+        duration=123,
+        source='youtube',
+        url='https://www.youtube.com/watch?v=abc123def45',
+      ),
+    ],
+  )
+
+  client = TestClient(app)
+  response = client.post(
+    '/internal/artist/discography',
+    json={'artist': 'Fallback Artist', 'limit': 10},
+    headers={'X-API-Key': 'change-me'},
+  )
+
+  assert response.status_code == 200
+  body = response.json()
+  assert body['title'] == 'Fallback Artist Discography'
+  assert body['total'] == 1
+  assert body['tracks'][0]['title'] == 'Fallback Song'
+  assert body['tracks'][0]['url'] == 'https://www.youtube.com/watch?v=abc123def45'
+
+
 def test_internal_smoke_fallback_for_spotify(monkeypatch):
   from app import main
 

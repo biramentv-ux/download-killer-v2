@@ -1634,20 +1634,88 @@ def ytdlp_search_target(artist: str, title: str) -> str:
   return f'ytsearch1:{clean_artist} - {clean_title} audio'
 
 
+def playlist_tracks_from_search_items(artist: str, items: list[SearchItem], limit: int) -> list[PlaylistTrack]:
+  tracks: list[PlaylistTrack] = []
+  seen: set[str] = set()
+  for item in items:
+    title = normalize_discography_search_text(item.title)
+    track_artist = normalize_discography_search_text(item.artist) or artist
+    url = str(item.url or '').strip()
+    if not title or not url:
+      continue
+    key = f'{track_artist.lower()}::{title.lower()}'
+    if key in seen:
+      continue
+    seen.add(key)
+    tracks.append(
+      PlaylistTrack(
+        title=title,
+        artist=track_artist,
+        source=item.source or 'youtube',
+        url=url if is_url(url) else ytdlp_search_target(track_artist, title),
+      )
+    )
+    if len(tracks) >= limit:
+      break
+  return tracks
+
+
+def lookup_artist_discography_with_ytdlp_search(artist: str, limit: int) -> list[PlaylistTrack]:
+  safe_limit = max(1, min(20, int(limit or 20)))
+  queries = [
+    f'{artist} official audio',
+    f'{artist} songs',
+  ]
+  combined: list[SearchItem] = []
+  seen_urls: set[str] = set()
+  last_error: Exception | None = None
+
+  for query in queries:
+    try:
+      for item in make_ydl_search(query, safe_limit):
+        if item.url in seen_urls:
+          continue
+        seen_urls.add(item.url)
+        combined.append(item)
+    except Exception as error:
+      last_error = error
+      continue
+    if len(combined) >= safe_limit:
+      break
+
+  tracks = playlist_tracks_from_search_items(artist, combined, safe_limit)
+  if tracks:
+    return tracks
+  if last_error:
+    raise RuntimeError(f'Fallback search failed: {last_error}') from last_error
+  return []
+
+
 def lookup_artist_discography(artist: str, limit: int = 50) -> PlaylistResolveResponse:
   clean_artist = normalize_discography_search_text(artist)
   if len(clean_artist) < 2:
     raise RuntimeError('Artist name is required')
 
   safe_limit = max(1, min(200, int(limit or 50)))
-  encoded_query = urllib.parse.quote(f'artist:"{clean_artist}"')
-  payload = fetch_json(
-    f'https://musicbrainz.org/ws/2/recording?query={encoded_query}&fmt=json&limit={safe_limit}',
-    timeout_seconds=20,
-    headers={
-      'User-Agent': 'DyrakArmyDownloader/8.1 (https://dyrakarmy.online)',
-    },
-  )
+  provider_error: Exception | None = None
+  payload: Any = {}
+  for attempt in range(2):
+    try:
+      encoded_query = urllib.parse.quote(f'artist:"{clean_artist}"')
+      payload = fetch_json(
+        f'https://musicbrainz.org/ws/2/recording?query={encoded_query}&fmt=json&limit={safe_limit}',
+        timeout_seconds=20,
+        headers={
+          'User-Agent': 'DyrakArmyDownloader/8.1 (https://dyrakarmy.online)',
+        },
+      )
+      provider_error = None
+      break
+    except Exception as error:
+      provider_error = error
+      if attempt == 0:
+        time.sleep(0.8)
+
   recordings = payload.get('recordings') if isinstance(payload, dict) else []
   if not isinstance(recordings, list):
     recordings = []
@@ -1686,6 +1754,12 @@ def lookup_artist_discography(artist: str, limit: int = 50) -> PlaylistResolveRe
     )
     if len(tracks) >= safe_limit:
       break
+
+  if not tracks:
+    fallback_limit = min(safe_limit, 20)
+    tracks = lookup_artist_discography_with_ytdlp_search(clean_artist, fallback_limit)
+    if not tracks and provider_error:
+      raise RuntimeError(f'Metadata provider failed and fallback returned no tracks: {provider_error}') from provider_error
 
   return PlaylistResolveResponse(
     title=f'{clean_artist} Discography',
