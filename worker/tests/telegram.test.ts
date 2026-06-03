@@ -224,6 +224,35 @@ describe('Telegram channel publishing', () => {
     expect(audio?.body.chat_id).toBe('-1003904304047');
   });
 
+  it('forces channel publishing for bot-origin downloads even when the user toggle is off', async () => {
+    const { env, calls, kv } = createTelegramTestContext();
+    env.TELEGRAM_DOWNLOAD_CHANNEL_ID = '-1003904304047';
+    await kv.put('tg:settings:123', JSON.stringify({
+      defaultFormat: 'mp3',
+      defaultQuality: '320',
+      defaultSource: 'all',
+      language: 'bg',
+      channelAutoPublish: false,
+    }));
+
+    const result = await publishTelegramChannelDownload(createDownloadJob(), createDownloadResult(), env);
+
+    expect(result.ok).toBe(true);
+    expect(result.method).toBe('sendAudio');
+    expect(calls.some((call) => call.method === 'sendAudio' && call.body.chat_id === '-1003904304047')).toBe(true);
+  });
+
+  it('still honors the global channel publishing kill switch', async () => {
+    const { env, calls } = createTelegramTestContext();
+    env.TELEGRAM_CHANNEL_PUBLISH_ENABLED = '0';
+
+    const result = await publishTelegramChannelDownload(createDownloadJob(), createDownloadResult(), env);
+
+    expect(result.ok).toBe(true);
+    expect(result.method).toBe('skipped');
+    expect(calls.some((call) => call.method === 'sendAudio')).toBe(false);
+  });
+
   it('captures forwarded channel media posts even when they have no text', async () => {
     const { env, calls, kv } = createTelegramTestContext();
 

@@ -1544,7 +1544,8 @@ export async function publishTelegramChannelDownload(
   }
 
   const settings = job.chatId ? await getTelegramSettings(job.chatId, env) : DEFAULT_SETTINGS;
-  if (!settings.channelAutoPublish) {
+  const forceBotDownloads = Boolean(job.chatId) && String(env.TELEGRAM_CHANNEL_FORCE_BOT_DOWNLOADS ?? '1').trim() !== '0';
+  if (!forceBotDownloads && !settings.channelAutoPublish) {
     return { ok: true, method: 'skipped', channelId, description: 'User disabled channel auto publish' };
   }
 
