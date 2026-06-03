@@ -18,6 +18,8 @@ interface TelegramCall {
 interface TelegramTestOptions {
   archiveTracks?: Array<Record<string, unknown>>;
   archiveTotal?: number;
+  preview?: Record<string, unknown>;
+  archivePack?: Record<string, unknown>;
 }
 
 class MemoryKv {
@@ -557,6 +559,151 @@ describe('Telegram channel publishing', () => {
     expect(queueMessages).toHaveLength(0);
     expect(calls.some((call) => call.method === 'sendAudio' && call.body.chat_id === 123 && call.body.audio === archiveUrl)).toBe(true);
   });
+
+  it('shows archive action panel for URLs already present in the server archive', async () => {
+    const archiveId = 'a'.repeat(64);
+    const { env, calls, kv, queueMessages } = createTelegramTestContext({
+      preview: {
+        title: 'Inception',
+        artist: 'Floree',
+      },
+      archiveTracks: [
+        {
+          id: archiveId,
+          kind: 'audio',
+          filename: 'Floree - Inception.flac',
+          title: 'Inception',
+          artist: 'Floree',
+          duration: 222,
+          size_bytes: 12345678,
+          format: 'FLAC',
+          stream_url: `/api/archive/file/${archiveId}`,
+        },
+      ],
+    });
+
+    await handleTelegramUpdate(telegramRequest({
+      update_id: 18,
+      message: {
+        message_id: 89,
+        chat: { id: 123, type: 'private' },
+        text: 'https://open.spotify.com/track/5msPBVPfpNMt36L9hsPD0B',
+      },
+    }), env);
+
+    const archiveMessage = calls.find((call) => (
+      call.method === 'sendMessage'
+      && String(call.body.text ?? '').includes('Floree - Inception')
+    ));
+    expect(archiveMessage).toBeTruthy();
+    expect(queueMessages).toHaveLength(0);
+
+    const buttons = allCallbackButtons(archiveMessage?.body ?? {});
+    expect(buttons.some((button) => button.callback_data.startsWith('arch_audio:'))).toBe(true);
+    expect(buttons.some((button) => button.callback_data.startsWith('arch_doc:'))).toBe(true);
+    expect(buttons.some((button) => button.callback_data.startsWith('arch_sel:'))).toBe(true);
+    expect(buttons.some((button) => button.callback_data.startsWith('fmt:'))).toBe(false);
+
+    const resultKey = buttons.find((button) => button.callback_data.startsWith('arch_audio:'))?.callback_data.split(':')[1];
+    expect(resultKey).toBeTruthy();
+    const cached = await kv.get(`tg:result:${resultKey}`, { type: 'json' }) as Record<string, unknown> | null;
+    expect(cached).toMatchObject({
+      title: 'Inception',
+      artist: 'Floree',
+      archive: true,
+      directArchiveFile: true,
+      archiveFileId: archiveId,
+    });
+  });
+
+  it('supports multi-select archive actions and pack creation for five selected files', async () => {
+    const { env, calls, kv } = createTelegramTestContext({
+      archivePack: {
+        filename: 'telegram-selected-test.zip',
+        file_size: 12345,
+        file_count: 5,
+        archive_format: 'zip',
+        requested_format: '7z',
+        fallback_used: true,
+      },
+    });
+    const ids = ['a', 'b', 'c', 'd', 'e'].map((char) => char.repeat(64));
+
+    for (let index = 0; index < ids.length; index += 1) {
+      const key = `archive${index}`;
+      const url = `https://dyrakarmy.online/api/archive/file/${ids[index]}`;
+      await kv.put(`tg:url:${key}`, url);
+      await kv.put(`tg:result:${key}`, JSON.stringify({
+        url,
+        title: `Track ${index + 1}`,
+        artist: 'Archive Artist',
+        source: 'archive',
+        archive: true,
+        directArchiveFile: true,
+        archiveFileId: ids[index],
+        duration: 180 + index,
+        fileSize: 1000 + index,
+        formatLabel: 'FLAC',
+      }));
+
+      await handleTelegramUpdate(telegramRequest({
+        update_id: 30 + index,
+        callback_query: {
+          id: `cb-select-${index}`,
+          from: { id: 123, first_name: 'Tester' },
+          message: { message_id: 90, chat: { id: 123, type: 'private' } },
+          data: `arch_sel:${key}`,
+        },
+      }), env);
+    }
+
+    await handleTelegramUpdate(telegramRequest({
+      update_id: 40,
+      callback_query: {
+        id: 'cb-archive-list',
+        from: { id: 123, first_name: 'Tester' },
+        message: { message_id: 90, chat: { id: 123, type: 'private' } },
+        data: 'arch_list',
+      },
+    }), env);
+
+    const selectionPanel = calls.filter((call) => call.method === 'editMessageText').at(-1);
+    expect(String(selectionPanel?.body.text ?? '')).toContain('Track 1');
+    expect(hasCallback(selectionPanel?.body ?? {}, 'arch_each', '')).toBe(true);
+    expect(hasCallback(selectionPanel?.body ?? {}, 'arch_pack_7z', '')).toBe(true);
+    expect(hasCallback(selectionPanel?.body ?? {}, 'arch_pack_zip', '')).toBe(true);
+
+    await handleTelegramUpdate(telegramRequest({
+      update_id: 41,
+      callback_query: {
+        id: 'cb-archive-each',
+        from: { id: 123, first_name: 'Tester' },
+        message: { message_id: 90, chat: { id: 123, type: 'private' } },
+        data: 'arch_each',
+      },
+    }), env);
+
+    const sentDocuments = calls.filter((call) => (
+      call.method === 'sendDocument'
+      && String(call.body.document ?? '').includes('/api/archive/file/')
+    ));
+    expect(sentDocuments).toHaveLength(5);
+
+    await handleTelegramUpdate(telegramRequest({
+      update_id: 42,
+      callback_query: {
+        id: 'cb-archive-pack',
+        from: { id: 123, first_name: 'Tester' },
+        message: { message_id: 90, chat: { id: 123, type: 'private' } },
+        data: 'arch_pack_7z',
+      },
+    }), env);
+
+    expect(calls.some((call) => (
+      call.method === 'sendDocument'
+      && call.body.document === 'https://dyrakarmy.online/api/archive/packed/telegram-selected-test.zip'
+    ))).toBe(true);
+  });
 });
 
 function createTelegramTestContext(options: TelegramTestOptions = {}): { env: Env; calls: TelegramCall[]; kv: MemoryKv; db: FakeD1; queueMessages: DownloadJob[] } {
@@ -566,6 +713,23 @@ function createTelegramTestContext(options: TelegramTestOptions = {}): { env: En
   const queueMessages: DownloadJob[] = [];
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.includes('/internal/archive/pack')) {
+      return new Response(JSON.stringify(options.archivePack ?? {
+        filename: 'telegram-selected.zip',
+        file_size: 0,
+        file_count: 0,
+        archive_format: 'zip',
+        requested_format: 'zip',
+        fallback_used: false,
+      }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (url.includes('/internal/preview')) {
+      return new Response(JSON.stringify(options.preview ?? {}), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
     if (url.includes('/internal/archive')) {
       const tracks = options.archiveTracks ?? [];
       return new Response(JSON.stringify({ tracks, total: options.archiveTotal ?? tracks.length }), {

@@ -19,7 +19,13 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "build:ios:production": "eas build -p ios --profile production",
+    "build:android:production": "eas build -p android --profile production",
+    "build:stores": "eas build --profile production",
+    "submit:ios": "eas submit -p ios --profile production",
+    "submit:android": "eas submit -p android --profile production"
   },
   "private": true
 }

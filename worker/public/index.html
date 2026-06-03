@@ -2316,9 +2316,9 @@
             <a class="exe-link" id="macDownloadBtn" href="/downloads/DyrakArmyDesktop-macOS.zip" download>Download macOS Portable</a>
             <a class="exe-link" id="linuxX64DownloadBtn" href="/downloads/DyrakArmyDesktop-linux-x64.zip" download>Download Linux x64</a>
             <a class="exe-link" id="linuxArm64DownloadBtn" href="/downloads/DyrakArmyDesktop-linux-arm64.zip" download>Download Linux ARM64</a>
-            <button class="action-btn mobile-install-btn hidden" id="installAppBtn">Install Mobile App</button>
-            <button class="action-btn mobile-install-btn" id="androidInstallBtn">Install Android App</button>
-            <button class="action-btn mobile-install-btn" id="iosInstallBtn">Install iOS App</button>
+            <button class="action-btn mobile-install-btn hidden" id="installAppBtn">Download Mobile App Package</button>
+            <a class="exe-link mobile-install-btn" id="androidInstallBtn" href="/downloads/DyrakArmy-Mobile-Android-Expo.zip" download>Download Android App Package</a>
+            <a class="exe-link mobile-install-btn" id="iosInstallBtn" href="/downloads/DyrakArmy-Mobile-iOS-Expo.zip" download>Download iOS App Package</a>
           </div>
         </div>
         <div class="surface-card">
@@ -2544,7 +2544,7 @@
         copy_sync_link: "Copy Sync Link",
         sync_link_copied: "Sync link copied.",
         sync_link_copy_failed: "Could not copy automatically. Use this link:",
-        install_mobile: "Install Mobile App",
+        install_mobile: "Download Mobile App Package",
         install_android: "Download Android App Package",
         install_ios: "Download iOS App Package",
         desktop_open_web: "Open Web Version",
@@ -2598,9 +2598,9 @@
         health_idle: "Not checked yet.",
         health_ok: "Status: OK | Service: {service}",
         health_failed: "Health check failed: {message}",
-	        mobile_help: "Native package is not available yet. Use TestFlight/App Store after the iOS build is submitted.",
-	        mobile_help_generic: "Native package is not available yet. Use the web app while a store build is prepared.",
-	        mobile_mode_hint: "Mobile mode: open this page on Android/iOS and use Install/Add to Home Screen.",
+	        mobile_help: "Download the native iOS package here. Public installation still requires TestFlight/App Store approval.",
+	        mobile_help_generic: "Download the native Android/iOS package here. Store distribution is handled by EAS/App Store/Play Store.",
+	        mobile_mode_hint: "Mobile mode: use the Android/iOS package buttons. The PWA package remains only as a legacy fallback.",
 	        sync_label: "Sync key: {key} | Language sync: {lang}",
 	        ops_token_placeholder: "OPS read token",
 	        ops_load: "Load Ops Summary",
@@ -2793,7 +2793,7 @@
         copy_sync_link: "Копирай Sync Линк",
         sync_link_copied: "Sync линкът е копиран.",
         sync_link_copy_failed: "Неуспешно автоматично копиране. Използвай този линк:",
-        install_mobile: "Инсталирай мобилно приложение",
+        install_mobile: "Свали Mobile App пакет",
         install_android: "Свали Android App пакет",
         install_ios: "Свали iOS App пакет",
         desktop_open_web: "Отвори web версията",
@@ -2847,9 +2847,9 @@
         health_idle: "Все още не е проверено.",
         health_ok: "Статус: OK | Услуга: {service}",
         health_failed: "Проверката се провали: {message}",
-	        mobile_help: "Native пакетът още не е наличен. Използвай TestFlight/App Store след качване на iOS build.",
-	        mobile_help_generic: "Native пакетът още не е наличен. Използвай web версията докато се подготви store build.",
-	        mobile_mode_hint: "Мобилен режим: отвори страницата на Android/iOS и избери Install/Add to Home Screen.",
+	        mobile_help: "Свали native iOS пакета оттук. Публичната инсталация минава през TestFlight/App Store одобрение.",
+	        mobile_help_generic: "Свали native Android/iOS пакета оттук. Store публикуването минава през EAS/App Store/Play Store.",
+	        mobile_mode_hint: "Мобилен режим: използвай Android/iOS package бутоните. PWA пакетът остава само legacy fallback.",
 	        sync_label: "Sync ключ: {key} | Език sync: {lang}",
 	        ops_token_placeholder: "OPS read token",
 	        ops_load: "Зареди Ops обобщение",
@@ -3019,7 +3019,7 @@
       refresh_history: "Actualizar historial",
       check_health: "Comprobar API",
       copy_sync_link: "Copiar enlace Sync",
-      install_mobile: "Instalar app móvil",
+      install_mobile: "Descargar paquete móvil",
       install_android: "Descargar paquete Android",
       install_ios: "Descargar paquete iOS",
       desktop_open_web: "Abrir versión web",
@@ -3139,7 +3139,7 @@
       refresh_history: "Обновить историю",
       check_health: "Проверить API",
       copy_sync_link: "Копировать Sync ссылку",
-      install_mobile: "Установить мобильное приложение",
+      install_mobile: "Скачать мобильный пакет",
       install_android: "Скачать пакет Android",
       install_ios: "Скачать пакет iOS",
       desktop_open_web: "Открыть web версию",
@@ -3259,7 +3259,7 @@
       refresh_history: "Verlauf aktualisieren",
       check_health: "API prüfen",
       copy_sync_link: "Sync-Link kopieren",
-      install_mobile: "Mobile App installieren",
+      install_mobile: "Mobile-App-Paket herunterladen",
       install_android: "Android-Paket herunterladen",
       install_ios: "iOS-Paket herunterladen",
       desktop_open_web: "Web-Version öffnen",
@@ -3662,7 +3662,7 @@
       const storedDirectory = String(localStorage.getItem("sd_download_directory") || PREFERENCE_DEFAULTS.download_directory || "");
       const storedTelegramMode = String(localStorage.getItem("sd_telegram_link_mode") || PREFERENCE_DEFAULTS.telegram_link_mode || "bot");
 
-      currentLang = storedLang || queryLang || normalizeLang(PREFERENCE_DEFAULTS.language) || languageFromBrowser();
+      currentLang = queryLang || storedLang || normalizeLang(PREFERENCE_DEFAULTS.language) || languageFromBrowser();
       if (["all", "spotify", "youtube", "soundcloud", "deezer", "apple", "podcast"].includes(storedSource)) {
         currentSource = storedSource;
       }
@@ -3681,6 +3681,9 @@
         applyRemotePreferencePayload(payload);
       } catch {
         // keep local fallback
+      }
+      if (queryLang) {
+        currentLang = queryLang;
       }
 
       localStorage.setItem("sd_lang", currentLang);
@@ -5116,8 +5119,16 @@
         linuxArm64Btn.textContent = translate("linux_arm64_download");
         linuxArm64Btn.href = LINUX_ARM64_ZIP_URL;
       }
-      if (androidBtn) androidBtn.textContent = translate("install_android");
-      if (iosBtn) iosBtn.textContent = translate("install_ios");
+      if (androidBtn) {
+        androidBtn.textContent = translate("install_android");
+        androidBtn.href = ANDROID_NATIVE_PACKAGE_URL;
+        androidBtn.setAttribute("download", "");
+      }
+      if (iosBtn) {
+        iosBtn.textContent = translate("install_ios");
+        iosBtn.href = IOS_NATIVE_PACKAGE_URL;
+        iosBtn.setAttribute("download", "");
+      }
       if (quickExeBtn) {
         quickExeBtn.textContent = translate("quick_windows_exe");
         quickExeBtn.href = WINDOWS_EXE_URL;
@@ -5134,7 +5145,7 @@
         firefoxExtensionBtn.textContent = translate("firefox_extension_download");
         firefoxExtensionBtn.href = FIREFOX_EXTENSION_ZIP_URL;
       }
-      if (installBtn && desktopMode) installBtn.classList.add("hidden");
+      if (installBtn) installBtn.classList.add("hidden");
 
       if (!primaryBtn) return;
 
@@ -5169,8 +5180,10 @@
         primaryBtn.setAttribute("download", "");
       } else {
         primaryBtn.textContent = translate("install_mobile");
-        primaryBtn.href = buildSyncUrl("/");
-        primaryBtn.removeAttribute("download");
+        const nativePackageUrl = ANDROID_NATIVE_PACKAGE_URL || IOS_NATIVE_PACKAGE_URL;
+        primaryBtn.href = nativePackageUrl || buildSyncUrl("/");
+        if (nativePackageUrl) primaryBtn.setAttribute("download", "");
+        else primaryBtn.removeAttribute("download");
       }
     }
 
@@ -5235,11 +5248,13 @@
         return;
       }
 
-      if (deferredInstallPrompt && (target === "android" || target === "mobile")) {
-        deferredInstallPrompt.prompt();
-        await deferredInstallPrompt.userChoice.catch(() => null);
-        deferredInstallPrompt = null;
-        if (installAppBtn) installAppBtn.classList.add("hidden");
+      if (target === "mobile") {
+        const nativePackageUrl = isIosDevice() ? IOS_NATIVE_PACKAGE_URL : ANDROID_NATIVE_PACKAGE_URL;
+        if (nativePackageUrl) {
+          window.location.href = nativePackageUrl;
+          return;
+        }
+        alert(translate("mobile_help_generic"));
         return;
       }
 
@@ -5254,22 +5269,13 @@
     function setupInstallPrompt() {
       const androidBtn = document.getElementById("androidInstallBtn");
       const iosBtn = document.getElementById("iosInstallBtn");
+      if (installAppBtn) installAppBtn.classList.add("hidden");
 
       if (isDesktopMode()) {
         if (installAppBtn) installAppBtn.classList.add("hidden");
         if (androidBtn) androidBtn.classList.add("hidden");
         if (iosBtn) iosBtn.classList.add("hidden");
         return;
-      }
-
-      window.addEventListener("beforeinstallprompt", (event) => {
-        event.preventDefault();
-        deferredInstallPrompt = event;
-        if (installAppBtn) installAppBtn.classList.remove("hidden");
-      });
-
-      if (isIosDevice() && !isStandaloneMode() && installAppBtn) {
-        installAppBtn.classList.remove("hidden");
       }
 
       if (installAppBtn) {

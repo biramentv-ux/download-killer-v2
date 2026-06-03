@@ -27,3 +27,15 @@ npm run start
 npx tsc --noEmit
 ```
 
+## Store-ready builds
+
+This is a real Expo native app project, not only a PWA shortcut. The website publishes this source package for download, while public iOS/Android distribution is produced with EAS and store credentials:
+
+```bash
+npm run build:ios:production
+npm run build:android:production
+npm run submit:ios
+npm run submit:android
+```
+
+Required external accounts are listed in `store-readiness.md`.
