@@ -62,6 +62,13 @@ class FakeStatement {
   }
 
   async first<T>(): Promise<T | null> {
+    if (this.sql.includes('COUNT(*) AS count') && this.sql.includes('FROM download_jobs j') && this.sql.includes('telegram_channel_publishes')) {
+      const count = this.db.completedTelegramRows
+        .filter((row) => this.db.channelPublishes.get(String(row.id))?.status !== 'published')
+        .length;
+      return { count } as T;
+    }
+
     if (this.sql.includes('COUNT(*) AS total_links')) {
       return {
         total_links: this.db.workflowJobs.length,
@@ -91,6 +98,22 @@ class FakeStatement {
   }
 
   async all<T>(): Promise<{ results: T[] }> {
+    if (this.sql.includes('SELECT status, COUNT(*) AS count') && this.sql.includes('FROM telegram_channel_publishes')) {
+      const counts = new Map<string, number>();
+      for (const row of this.db.channelPublishes.values()) {
+        const status = String(row.status ?? 'unknown');
+        counts.set(status, (counts.get(status) ?? 0) + 1);
+      }
+      return { results: Array.from(counts.entries()).map(([status, count]) => ({ status, count })) as T[] };
+    }
+
+    if (this.sql.includes('FROM download_jobs j') && this.sql.includes('telegram_channel_publishes')) {
+      return {
+        results: this.db.completedTelegramRows
+          .filter((row) => this.db.channelPublishes.get(String(row.id))?.status !== 'published') as T[],
+      };
+    }
+
     if (this.sql.includes('PRAGMA table_info(download_jobs)')) {
       return {
         results: [
@@ -167,6 +190,18 @@ class FakeStatement {
       });
     }
 
+    if (this.sql.includes('INSERT INTO telegram_channel_publishes')) {
+      const jobId = String(this.values[0] ?? '');
+      this.db.channelPublishes.set(jobId, {
+        job_id: jobId,
+        status: String(this.values[1] ?? ''),
+        method: String(this.values[2] ?? ''),
+        channel_id: String(this.values[3] ?? ''),
+        attempts: 1,
+        description: String(this.values[4] ?? ''),
+      });
+    }
+
     if (this.sql.includes('UPDATE playlist_workflows') && this.values.length >= 10) {
       const workflowId = String(this.values[9] ?? '');
       const row = this.db.workflows.get(workflowId);
@@ -190,6 +225,8 @@ class FakeD1 {
   jobs = new Map<string, FakeJobRow>();
   workflows = new Map<string, Record<string, unknown>>();
   workflowJobs: Array<{ workflow_id: string; job_id: string; is_deduped: number }> = [];
+  channelPublishes = new Map<string, Record<string, unknown>>();
+  completedTelegramRows: Array<Record<string, unknown>> = [];
   runs: Array<{ sql: string; values: unknown[] }> = [];
 
   prepare(sql: string): FakeStatement {
@@ -305,6 +342,92 @@ describe('artist discography queue', () => {
   });
 });
 
+describe('ops Telegram channel endpoint', () => {
+  it('requires an ops token before returning channel status', async () => {
+    const { env } = createTestContext();
+
+    const response = await downloadRouter(new Request('https://dyrakarmy.online/api/ops/telegram-channel'), env);
+
+    expect(response.status).toBe(403);
+  });
+
+  it('returns channel publish status for viewer tokens', async () => {
+    const { env, db } = createTestContext();
+    db.channelPublishes.set('published-job', { status: 'published' });
+    db.completedTelegramRows.push({
+      id: 'pending-job',
+      url: 'hashed-url',
+      source: 'youtube',
+      format: 'mp3',
+      quality: '320',
+      fingerprint: 'fp-pending',
+      chat_id: 123,
+      message_id: 77,
+      sync_key: 'tg_123',
+      created_at: '2026-06-03T00:00:00Z',
+      title: 'Pending Track',
+      artist: 'Pending Artist',
+      duration: 181,
+      file_size: 123456,
+      result_url: 'https://files.example/pending.mp3',
+    });
+
+    const response = await downloadRouter(new Request('https://dyrakarmy.online/api/ops/telegram-channel', {
+      headers: { Authorization: 'Bearer read-token' },
+    }), env);
+    const payload = await response.json() as {
+      telegram_channel: {
+        channel_id: string;
+        pending_backfill_count: number;
+        publish_counts: Record<string, number>;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.telegram_channel.channel_id).toBe('-1003904304047');
+    expect(payload.telegram_channel.pending_backfill_count).toBe(1);
+    expect(payload.telegram_channel.publish_counts.published).toBe(1);
+  });
+
+  it('runs a manual channel backfill for admin tokens', async () => {
+    const { env, db } = createTestContext();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), {
+      headers: { 'Content-Type': 'application/json' },
+    })));
+    db.completedTelegramRows.push({
+      id: '00000000-0000-4000-8000-000000000099',
+      url: 'hashed-url',
+      source: 'youtube',
+      format: 'mp3',
+      quality: '320',
+      fingerprint: 'fp-pending',
+      chat_id: 123,
+      message_id: 77,
+      sync_key: 'tg_123',
+      created_at: '2026-06-03T00:00:00Z',
+      title: 'Pending Track',
+      artist: 'Pending Artist',
+      duration: 181,
+      file_size: 123456,
+      result_url: 'https://files.example/pending.mp3',
+    });
+
+    const response = await downloadRouter(new Request('https://dyrakarmy.online/api/ops/telegram-channel/backfill', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer admin-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ limit: 5 }),
+    }), env);
+    const payload = await response.json() as { published: number };
+
+    expect(response.status).toBe(200);
+    expect(payload.published).toBe(1);
+    expect(db.channelPublishes.get('00000000-0000-4000-8000-000000000099')?.status).toBe('published');
+  });
+});
+
 function createTestContext(): {
   db: FakeD1;
   env: Env;
@@ -329,6 +452,11 @@ function createTestContext(): {
     SHARE_TOKEN_TTL_SECONDS: '3600',
     ARTIST_DISCOGRAPHY_MAX_TRACKS: '20',
     AUTO_MOBILE_VARIANT_ENABLED: '0',
+    TELEGRAM_BOT_TOKEN: 'test-token',
+    TELEGRAM_DOWNLOAD_CHANNEL_ID: 'https://t.me/boost?c=3904304047',
+    TELEGRAM_CHANNEL_FORCE_BOT_DOWNLOADS: '1',
+    OPS_READ_TOKEN: 'read-token',
+    OPS_ADMIN_TOKEN: 'admin-token',
     DOWNLOAD_URL_ALLOWLIST: 'youtube.com,*.youtube.com,youtu.be,spotify.com,*.spotify.com',
     URL_BLOCKLIST: 'localhost,*.localhost',
   } as unknown as Env;

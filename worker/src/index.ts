@@ -531,7 +531,7 @@ function classifyDownloaderOriginError(error: unknown, source: string): Error {
   const genericRender502 = normalized.includes('status=502') || normalized.includes('error code: 502');
   if (isYoutube && genericRender502 && !normalized.includes('not a bot') && !normalized.includes('sign in to confirm')) {
     return new Error(
-      `${message}; Sign in to confirm you're not a bot. Render origin is blocked by YouTube bot-check.`,
+      `${message}; YOUTUBE_ORIGIN_BOT_GATED: Render origin is blocked by YouTube bot-check.`,
     );
   }
   return error instanceof Error ? error : new Error(message);

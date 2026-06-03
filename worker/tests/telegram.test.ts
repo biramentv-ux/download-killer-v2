@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { backfillTelegramChannelPublishes, handleTelegramUpdate, publishTelegramChannelDownload } from '../src/telegram';
+import {
+  backfillTelegramChannelPublishes,
+  getTelegramChannelPublishStatus,
+  handleTelegramUpdate,
+  notifyTelegramFailure,
+  publishTelegramChannelDownload,
+} from '../src/telegram';
 import type { DownloadJob, DownloaderDownloadResult, Env } from '../src/types';
 import { createJobFingerprint } from '../src/utils';
 
@@ -41,6 +47,12 @@ class FakeStatement {
   }
 
   async first<T>(): Promise<T | null> {
+    if (this.sql.includes('COUNT(*) AS count') && this.sql.includes('FROM download_jobs j')) {
+      const count = this.db.completedTelegramRows
+        .filter((row) => this.db.channelPublishes.get(String(row.id))?.status !== 'published')
+        .length;
+      return { count } as T;
+    }
     if (this.sql.includes('FROM user_preferences')) {
       const key = String(this.values[0] ?? '');
       const payload = this.db.preferences.get(key);
@@ -58,6 +70,14 @@ class FakeStatement {
   }
 
   async all<T>(): Promise<{ results: T[] }> {
+    if (this.sql.includes('SELECT status, COUNT(*) AS count') && this.sql.includes('FROM telegram_channel_publishes')) {
+      const counts = new Map<string, number>();
+      for (const row of this.db.channelPublishes.values()) {
+        const status = String(row.status ?? 'unknown');
+        counts.set(status, (counts.get(status) ?? 0) + 1);
+      }
+      return { results: Array.from(counts.entries()).map(([status, count]) => ({ status, count })) as T[] };
+    }
     if (this.sql.includes('FROM download_jobs j') && this.sql.includes('telegram_channel_publishes')) {
       return {
         results: this.db.completedTelegramRows
@@ -321,6 +341,56 @@ describe('Telegram channel publishing', () => {
     expect(published).toBe(1);
     expect(calls.some((call) => call.method === 'sendAudio' && call.body.chat_id === '-1003904304047')).toBe(true);
     expect(db.channelPublishes.get('00000000-0000-4000-8000-000000000099')?.status).toBe('published');
+  });
+
+  it('reports Telegram channel publish status and pending backfill count', async () => {
+    const { env, kv, db } = createTelegramTestContext();
+    env.TELEGRAM_DOWNLOAD_CHANNEL_ID = 'https://t.me/boost?c=3904304047';
+    await kv.put('tg:last_channel_publish', JSON.stringify({ ok: true, method: 'sendAudio' }));
+    db.channelPublishes.set('published-job', { status: 'published' });
+    db.channelPublishes.set('failed-job', { status: 'failed' });
+    db.completedTelegramRows.push({
+      id: 'pending-job',
+      url: 'hashed-url',
+      source: 'youtube',
+      format: 'mp3',
+      quality: '320',
+      fingerprint: 'fp-pending',
+      chat_id: 123,
+      message_id: 77,
+      sync_key: 'tg_123',
+      created_at: '2026-06-03T00:00:00Z',
+      title: 'Pending Track',
+      artist: 'Pending Artist',
+      duration: 181,
+      file_size: 123456,
+      result_url: 'https://files.example/pending.mp3',
+    });
+
+    const status = await getTelegramChannelPublishStatus(env);
+
+    expect(status.channel_id).toBe('-1003904304047');
+    expect(status.pending_backfill_count).toBe(1);
+    expect(status.publish_counts.published).toBe(1);
+    expect(status.publish_counts.failed).toBe(1);
+    expect(status.last_publish?.method).toBe('sendAudio');
+  });
+
+  it('does not suggest cookie-based bypasses for Render YouTube bot-gate failures', async () => {
+    const { env, calls } = createTelegramTestContext();
+
+    await notifyTelegramFailure(
+      createDownloadJob(),
+      "Downloader API failed (502): Sign in to confirm you're not a bot",
+      env,
+    );
+
+    const edit = calls.find((call) => call.method === 'editMessageText');
+    const text = String(edit?.body.text ?? '');
+    expect(text).toContain('Render origin');
+    expect(text).toContain('shared/free host');
+    expect(text).not.toContain('YTDLP_COOKIES');
+    expect(text.toLowerCase()).not.toContain('cookies-from-browser');
   });
 
   it('captures forwarded channel media posts even when they have no text', async () => {

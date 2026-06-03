@@ -44,6 +44,10 @@ import {
   validateDownloadUrlPolicy,
   validateUrlPolicy,
 } from './utils';
+import {
+  backfillTelegramChannelPublishes,
+  getTelegramChannelPublishStatus,
+} from './telegram';
 
 interface SearchRequestBody {
   query: string;
@@ -74,6 +78,10 @@ interface DownloadRequestBody {
   quality?: AudioQuality;
   sync_key?: string;
   client_id?: string;
+}
+
+interface OpsTelegramChannelBackfillRequestBody {
+  limit?: number;
 }
 
 interface SyncClaimRequestBody {
@@ -404,6 +412,14 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
 
   if (path === '/ops/replay' && request.method === 'POST') {
     return handleOpsReplay(request, env);
+  }
+
+  if (path === '/ops/telegram-channel' && request.method === 'GET') {
+    return handleOpsTelegramChannelStatus(request, env);
+  }
+
+  if (path === '/ops/telegram-channel/backfill' && request.method === 'POST') {
+    return handleOpsTelegramChannelBackfill(request, env);
   }
 
   if (path === '/telegram/info' && request.method === 'GET') {
@@ -3507,6 +3523,7 @@ async function handleRuntimeConfig(request: Request, env: Env): Promise<Response
       playlist_zip_export: true,
       preference_sync_v2: true,
       ops_replay: true,
+      ops_telegram_channel: true,
       admin_panel_v2: true,
       update_channel_v1: true,
       signed_release_manifest_v1: true,
@@ -3766,6 +3783,66 @@ async function handleOpsSummary(request: Request, env: Env): Promise<Response> {
     failed_jobs: failedJobs.results ?? [],
     queue_samples: queueSamples.results ?? [],
     ops_audit: recentAudit.results ?? [],
+  });
+}
+
+async function handleOpsTelegramChannelStatus(request: Request, env: Env): Promise<Response> {
+  const auth = resolveOpsAuthContext(request, env);
+  if (!hasOpsRole(auth, 'viewer')) {
+    await writeOpsAuditEvent(env, request, 'ops_telegram_channel_status', auth, 'denied', 'missing_or_invalid_token');
+    return jsonError(request, env, 'FORBIDDEN', 'Missing or invalid ops token', 403);
+  }
+
+  const status = await getTelegramChannelPublishStatus(env);
+  await writeOpsAuditEvent(env, request, 'ops_telegram_channel_status', auth, 'allowed', {
+    channel_configured: Boolean(status.channel_id),
+    pending_backfill_count: status.pending_backfill_count,
+  });
+
+  return jsonOk(request, env, {
+    ok: true,
+    role: auth.role,
+    telegram_channel: status,
+  });
+}
+
+async function handleOpsTelegramChannelBackfill(request: Request, env: Env): Promise<Response> {
+  const auth = resolveOpsAuthContext(request, env);
+  if (!hasOpsRole(auth, 'admin')) {
+    await writeOpsAuditEvent(env, request, 'ops_telegram_channel_backfill', auth, 'denied', {
+      reason: 'requires_admin',
+    });
+    return jsonError(request, env, 'FORBIDDEN', 'Missing or invalid ops admin token', 403);
+  }
+
+  const body = await parseJson<OpsTelegramChannelBackfillRequestBody>(request);
+  const requestedLimit = Number(body?.limit ?? 25);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.max(1, Math.min(100, Math.trunc(requestedLimit)))
+    : 25;
+  const published = await backfillTelegramChannelPublishes(env, limit);
+  const status = await getTelegramChannelPublishStatus(env);
+
+  await recordTelemetry(env, {
+    event: 'telegram_channel_backfill_manual',
+    status: '200',
+    code: `published=${published};limit=${limit}`,
+    value: published,
+  });
+  await writeOpsAuditEvent(env, request, 'ops_telegram_channel_backfill', auth, 'success', {
+    requested_limit: requestedLimit,
+    enforced_limit: limit,
+    published,
+    pending_backfill_count: status.pending_backfill_count,
+  });
+
+  return jsonOk(request, env, {
+    ok: true,
+    role: auth.role,
+    requested_limit: requestedLimit,
+    limit,
+    published,
+    telegram_channel: status,
   });
 }
 

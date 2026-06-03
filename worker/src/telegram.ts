@@ -75,6 +75,18 @@ interface TelegramChannelPublishRecord {
   attempts?: number | null;
 }
 
+export interface TelegramChannelPublishStatus {
+  channel_id: string | null;
+  channel_name: string | null;
+  bound_at: string | null;
+  enabled: boolean;
+  force_bot_downloads: boolean;
+  last_publish: Record<string, unknown> | null;
+  last_error: string | null;
+  publish_counts: Record<string, number>;
+  pending_backfill_count: number;
+}
+
 interface SearchResultPayload {
   title: string;
   artist: string;
@@ -1604,6 +1616,57 @@ export async function backfillTelegramChannelPublishes(env: Env, limit = TELEGRA
   return published;
 }
 
+export async function getTelegramChannelPublishStatus(env: Env): Promise<TelegramChannelPublishStatus> {
+  const channelId = await resolveTelegramDownloadChannelId(env);
+  const [username, title, boundAt, lastPublishRaw, lastError] = await Promise.all([
+    env.CACHE.get('tg:download_channel_username'),
+    env.CACHE.get('tg:download_channel_title'),
+    env.CACHE.get('tg:download_channel_bound_at'),
+    env.CACHE.get('tg:last_channel_publish'),
+    env.CACHE.get('tg:last_channel_publish_error'),
+  ]);
+
+  const publishCounts: Record<string, number> = {};
+  let pendingBackfillCount = 0;
+
+  try {
+    await ensureTelegramChannelPublishSchema(env);
+    const counts = await env.DB.prepare(
+      `SELECT status, COUNT(*) AS count
+       FROM telegram_channel_publishes
+       GROUP BY status`,
+    ).all<{ status: string; count: number }>();
+    for (const row of counts.results ?? []) {
+      publishCounts[String(row.status ?? 'unknown')] = Number(row.count ?? 0);
+    }
+
+    const pending = await env.DB.prepare(
+      `SELECT COUNT(*) AS count
+       FROM download_jobs j
+       LEFT JOIN telegram_channel_publishes p
+         ON p.job_id = j.id AND p.status = 'published'
+       WHERE j.status = 'done'
+         AND j.chat_id IS NOT NULL
+         AND p.job_id IS NULL`,
+    ).first<{ count: number }>();
+    pendingBackfillCount = Number(pending?.count ?? 0);
+  } catch {
+    // Status must remain readable even if the audit table is not yet migrated.
+  }
+
+  return {
+    channel_id: channelId,
+    channel_name: username ?? title ?? null,
+    bound_at: boundAt ?? null,
+    enabled: String(env.TELEGRAM_CHANNEL_PUBLISH_ENABLED ?? '1').trim() !== '0',
+    force_bot_downloads: String(env.TELEGRAM_CHANNEL_FORCE_BOT_DOWNLOADS ?? '1').trim() !== '0',
+    last_publish: parseJsonRecord(lastPublishRaw),
+    last_error: lastError ?? null,
+    publish_counts: publishCounts,
+    pending_backfill_count: pendingBackfillCount,
+  };
+}
+
 export async function publishTelegramChannelDownload(
   job: DownloadJob,
   result: DownloaderDownloadResult,
@@ -1719,8 +1782,8 @@ function formatTelegramFailureText(errorMessage: string): string {
     return [
       '\u274c \u0421\u0432\u0430\u043b\u044f\u043d\u0435\u0442\u043e \u0441\u0435 \u043f\u0440\u043e\u0432\u0430\u043b\u0438',
       '\u041f\u0440\u0438\u0447\u0438\u043d\u0430: YouTube \u0431\u043b\u043e\u043a\u0438\u0440\u0430 Render origin-\u0430 \u0441 bot-check.',
-      '\u041d\u0443\u0436\u043d\u043e \u0435 \u0432 Render \u0434\u0430 \u0438\u043c\u0430 YTDLP_COOKIES_BASE64 \u0438\u043b\u0438 YTDLP_COOKIES_TEXT.',
-      '\u0421\u043b\u0435\u0434 \u0442\u043e\u0432\u0430 \u0431\u043e\u0442\u044a\u0442 \u0449\u0435 \u043f\u043e\u0434\u043d\u043e\u0432\u0438 \u0441\u0432\u0430\u043b\u044f\u043d\u0435\u0442\u043e.',
+      '\u0422\u043e\u0432\u0430 \u043d\u0435 \u043c\u043e\u0436\u0435 \u0434\u0430 \u0431\u044a\u0434\u0435 \u0433\u0430\u0440\u0430\u043d\u0442\u0438\u0440\u0430\u043d\u043e 100% \u043e\u0442 shared/free host.',
+      '\u041e\u043f\u0438\u0442\u0430\u0439 \u0430\u0440\u0445\u0438\u0432\u0435\u043d \u0437\u0430\u043f\u0438\u0441, podcast/RSS, \u0434\u0438\u0440\u0435\u043a\u0442\u0435\u043d \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043d \u0444\u0430\u0439\u043b \u0438\u043b\u0438 \u0434\u0440\u0443\u0433 source.',
     ].join('\n');
   }
   return `\u274c \u0421\u0432\u0430\u043b\u044f\u043d\u0435\u0442\u043e \u0441\u0435 \u043f\u0440\u043e\u0432\u0430\u043b\u0438\n${errorMessage.slice(0, 600)}`;
@@ -2384,6 +2447,18 @@ function normalizeTelegramChannelTarget(raw: string | undefined): string {
   if (/^-\d{5,}$/.test(numeric)) return `-100${numeric.slice(1)}`;
   if (/^[a-zA-Z0-9_]{5,}$/.test(value)) return `@${value}`;
   return '';
+}
+
+function parseJsonRecord(raw: string | null): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 async function recordTelegramChannelPublish(env: Env, result: TelegramChannelPublishResult): Promise<void> {
