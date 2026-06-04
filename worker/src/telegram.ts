@@ -263,11 +263,11 @@ const DEFAULT_SETTINGS: TelegramSettings = {
 };
 
 const MENU_LABELS = {
-  search: 'рџЋµ РўСЉСЂСЃРµРЅРµ',
-  settings: 'вљ™пёЏ РќР°СЃС‚СЂРѕР№РєРё',
-  archive: 'рџ“¦ РђСЂС…РёРІ',
-  miniApp: 'рџ“± Mini App',
-  help: 'ℹ️ РџРѕРјРѕС‰',
+  search: '🎵 Търсене',
+  settings: '⚙️ Настройки',
+  archive: '📦 Архив',
+  miniApp: '📱 Mini App',
+  help: 'ℹ️ Помощ',
 };
 
 export async function handleTelegramUpdate(request: Request, env: Env): Promise<Response> {
@@ -386,7 +386,7 @@ async function handleMessage(msg: TelegramMessage, env: Env): Promise<void> {
   }
 
   if (text === MENU_LABELS.search) {
-    await sendMessage(chatId, env, 'РР·РїСЂР°С‚Рё РёРјРµ РЅР° РїРµСЃРµРЅ РёР»Рё URL Р»РёРЅРє.');
+    await sendMessage(chatId, env, 'Изпрати име на песен или URL линк.');
     return;
   }
 
@@ -405,13 +405,13 @@ async function handleMessage(msg: TelegramMessage, env: Env): Promise<void> {
     return;
   }
 
-  await sendMessage(chatId, env, 'РР·РїСЂР°С‚Рё URL РёР»Рё РЅР°РїРёС€Рё РёРјРµ РЅР° РїРµСЃРµРЅ.');
+  await sendMessage(chatId, env, 'Изпрати URL или напиши име на песен.');
 }
 
 async function handleUrlInput(chatId: number, inputUrl: string, env: Env, replyToMessageId?: number): Promise<void> {
   const policy = validateUrlPolicy(inputUrl, env);
   if (!policy.allowed) {
-    await sendMessage(chatId, env, `URL Рµ Р±Р»РѕРєРёСЂР°РЅ: ${policy.message ?? 'domain policy'}`, replyToMessageId ? { reply_to_message_id: replyToMessageId } : undefined);
+    await sendMessage(chatId, env, `URL е блокиран: ${policy.message ?? 'domain policy'}`, replyToMessageId ? { reply_to_message_id: replyToMessageId } : undefined);
     return;
   }
   const settings = await getTelegramSettings(chatId, env);
@@ -420,7 +420,7 @@ async function handleUrlInput(chatId: number, inputUrl: string, env: Env, replyT
     await sendMessage(
       chatId,
       env,
-      `рџ“¦ РќР°РјРµСЂРµРЅ Р·Р°РїРёСЃ РІ Р°СЂС…РёРІР°:\n${formatArchiveMeta(archiveMatch)}\n\nРР·Р±РµСЂРё С„РѕСЂРјР°С‚ РёР»Рё РёР·РїРѕР»Р·РІР°Р№ Р±СЉСЂР·Рѕ СЃРІР°Р»СЏРЅРµ.`,
+      `📦 Намерен запис в архива:\n${formatArchiveMeta(archiveMatch)}\n\nИзбери формат или използвай бързо сваляне.`,
       replyToMessageId ? { reply_to_message_id: replyToMessageId } : undefined,
     );
   }
@@ -443,7 +443,7 @@ async function handleUrlInput(chatId: number, inputUrl: string, env: Env, replyT
 
 async function searchAndPresent(chatId: number, query: string, env: Env): Promise<void> {
   const settings = await getTelegramSettings(chatId, env);
-  const loading = await sendMessage(chatId, env, `РўСЉСЂСЃСЏ: ${query}`);
+  const loading = await sendMessage(chatId, env, `Търся: ${query}`);
   const loadingId = loading.result?.message_id;
   if (!loadingId) return;
 
@@ -498,8 +498,8 @@ async function searchAndPresent(chatId: number, query: string, env: Env): Promis
         seen.add(normalizedUrl);
         combinedResults.push({
           url: row.url,
-          title: row.title || 'Р‘РµР· Р·Р°РіР»Р°РІРёРµ',
-          artist: row.artist || 'РќРµРёР·РІРµСЃС‚РµРЅ РёР·РїСЉР»РЅРёС‚РµР»',
+          title: row.title || 'Без заглавие',
+          artist: row.artist || 'Неизвестен изпълнител',
           source: normalizeSourceValue(row.source || detectSourceFromUrl(row.url)),
           archive: false,
           botUsername: null,
@@ -510,39 +510,39 @@ async function searchAndPresent(chatId: number, query: string, env: Env): Promis
     }
 
     if (!combinedResults.length) {
-      await editOrSend(chatId, loadingId, env, 'РќСЏРјР° РЅР°РјРµСЂРµРЅРё СЂРµР·СѓР»С‚Р°С‚Рё. РћРїРёС‚Р°Р№ СЃ РґСЂСѓРі С‚РµРєСЃС‚ РёР»Рё URL.');
+      await editOrSend(chatId, loadingId, env, 'Няма намерени резултати. Опитай с друг текст или URL.');
       return;
     }
 
     const keyboard: Array<Array<{ text: string; callback_data: string }>> = [];
     for (const result of combinedResults.slice(0, 10)) {
       const key = await cacheTelegramPickerResult(result, env);
-      const prefix = result.archive ? 'рџ“¦ ' : '';
+      const prefix = result.archive ? '📦 ' : '';
       keyboard.push([{
         text: `${prefix}${truncate(`${result.artist} - ${result.title}`, 58)}`,
         callback_data: `search_pick:${key}`,
       }]);
     }
-    keyboard.push([{ text: 'вљ™пёЏ РќР°СЃС‚СЂРѕР№РєРё', callback_data: 's:open' }]);
-    keyboard.push([{ text: 'РћС‚РєР°Р·', callback_data: 'cancel' }]);
+    keyboard.push([{ text: '⚙️ Настройки', callback_data: 's:open' }]);
+    keyboard.push([{ text: 'Отказ', callback_data: 'cancel' }]);
 
     const chooserText = settings.searchResultView === 'message'
       ? [
-        'РР·Р±РµСЂРё РїРµСЃРµРЅ:',
+        'Избери песен:',
         '',
         ...combinedResults.slice(0, 10).map((result, index) => {
-          const prefix = result.archive ? 'рџ“¦ ' : '';
+          const prefix = result.archive ? '📦 ' : '';
           return `${index + 1}. ${prefix}${result.artist} - ${result.title} (${sourceLabel(result.source)})`;
         }),
       ].join('\n')
-      : 'РР·Р±РµСЂРё РїРµСЃРµРЅ:';
+      : 'Избери песен:';
 
     await editOrSend(chatId, loadingId, env, chooserText, {
       reply_markup: { inline_keyboard: keyboard },
     });
   } catch (error) {
     console.error('Telegram search error', error);
-    await editOrSend(chatId, loadingId, env, 'Р“СЂРµС€РєР° РїСЂРё С‚СЉСЂСЃРµРЅРµ. РћРїРёС‚Р°Р№ РѕС‚РЅРѕРІРѕ.');
+    await editOrSend(chatId, loadingId, env, 'Грешка при търсене. Опитай отново.');
   }
 }
 
@@ -556,7 +556,7 @@ async function presentFormatPicker(
   const urlKey = shortHash(url);
   await env.CACHE.put(`tg:url:${urlKey}`, url, { expirationTtl: 7200 });
 
-  await sendMessage(chatId, env, 'РР·Р±РµСЂРё С„РѕСЂРјР°С‚ Р·Р° СЃРІР°Р»СЏРЅРµ:', {
+  await sendMessage(chatId, env, 'Избери формат за сваляне:', {
     ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
     reply_markup: {
       inline_keyboard: formatKeyboard(urlKey, settings),
@@ -710,8 +710,8 @@ function archiveSelectionListText(rows: ArchiveSelectionEntry[]): string {
 
 function formatKeyboard(key: string, settings?: TelegramSettings): Array<Array<{ text: string; callback_data: string }>> {
   const quickLabel = settings
-    ? `рџљЂ Р‘СЉСЂР·Рѕ (${settings.defaultFormat.toUpperCase()} ${settings.defaultQuality})`
-    : 'рџљЂ Р‘СЉСЂР·Рѕ';
+    ? `🚀 Бързо (${settings.defaultFormat.toUpperCase()} ${settings.defaultQuality})`
+    : '🚀 Бързо';
   return [
     [
       { text: 'MP3', callback_data: `fmt:${key}:mp3` },
@@ -725,8 +725,8 @@ function formatKeyboard(key: string, settings?: TelegramSettings): Array<Array<{
     ],
     [{ text: quickLabel, callback_data: `qdef:${key}` }],
     [
-      { text: 'вљ™пёЏ РќР°СЃС‚СЂРѕР№РєРё', callback_data: 's:open' },
-      { text: 'РћС‚РєР°Р·', callback_data: 'cancel' },
+      { text: '⚙️ Настройки', callback_data: 's:open' },
+      { text: 'Отказ', callback_data: 'cancel' },
     ],
   ];
 }
@@ -739,8 +739,8 @@ function buildQualityKeyboard(key: string, format: AudioFormat): Array<Array<{ t
         { text: 'Best', callback_data: `dl:${key}:${format}:best` },
       ],
       [
-        { text: '⬅️ РќР°Р·Р°Рґ', callback_data: `back_fmt:${key}` },
-        { text: 'РћС‚РєР°Р·', callback_data: 'cancel' },
+        { text: '⬅️ Назад', callback_data: `back_fmt:${key}` },
+        { text: 'Отказ', callback_data: 'cancel' },
       ],
     ];
   }
@@ -757,8 +757,8 @@ function buildQualityKeyboard(key: string, format: AudioFormat): Array<Array<{ t
       { text: '96', callback_data: `dl:${key}:${format}:96` },
     ],
     [
-      { text: '⬅️ РќР°Р·Р°Рґ', callback_data: `back_fmt:${key}` },
-      { text: 'РћС‚РєР°Р·', callback_data: 'cancel' },
+      { text: '⬅️ Назад', callback_data: `back_fmt:${key}` },
+      { text: 'Отказ', callback_data: 'cancel' },
     ],
   ];
 }
@@ -773,12 +773,12 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
 
   const rl = await rateLimit(env.CACHE, `tgcb:${chatId}`, 80, 60);
   if (rl.limited) {
-    await editOrSend(chatId, messageId, env, 'РџСЂРµРєР°Р»РµРЅРѕ РјРЅРѕРіРѕ РґРµР№СЃС‚РІРёСЏ. РР·С‡Р°РєР°Р№ 1 РјРёРЅСѓС‚Р°.');
+    await editOrSend(chatId, messageId, env, 'Прекалено много действия. Изчакай 1 минута.');
     return;
   }
 
   if (data === 'cancel') {
-    await editOrSend(chatId, messageId, env, 'РћРїРµСЂР°С†РёСЏС‚Р° Рµ РѕС‚РјРµРЅРµРЅР°.');
+    await editOrSend(chatId, messageId, env, 'Операцията е отменена.');
     return;
   }
 
@@ -1073,7 +1073,7 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
     const key = data.replace('search_pick:', '');
     const cached = await env.CACHE.get(`tg:result:${key}`, { type: 'json' }) as CachedPickerResult | null;
     if (!cached?.url) {
-      await editOrSend(chatId, messageId, env, 'РЎРµСЃРёСЏС‚Р° Рµ РёР·С‚РµРєР»Р°. РџРѕС‚СЉСЂСЃРё РѕС‚РЅРѕРІРѕ.');
+      await editOrSend(chatId, messageId, env, 'Сесията е изтекла. Потърси отново.');
       return;
     }
 
@@ -1082,9 +1082,9 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
       await editArchiveActionPanel(chatId, messageId, key, cached, env);
       return;
     }
-    const archiveSuffix = cached.archive ? '\nрџ“¦ Р РµР·СѓР»С‚Р°С‚ РѕС‚ Р°СЂС…РёРІ.' : '';
+    const archiveSuffix = cached.archive ? '\n📦 Резултат от архив.' : '';
     const settings = await getTelegramSettings(chatId, env);
-    await editOrSend(chatId, messageId, env, `РР·Р±СЂР°РЅРѕ: ${cached.artist} - ${cached.title}${archiveSuffix}\nРР·Р±РµСЂРё С„РѕСЂРјР°С‚:`, {
+    await editOrSend(chatId, messageId, env, `Избрано: ${cached.artist} - ${cached.title}${archiveSuffix}\nИзбери формат:`, {
       reply_markup: { inline_keyboard: formatKeyboard(key, settings) },
     });
     return;
@@ -1094,7 +1094,7 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
     const key = data.replace('qdef:', '');
     const url = await env.CACHE.get(`tg:url:${key}`);
     if (!url) {
-      await editOrSend(chatId, messageId, env, 'РЎРµСЃРёСЏС‚Р° Рµ РёР·С‚РµРєР»Р°. РР·РїСЂР°С‚Рё URL РѕС‚РЅРѕРІРѕ.');
+      await editOrSend(chatId, messageId, env, 'Сесията е изтекла. Изпрати URL отново.');
       return;
     }
     const settings = await getTelegramSettings(chatId, env);
@@ -1106,11 +1106,11 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
     const [, key, formatValue] = data.split(':');
     const format = formatValue as AudioFormat | undefined;
     if (!key || !format || !SUPPORTED_FORMATS.includes(format)) {
-      await editOrSend(chatId, messageId, env, 'РќРµРїРѕРґРґСЉСЂР¶Р°РЅ С„РѕСЂРјР°С‚.');
+      await editOrSend(chatId, messageId, env, 'Неподдържан формат.');
       return;
     }
 
-    await editOrSend(chatId, messageId, env, `Р¤РѕСЂРјР°С‚: ${format.toUpperCase()}\nРР·Р±РµСЂРё РєР°С‡РµСЃС‚РІРѕ:`, {
+    await editOrSend(chatId, messageId, env, `Формат: ${format.toUpperCase()}\nИзбери качество:`, {
       reply_markup: { inline_keyboard: buildQualityKeyboard(key, format) },
     });
     return;
@@ -1119,7 +1119,7 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
   if (data.startsWith('back_fmt:')) {
     const key = data.replace('back_fmt:', '');
     const settings = await getTelegramSettings(chatId, env);
-    await editOrSend(chatId, messageId, env, 'РР·Р±РµСЂРё С„РѕСЂРјР°С‚:', {
+    await editOrSend(chatId, messageId, env, 'Избери формат:', {
       reply_markup: { inline_keyboard: formatKeyboard(key, settings) },
     });
     return;
@@ -1130,13 +1130,13 @@ async function handleCallbackQuery(cb: TelegramCallbackQuery, env: Env): Promise
     const format = formatValue as AudioFormat | undefined;
     const quality = qualityValue as AudioQuality | undefined;
     if (!key || !format || !quality || !SUPPORTED_FORMATS.includes(format) || !isValidQualityForFormat(format, quality)) {
-      await editOrSend(chatId, messageId, env, 'РќРµРІР°Р»РёРґРµРЅ РёР·Р±РѕСЂ Р·Р° РєР°С‡РµСЃС‚РІРѕ.');
+      await editOrSend(chatId, messageId, env, 'Невалиден избор за качество.');
       return;
     }
 
     const url = await env.CACHE.get(`tg:url:${key}`);
     if (!url) {
-      await editOrSend(chatId, messageId, env, 'РЎРµСЃРёСЏС‚Р° Рµ РёР·С‚РµРєР»Р°. РР·РїСЂР°С‚Рё URL РѕС‚РЅРѕРІРѕ.');
+      await editOrSend(chatId, messageId, env, 'Сесията е изтекла. Изпрати URL отново.');
       return;
     }
 
@@ -1396,7 +1396,7 @@ async function queueJobFromSelection(
 
   const policy = validateDownloadUrlPolicy(url, env);
   if (!policy.allowed) {
-    await editOrSend(chatId, messageId, env, `URL Рµ Р±Р»РѕРєРёСЂР°РЅ: ${policy.message ?? 'domain policy'}`);
+    await editOrSend(chatId, messageId, env, `URL е блокиран: ${policy.message ?? 'domain policy'}`);
     return;
   }
   const source = normalizeSourceValue(cached?.source || detectSourceFromUrl(url));
@@ -1421,20 +1421,20 @@ async function queueJobFromSelection(
       env.DOWNLOAD_TOKEN_SECRET,
     );
     const link = `${getPublicBaseUrl(env)}/api/file/${encodeURIComponent(token)}`;
-    const readyArtist = existing.artist?.trim() || cached?.artist || 'РќРµРёР·РІРµСЃС‚РµРЅ РёР·РїСЉР»РЅРёС‚РµР»';
-    const readyTitle = existing.title?.trim() || cached?.title || 'Р“РѕС‚РѕРІ С„Р°Р№Р»';
+    const readyArtist = existing.artist?.trim() || cached?.artist || 'Неизвестен изпълнител';
+    const readyTitle = existing.title?.trim() || cached?.title || 'Готов файл';
     const readyDuration = formatDuration(existing.duration ?? 0);
     const readySize = formatFileSize(existing.file_size ?? 0);
     await editOrSend(
       chatId,
       messageId,
       env,
-      `рџ“¦ РќР°РјРµСЂРµРЅ РіРѕС‚РѕРІ Р·Р°РїРёСЃ РІ РєРµС€Р°\n${readyArtist} - ${readyTitle}\n${readyDuration} | ${readySize}\n${link}`,
+      `📦 Намерен готов запис в кеша\n${readyArtist} - ${readyTitle}\n${readyDuration} | ${readySize}\n${link}`,
       downloadLinkMarkup(link),
     );
     const sent = await sendAudio(chatId, link, readyTitle, readyArtist, existing.duration ?? 0, env);
     if (!sent.ok) {
-      await sendMessage(chatId, env, `РђРєРѕ audio С„Р°Р№Р»СЉС‚ РЅРµ СЃРµ РѕС‚РІРѕСЂРё РґРёСЂРµРєС‚РЅРѕ, РёР·РїРѕР»Р·РІР°Р№ Р»РёРЅРєР°:\n${link}`);
+      await sendMessage(chatId, env, `Ако audio файлът не се отвори директно, използвай линка:\n${link}`);
     }
 
     await publishTelegramChannelDownload(
@@ -1492,7 +1492,7 @@ async function queueJobFromSelection(
     chatId,
     messageId,
     env,
-    `✅ Р”РѕР±Р°РІРµРЅРѕ РІ РѕРїР°С€РєР°С‚Р°\nР—Р°РґР°С‡Р°: ${jobId.slice(0, 8)}\nР¤РѕСЂРјР°С‚: ${format.toUpperCase()} ${quality}\nР©Рµ С‚Рё РёР·РїСЂР°С‚СЏ Р»РёРЅРє, РєРѕРіР°С‚Рѕ С„Р°Р№Р»СЉС‚ Рµ РіРѕС‚РѕРІ.`,
+    `✅ Добавено в опашката\nЗадача: ${jobId.slice(0, 8)}\nФормат: ${format.toUpperCase()} ${quality}\nЩе ти изпратя линк, когато файлът е готов.`,
   );
 }
 
@@ -1546,26 +1546,26 @@ async function saveTelegramSettings(chatId: number, settings: TelegramSettings, 
 
 function settingsText(settings: TelegramSettings): string {
   return [
-    'вљ™пёЏ РќР°СЃС‚СЂРѕР№РєРё DyrakArmy',
+    '⚙️ Настройки DyrakArmy',
     '',
-    `рџЊђ Р•Р·РёРє: ${languageLabel(settings.language)}`,
-    `рџ”Ћ РўСЉСЂСЃРµРЅРµ: ${sourceLabel(settings.defaultSource)} / ${searchResultViewLabel(settings.searchResultView)}`,
-    `рџЋ§ Р¤РѕСЂРјР°С‚: ${settings.defaultFormat.toUpperCase()} ${settings.defaultQuality}`,
-    `рџ’ї РђСѓРґРёРѕ РїСЂРѕС„РёР»: ${audioTierLabel(settings.audioQualityTier)}`,
-    `рџ“¦ РђСЂС…РёРІ РїСЂРёРѕСЂРёС‚РµС‚: ${settings.preferArchive ? 'Р’РљР›' : 'РР—РљР›'}`,
-    `рџ“Ј РљР°РЅР°Р»: ${settings.channelAutoPublish ? 'РїСѓР±Р»РёРєСѓРІР°РЅРµ Р’РљР›' : 'РїСѓР±Р»РёРєСѓРІР°РЅРµ РР—РљР›'}`,
+    `🌐 Език: ${languageLabel(settings.language)}`,
+    `🔎 Търсене: ${sourceLabel(settings.defaultSource)} / ${searchResultViewLabel(settings.searchResultView)}`,
+    `🎧 Формат: ${settings.defaultFormat.toUpperCase()} ${settings.defaultQuality}`,
+    `💿 Аудио профил: ${audioTierLabel(settings.audioQualityTier)}`,
+    `📦 Архив приоритет: ${settings.preferArchive ? 'ВКЛ' : 'ИЗКЛ'}`,
+    `📣 Канал: ${settings.channelAutoPublish ? 'публикуване ВКЛ' : 'публикуване ИЗКЛ'}`,
   ].join('\n');
 }
 
 function settingsMainKeyboard(chatId: number, settings: TelegramSettings, env: Env): Array<Array<Record<string, unknown>>> {
   return [
-    [{ text: 'рџ§­ General', callback_data: 's:general' }, { text: 'рџЋ§ Audio Quality', callback_data: 's:tier' }],
-    [{ text: 'рџЋљ Per-Service Quality', callback_data: 's:svcq' }],
-    [{ text: 'рџ“Ґ Downloads', callback_data: 's:downloads' }, { text: 'рџ“ќ Captions', callback_data: 's:captions' }],
-    [{ text: 'рџ”Ѓ Codec Conversion', callback_data: 's:codec' }, { text: 'рџ“Ѓ File Naming', callback_data: 's:file' }],
-    [{ text: 'рџ“Ј Telegram РєР°РЅР°Р»', callback_data: 's:channel' }],
-    [{ text: 'рџ“± Mini App РЅР°СЃС‚СЂРѕР№РєРё', web_app: { url: buildTelegramMiniAppUrl(chatId, env, settings.language, 'settings') } }],
-    [{ text: 'Р—Р°С‚РІРѕСЂРё', callback_data: 'cancel' }],
+    [{ text: '🧭 General', callback_data: 's:general' }, { text: '🎧 Audio Quality', callback_data: 's:tier' }],
+    [{ text: '🎚 Per-Service Quality', callback_data: 's:svcq' }],
+    [{ text: '📥 Downloads', callback_data: 's:downloads' }, { text: '📝 Captions', callback_data: 's:captions' }],
+    [{ text: '🔁 Codec Conversion', callback_data: 's:codec' }, { text: '📁 File Naming', callback_data: 's:file' }],
+    [{ text: '📣 Telegram канал', callback_data: 's:channel' }],
+    [{ text: '📱 Mini App настройки', web_app: { url: buildTelegramMiniAppUrl(chatId, env, settings.language, 'settings') } }],
+    [{ text: 'Затвори', callback_data: 'cancel' }],
   ];
 }
 
@@ -1588,17 +1588,17 @@ async function editSettingsPanel(chatId: number, messageId: number, env: Env): P
 async function editSettingsGeneralPanel(chatId: number, messageId: number, env: Env): Promise<void> {
   const settings = await getTelegramSettings(chatId, env);
   await editOrSend(chatId, messageId, env, [
-    'рџ§­ General',
-    `Р•Р·РёРє: ${languageLabel(settings.language)}`,
+    '🧭 General',
+    `Език: ${languageLabel(settings.language)}`,
     `Default Search Service: ${sourceLabel(settings.defaultSource)}`,
     `Search Result View: ${searchResultViewLabel(settings.searchResultView)}`,
   ].join('\n'), {
     reply_markup: {
       inline_keyboard: [
-        [{ text: `рџЊђ Language: ${languageLabel(settings.language)}`, callback_data: 's:lang' }],
-        [{ text: `рџ”Ћ Default Search: ${sourceLabel(settings.defaultSource)}`, callback_data: 's:src' }],
-        [{ text: `вљ™пёЏ Result View: ${searchResultViewLabel(settings.searchResultView)}`, callback_data: 's:view' }],
-        [{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:back' }],
+        [{ text: `🌐 Language: ${languageLabel(settings.language)}`, callback_data: 's:lang' }],
+        [{ text: `🔎 Default Search: ${sourceLabel(settings.defaultSource)}`, callback_data: 's:src' }],
+        [{ text: `⚙️ Result View: ${searchResultViewLabel(settings.searchResultView)}`, callback_data: 's:view' }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
       ],
     },
   });
@@ -1610,8 +1610,8 @@ async function editSettingsLanguagePanel(chatId: number, messageId: number, env:
     text: `${languageLabel(language)}${language === settings.language ? ' ✅' : ''}`,
     callback_data: `s:setlang:${language}`,
   }]);
-  keyboard.push([{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:general' }]);
-  await editOrSend(chatId, messageId, env, 'РР·Р±РµСЂРё РµР·РёРє Р·Р° Р±РѕС‚Р° Рё Mini App sync:', {
+  keyboard.push([{ text: '⬅️ Назад', callback_data: 's:general' }]);
+  await editOrSend(chatId, messageId, env, 'Избери език за бота и Mini App sync:', {
     reply_markup: { inline_keyboard: keyboard },
   });
 }
@@ -1619,9 +1619,9 @@ async function editSettingsLanguagePanel(chatId: number, messageId: number, env:
 async function editSettingsSearchViewPanel(chatId: number, messageId: number, env: Env): Promise<void> {
   const settings = await getTelegramSettings(chatId, env);
   await editOrSend(chatId, messageId, env, [
-    'вљ™пёЏ Search Result View',
-    'Message: СЂРµР·СѓР»С‚Р°С‚РёС‚Рµ СЃР° РІ РµРґРЅРѕ СЃСЉРѕР±С‰РµРЅРёРµ.',
-    'Buttons: СЂРµР·СѓР»С‚Р°С‚РёС‚Рµ СЃР° РєР°С‚Рѕ РєРѕРјРїР°РєС‚РЅРё inline Р±СѓС‚РѕРЅРё.',
+    '⚙️ Search Result View',
+    'Message: резултатите са в едно съобщение.',
+    'Buttons: резултатите са като компактни inline бутони.',
   ].join('\n'), {
     reply_markup: {
       inline_keyboard: [
@@ -1629,7 +1629,7 @@ async function editSettingsSearchViewPanel(chatId: number, messageId: number, en
           text: `${searchResultViewLabel(view)}${view === settings.searchResultView ? ' ✅' : ''}`,
           callback_data: `s:setview:${view}`,
         }]),
-        [{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:general' }],
+        [{ text: '⬅️ Назад', callback_data: 's:general' }],
       ],
     },
   });
@@ -1637,7 +1637,7 @@ async function editSettingsSearchViewPanel(chatId: number, messageId: number, en
 
 async function editSettingsFormatPanel(chatId: number, messageId: number, env: Env): Promise<void> {
   const settings = await getTelegramSettings(chatId, env);
-  await editOrSend(chatId, messageId, env, 'РР·Р±РµСЂРё С„РѕСЂРјР°С‚ РїРѕ РїРѕРґСЂР°Р·Р±РёСЂР°РЅРµ:', {
+  await editOrSend(chatId, messageId, env, 'Избери формат по подразбиране:', {
     reply_markup: {
       inline_keyboard: [
         [
@@ -1650,7 +1650,7 @@ async function editSettingsFormatPanel(chatId: number, messageId: number, env: E
           { text: formatChoiceLabel('flac', settings.defaultFormat), callback_data: 's:setfmt:flac' },
           { text: formatChoiceLabel('wav', settings.defaultFormat), callback_data: 's:setfmt:wav' },
         ],
-        [{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:back' }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
       ],
     },
   });
@@ -1666,9 +1666,9 @@ async function editSettingsQualityPanel(chatId: number, messageId: number, env: 
       callback_data: `s:setq:${value}`,
     })));
   }
-  keyboard.push([{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:back' }]);
+  keyboard.push([{ text: '⬅️ Назад', callback_data: 's:back' }]);
 
-  await editOrSend(chatId, messageId, env, 'РР·Р±РµСЂРё РєР°С‡РµСЃС‚РІРѕ РїРѕ РїРѕРґСЂР°Р·Р±РёСЂР°РЅРµ:', {
+  await editOrSend(chatId, messageId, env, 'Избери качество по подразбиране:', {
     reply_markup: { inline_keyboard: keyboard },
   });
 }
@@ -1676,14 +1676,14 @@ async function editSettingsQualityPanel(chatId: number, messageId: number, env: 
 async function editSettingsAudioTierPanel(chatId: number, messageId: number, env: Env): Promise<void> {
   const settings = await getTelegramSettings(chatId, env);
   await editOrSend(chatId, messageId, env, [
-    'рџЋ§ Audio Quality',
-    `РўРµРєСѓС‰ РїСЂРѕС„РёР»: ${audioTierLabel(settings.audioQualityTier)}`,
-    `Р¤РѕСЂРјР°С‚/РєР°С‡РµСЃС‚РІРѕ: ${settings.defaultFormat.toUpperCase()} ${settings.defaultQuality}`,
+    '🎧 Audio Quality',
+    `Текущ профил: ${audioTierLabel(settings.audioQualityTier)}`,
+    `Формат/качество: ${settings.defaultFormat.toUpperCase()} ${settings.defaultQuality}`,
     '',
-    'Low: РјРѕР±РёР»РµРЅ РёРєРѕРЅРѕРјРёС‡РµРЅ СЂРµР¶РёРј.',
-    'High: РєР°С‡РµСЃС‚РІРµРЅ MP3/OPUS СЂРµР¶РёРј.',
-    'Lossless: FLAC/WAV РїСЂРё РІСЉР·РјРѕР¶РЅРѕСЃС‚.',
-    'HiFi: РјР°РєСЃРёРјР°Р»РµРЅ РїСЂРѕС„РёР» Р·Р° СѓСЃР»СѓРіР°С‚Р°.',
+    'Low: мобилен икономичен режим.',
+    'High: качествен MP3/OPUS режим.',
+    'Lossless: FLAC/WAV при възможност.',
+    'HiFi: максимален профил за услугата.',
   ].join('\n'), {
     reply_markup: {
       inline_keyboard: [
@@ -1691,9 +1691,9 @@ async function editSettingsAudioTierPanel(chatId: number, messageId: number, env
           text: `${audioTierLabel(tier)}${tier === settings.audioQualityTier ? ' ✅' : ''}`,
           callback_data: `s:settier:${tier}`,
         })),
-        [{ text: `Р¤РѕСЂРјР°С‚: ${settings.defaultFormat.toUpperCase()}`, callback_data: 's:fmt' }],
-        [{ text: `РљР°С‡РµСЃС‚РІРѕ: ${settings.defaultQuality}`, callback_data: 's:q' }],
-        [{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:back' }],
+        [{ text: `Формат: ${settings.defaultFormat.toUpperCase()}`, callback_data: 's:fmt' }],
+        [{ text: `Качество: ${settings.defaultQuality}`, callback_data: 's:q' }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
       ],
     },
   });
@@ -1715,10 +1715,10 @@ async function editSettingsSourcePanel(chatId: number, messageId: number, env: E
     [
       { text: sourceChoiceLabel('podcast', settings.defaultSource), callback_data: 's:setsrc:podcast' },
     ],
-    [{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:back' }],
+    [{ text: '⬅️ Назад', callback_data: 's:back' }],
   ];
 
-  await editOrSend(chatId, messageId, env, 'РР·Р±РµСЂРё РёР·С‚РѕС‡РЅРёРє РїРѕ РїРѕРґСЂР°Р·Р±РёСЂР°РЅРµ Р·Р° С‚СЉСЂСЃРµРЅРµ:', {
+  await editOrSend(chatId, messageId, env, 'Избери източник по подразбиране за търсене:', {
     reply_markup: { inline_keyboard: keyboard },
   });
 }
@@ -1732,10 +1732,10 @@ async function editSettingsServiceQualityPanel(chatId: number, messageId: number
       callback_data: `s:svcq:${service}:${nextServiceQualityPreset(current)}`,
     }];
   });
-  keyboard.push([{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:back' }]);
+  keyboard.push([{ text: '⬅️ Назад', callback_data: 's:back' }]);
   await editOrSend(chatId, messageId, env, [
-    'рџЋљ Per-Service Quality',
-    'РќР°С‚РёСЃРєР°РЅРµС‚Рѕ РІСЉСЂС…Сѓ СЂРµРґ С†РёРєР»РёСЂР° РєР°С‡РµСЃС‚РІРѕС‚Рѕ Р·Р° РєРѕРЅРєСЂРµС‚РЅР°С‚Р° РїР»Р°С‚С„РѕСЂРјР°.',
+    '🎚 Per-Service Quality',
+    'Натискането върху ред циклира качеството за конкретната платформа.',
   ].join('\n'), {
     reply_markup: { inline_keyboard: keyboard },
   });
@@ -1744,20 +1744,20 @@ async function editSettingsServiceQualityPanel(chatId: number, messageId: number
 async function editSettingsDownloadsPanel(chatId: number, messageId: number, env: Env): Promise<void> {
   const settings = await getTelegramSettings(chatId, env);
   await editOrSend(chatId, messageId, env, [
-    'рџ“Ґ Downloads',
-    'РќР°СЃС‚СЂРѕР№РєРё Р·Р° Р°Р»Р±СѓРјРё, РїР»РµР№Р»РёСЃС‚Рё, РґРёСЂРµРєС‚РЅРё Р»РёРЅРєРѕРІРµ Рё РґРѕРїСЉР»РЅРёС‚РµР»РЅРё С„Р°Р№Р»РѕРІРµ.',
+    '📥 Downloads',
+    'Настройки за албуми, плейлисти, директни линкове и допълнителни файлове.',
   ].join('\n'), {
     reply_markup: {
       inline_keyboard: [
-        [{ text: toggleLabel('рџ“¦ Enable Archive Uploads', settings.archiveUploads), callback_data: 's:tog:archiveUploads' }],
-        [{ text: toggleLabel('рџ”— Use Direct Links', settings.useDirectLinks), callback_data: 's:tog:useDirectLinks' }],
-        [{ text: toggleLabel('рџ“€ Spek ZIP For Tracks', settings.spekZipForTracks), callback_data: 's:tog:spekZipForTracks' }],
-        [{ text: toggleLabel('рџ’ї Album Link Preview', settings.albumLinkPreview), callback_data: 's:tog:albumLinkPreview' }],
+        [{ text: toggleLabel('📦 Enable Archive Uploads', settings.archiveUploads), callback_data: 's:tog:archiveUploads' }],
+        [{ text: toggleLabel('🔗 Use Direct Links', settings.useDirectLinks), callback_data: 's:tog:useDirectLinks' }],
+        [{ text: toggleLabel('📈 Spek ZIP For Tracks', settings.spekZipForTracks), callback_data: 's:tog:spekZipForTracks' }],
+        [{ text: toggleLabel('💿 Album Link Preview', settings.albumLinkPreview), callback_data: 's:tog:albumLinkPreview' }],
         [{ text: toggleLabel('ℹ️ Show Quality Info In Captions', settings.showQualityInfoInCaptions), callback_data: 's:tog:showQualityInfoInCaptions' }],
-        [{ text: toggleLabel('рџ”ў Playlist Position Track Numbers', settings.playlistTrackNumbers), callback_data: 's:tog:playlistTrackNumbers' }],
-        [{ text: toggleLabel('рџ“Ѓ Playlist Name As Album', settings.playlistNameAsAlbum), callback_data: 's:tog:playlistNameAsAlbum' }],
-        [{ text: toggleLabel('рџ“¦ РђСЂС…РёРІ РїСЂРёРѕСЂРёС‚РµС‚ РїСЂРё С‚СЉСЂСЃРµРЅРµ', settings.preferArchive), callback_data: 's:arc' }],
-        [{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:back' }],
+        [{ text: toggleLabel('🔢 Playlist Position Track Numbers', settings.playlistTrackNumbers), callback_data: 's:tog:playlistTrackNumbers' }],
+        [{ text: toggleLabel('📁 Playlist Name As Album', settings.playlistNameAsAlbum), callback_data: 's:tog:playlistNameAsAlbum' }],
+        [{ text: toggleLabel('📦 Архив приоритет при търсене', settings.preferArchive), callback_data: 's:arc' }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
       ],
     },
   });
@@ -1766,17 +1766,17 @@ async function editSettingsDownloadsPanel(chatId: number, messageId: number, env
 async function editSettingsCaptionsPanel(chatId: number, messageId: number, env: Env): Promise<void> {
   const settings = await getTelegramSettings(chatId, env);
   await editOrSend(chatId, messageId, env, [
-    'рџ“ќ Captions',
+    '📝 Captions',
     `Track Caption: ${captionStyleLabel(settings.trackCaptionStyle)}`,
     `Album Caption: ${captionStyleLabel(settings.albumCaptionStyle)}`,
   ].join('\n'), {
     reply_markup: {
       inline_keyboard: [
-        [{ text: toggleLabel('рџ–ј Track Cover Image', settings.trackCoverImage), callback_data: 's:tog:trackCoverImage' }],
-        [{ text: `рџЋµ Track Caption: ${captionStyleLabel(settings.trackCaptionStyle)}`, callback_data: 's:tcaption' }],
-        [{ text: toggleLabel('рџ’ї Album Cover Image', settings.albumCoverImage), callback_data: 's:tog:albumCoverImage' }],
-        [{ text: `рџ’ї Album Caption: ${captionStyleLabel(settings.albumCaptionStyle)}`, callback_data: 's:acaption' }],
-        [{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:back' }],
+        [{ text: toggleLabel('🖼 Track Cover Image', settings.trackCoverImage), callback_data: 's:tog:trackCoverImage' }],
+        [{ text: `🎵 Track Caption: ${captionStyleLabel(settings.trackCaptionStyle)}`, callback_data: 's:tcaption' }],
+        [{ text: toggleLabel('💿 Album Cover Image', settings.albumCoverImage), callback_data: 's:tog:albumCoverImage' }],
+        [{ text: `💿 Album Caption: ${captionStyleLabel(settings.albumCaptionStyle)}`, callback_data: 's:acaption' }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
       ],
     },
   });
@@ -1791,7 +1791,7 @@ async function editSettingsTrackCaptionPanel(chatId: number, messageId: number, 
           text: `${captionStyleLabel(style)}${style === settings.trackCaptionStyle ? ' ✅' : ''}`,
           callback_data: `s:tcap:${style}`,
         }]),
-        [{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:captions' }],
+        [{ text: '⬅️ Назад', callback_data: 's:captions' }],
       ],
     },
   });
@@ -1806,7 +1806,7 @@ async function editSettingsAlbumCaptionPanel(chatId: number, messageId: number, 
           text: `${captionStyleLabel(style)}${style === settings.albumCaptionStyle ? ' ✅' : ''}`,
           callback_data: `s:acap:${style}`,
         }]),
-        [{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:captions' }],
+        [{ text: '⬅️ Назад', callback_data: 's:captions' }],
       ],
     },
   });
@@ -1815,15 +1815,15 @@ async function editSettingsAlbumCaptionPanel(chatId: number, messageId: number, 
 async function editSettingsCodecPanel(chatId: number, messageId: number, env: Env): Promise<void> {
   const settings = await getTelegramSettings(chatId, env);
   await editOrSend(chatId, messageId, env, [
-    'рџ”Ѓ Direct-Link Codec Conversion',
-    'РљРѕРЅС‚СЂРѕР»РёСЂР° AAC, ALAC Рё FLAC РїСЂР°РІРёР»Р°С‚Р° РѕС‚РґРµР»РЅРѕ.',
+    '🔁 Direct-Link Codec Conversion',
+    'Контролира AAC, ALAC и FLAC правилата отделно.',
   ].join('\n'), {
     reply_markup: {
       inline_keyboard: [
         [{ text: `AAC in M4A: ${codecConversionLabel(settings.codecConversion.aacInM4a)}`, callback_data: `s:codec:aac:${nextCodecConversion(settings.codecConversion.aacInM4a)}` }],
         [{ text: `ALAC in M4A: ${codecConversionLabel(settings.codecConversion.alacInM4a)}`, callback_data: `s:codec:alac:${nextCodecConversion(settings.codecConversion.alacInM4a)}` }],
         [{ text: `FLAC: ${codecConversionLabel(settings.codecConversion.flac)}`, callback_data: `s:codec:flac:${nextCodecConversion(settings.codecConversion.flac)}` }],
-        [{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:back' }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
       ],
     },
   });
@@ -1832,18 +1832,18 @@ async function editSettingsCodecPanel(chatId: number, messageId: number, env: En
 async function editSettingsFileNamingPanel(chatId: number, messageId: number, env: Env): Promise<void> {
   const settings = await getTelegramSettings(chatId, env);
   await editOrSend(chatId, messageId, env, [
-    'рџ“Ѓ File Name Templates',
-    `РЁР°Р±Р»РѕРЅ: ${settings.fileNameTemplate}`,
+    '📁 File Name Templates',
+    `Шаблон: ${settings.fileNameTemplate}`,
     '',
-    'РџРѕРґРґСЉСЂР¶Р°РЅРё РїРѕР»РµС‚Р°: {artist}, {title}, {album}, {year}, {track}.',
-    'Р—Р° СЃРІРѕР±РѕРґРЅРѕ СЂРµРґР°РєС‚РёСЂР°РЅРµ РѕС‚РІРѕСЂРё Mini App РЅР°СЃС‚СЂРѕР№РєРёС‚Рµ.',
+    'Поддържани полета: {artist}, {title}, {album}, {year}, {track}.',
+    'За свободно редактиране отвори Mini App настройките.',
   ].join('\n'), {
     reply_markup: {
       inline_keyboard: [
-        [{ text: toggleLabel('рџ”ў Playlist Position Track Numbers', settings.playlistTrackNumbers), callback_data: 's:tog:playlistTrackNumbers' }],
-        [{ text: toggleLabel('рџ“Ѓ Playlist Name As Album', settings.playlistNameAsAlbum), callback_data: 's:tog:playlistNameAsAlbum' }],
-        [{ text: 'рџ“± РћС‚РІРѕСЂРё Mini App', web_app: { url: buildTelegramMiniAppUrl(chatId, env, settings.language, 'settings') } }],
-        [{ text: '⬅️ РќР°Р·Р°Рґ', callback_data: 's:back' }],
+        [{ text: toggleLabel('🔢 Playlist Position Track Numbers', settings.playlistTrackNumbers), callback_data: 's:tog:playlistTrackNumbers' }],
+        [{ text: toggleLabel('📁 Playlist Name As Album', settings.playlistNameAsAlbum), callback_data: 's:tog:playlistNameAsAlbum' }],
+        [{ text: '📱 Отвори Mini App', web_app: { url: buildTelegramMiniAppUrl(chatId, env, settings.language, 'settings') } }],
+        [{ text: '⬅️ Назад', callback_data: 's:back' }],
       ],
     },
   });
@@ -1950,10 +1950,10 @@ async function sendWelcomeMenu(chatId: number, env: Env): Promise<void> {
     chatId,
     env,
     [
-      'рџЋ§ DyrakArmy BOT',
+      '🎧 DyrakArmy BOT',
       '',
-      'РР·РїСЂР°С‚Рё РёРјРµ РЅР° РїРµСЃРµРЅ РёР»Рё URL РѕС‚ YouTube, Spotify, SoundCloud, Deezer РёР»Рё Apple Music.',
-      'РњРѕР¶РµС€ РґР° РёР·РїРѕР»Р·РІР°С€ Р°СЂС…РёРІР°, РЅР°СЃС‚СЂРѕР№РєРёС‚Рµ Рё Mini App Р±СѓС‚РѕРЅР° РѕС‚ РјРµРЅСЋС‚Рѕ.',
+      'Изпрати име на песен или URL от YouTube, Spotify, SoundCloud, Deezer или Apple Music.',
+      'Можеш да използваш архива, настройките и Mini App бутона от менюто.',
     ].join('\n'),
     {
       reply_markup: {
@@ -1974,18 +1974,18 @@ async function sendHelp(chatId: number, env: Env): Promise<void> {
     chatId,
     env,
     [
-      'ℹ️ РџРѕРјРѕС‰',
-      '1. РР·РїСЂР°С‚Рё URL РёР»Рё РёРјРµ РЅР° РїРµСЃРµРЅ.',
-      '2. РР·Р±РµСЂРё СЂРµР·СѓР»С‚Р°С‚, С„РѕСЂРјР°С‚ Рё РєР°С‡РµСЃС‚РІРѕ.',
-      '3. Р‘РѕС‚СЉС‚ РґРѕР±Р°РІСЏ Р·Р°РґР°С‡Р°С‚Р° РІ РѕРїР°С€РєР°.',
-      '4. РџСЂРё РіРѕС‚РѕРІ С„Р°Р№Р» РїРѕР»СѓС‡Р°РІР°С€ РґРёСЂРµРєС‚РµРЅ Р»РёРЅРє Рё audio РёР·РїСЂР°С‰Р°РЅРµ, РєРѕРіР°С‚Рѕ Telegram РіРѕ РїСЂРёРµРјРµ.',
+      'ℹ️ Помощ',
+      '1. Изпрати URL или име на песен.',
+      '2. Избери резултат, формат и качество.',
+      '3. Ботът добавя задачата в опашка.',
+      '4. При готов файл получаваш директен линк и audio изпращане, когато Telegram го приеме.',
       '',
-      'РљРѕРјР°РЅРґРё:',
-      '/start - СЃС‚Р°СЂС‚ Рё РјРµРЅСЋ',
-      '/menu - РїРѕРєР°Р·РІР° РјРµРЅСЋ',
-      '/settings - РЅР°СЃС‚СЂРѕР№РєРё',
-      '/archive - Р°СЂС…РёРІ',
-      '/help - РїРѕРјРѕС‰',
+      'Команди:',
+      '/start - старт и меню',
+      '/menu - показва меню',
+      '/settings - настройки',
+      '/archive - архив',
+      '/help - помощ',
     ].join('\n'),
   );
 }
@@ -1993,9 +1993,9 @@ async function sendHelp(chatId: number, env: Env): Promise<void> {
 async function sendMiniAppLink(chatId: number, env: Env): Promise<void> {
   const settings = await getTelegramSettings(chatId, env);
   const base = buildTelegramMiniAppUrl(chatId, env, settings.language, 'settings');
-  await sendMessage(chatId, env, `РћС‚РІРѕСЂРё DyrakArmy Mini App:\n${base}`, {
+  await sendMessage(chatId, env, `Отвори DyrakArmy Mini App:\n${base}`, {
     reply_markup: {
-      inline_keyboard: [[{ text: 'РћС‚РІРѕСЂРё Mini App', web_app: { url: base } }]],
+      inline_keyboard: [[{ text: 'Отвори Mini App', web_app: { url: base } }]],
     },
   });
 }
@@ -2005,8 +2005,8 @@ async function sendArchivePanel(chatId: number, env: Env): Promise<void> {
   await sendMessage(chatId, env, text, {
     reply_markup: {
       inline_keyboard: [
-        [{ text: 'рџ”Ћ РўСЉСЂСЃРё РІ Р°СЂС…РёРІР°', callback_data: 'arc:open' }],
-        [{ text: 'РћС‚РІРѕСЂРё Web Р°СЂС…РёРІР°', url: `${getPublicBaseUrl(env)}/?tab=archive` }],
+        [{ text: '🔎 Търси в архива', callback_data: 'arc:open' }],
+        [{ text: 'Отвори Web архива', url: `${getPublicBaseUrl(env)}/?tab=archive` }],
       ],
     },
   });
@@ -2014,9 +2014,9 @@ async function sendArchivePanel(chatId: number, env: Env): Promise<void> {
 
 async function editArchivePanel(chatId: number, messageId: number, env: Env): Promise<void> {
   const text = await buildArchivePanelText(env);
-  await editOrSend(chatId, messageId, env, `${text}\n\nРќР°РїРёС€Рё С‡Р°СЃС‚ РѕС‚ РёРјРµ/РёР·РїСЉР»РЅРёС‚РµР» Рё С‰Рµ РІСЉСЂРЅР° СЂРµР·СѓР»С‚Р°С‚Рё РѕС‚ Р°СЂС…РёРІР°.`, {
+  await editOrSend(chatId, messageId, env, `${text}\n\nНапиши част от име/изпълнител и ще върна резултати от архива.`, {
     reply_markup: {
-      inline_keyboard: [[{ text: 'РћС‚РІРѕСЂРё Web Р°СЂС…РёРІР°', url: `${getPublicBaseUrl(env)}/?tab=archive` }]],
+      inline_keyboard: [[{ text: 'Отвори Web архива', url: `${getPublicBaseUrl(env)}/?tab=archive` }]],
     },
   });
 }
@@ -2124,8 +2124,8 @@ export async function notifyTelegramComplete(job: DownloadJob, result: Downloade
 
   const link = `${getPublicBaseUrl(env)}/api/file/${encodeURIComponent(token)}`;
   const doneText = [
-    '✅ Р“РѕС‚РѕРІРѕ',
-    `${result.artist || 'РќРµРёР·РІРµСЃС‚РµРЅ РёР·РїСЉР»РЅРёС‚РµР»'} - ${result.title || 'Р¤Р°Р№Р»'}`,
+    '✅ Готово',
+    `${result.artist || 'Неизвестен изпълнител'} - ${result.title || 'Файл'}`,
     `${formatDuration(result.duration)} | ${formatFileSize(result.file_size)}`,
     link,
   ].join('\n');
@@ -2136,9 +2136,9 @@ export async function notifyTelegramComplete(job: DownloadJob, result: Downloade
     await sendMessage(job.chatId, env, doneText, downloadLinkMarkup(link));
   }
 
-  const sent = await sendAudio(job.chatId, link, result.title || 'Р¤Р°Р№Р»', result.artist || 'DyrakArmy', result.duration || 0, env);
+  const sent = await sendAudio(job.chatId, link, result.title || 'Файл', result.artist || 'DyrakArmy', result.duration || 0, env);
   if (!sent.ok) {
-    await sendMessage(job.chatId, env, `Telegram РЅРµ РїСЂРёРµ РґРёСЂРµРєС‚РЅРѕС‚Рѕ audio РёР·РїСЂР°С‰Р°РЅРµ. РР·РїРѕР»Р·РІР°Р№ Р»РёРЅРєР°:\n${link}`);
+    await sendMessage(job.chatId, env, `Telegram не прие директното audio изпращане. Използвай линка:\n${link}`);
   }
 }
 
@@ -2178,7 +2178,7 @@ export async function backfillTelegramChannelPublishes(env: Env, limit = TELEGRA
       },
       {
         download_url: row.result_url ?? '',
-        title: row.title ?? 'Р¤Р°Р№Р»',
+        title: row.title ?? 'Файл',
         artist: row.artist ?? 'DyrakArmy',
         duration: Number(row.duration ?? 0),
         file_size: Number(row.file_size ?? 0),
@@ -2280,12 +2280,12 @@ export async function publishTelegramChannelDownload(
   }
 
   const link = await createJobDownloadLink(job.id, env);
-  const title = result.title || 'Р¤Р°Р№Р»';
+  const title = result.title || 'Файл';
   const artist = result.artist || 'DyrakArmy';
   const caption = buildDownloadCaption(job, result, link, settings);
   const replyMarkup = {
     inline_keyboard: [
-      [{ text: '⬇️ РЎРІР°Р»Рё С„Р°Р№Р»Р°', url: link }, { text: 'рџ¤– DyrakArmy BOT', url: 'https://t.me/dyrakarmy_bot' }],
+      [{ text: '⬇️ Свали файла', url: link }, { text: '🤖 DyrakArmy BOT', url: 'https://t.me/dyrakarmy_bot' }],
     ],
   };
 
@@ -2371,12 +2371,12 @@ async function ensureTelegramCommands(env: Env): Promise<void> {
   try {
     await telegramRequest('setMyCommands', {
       commands: [
-        { command: 'start', description: 'РЎС‚Р°СЂС‚ Рё РјРµРЅСЋ' },
-        { command: 'menu', description: 'РџРѕРєР°Р¶Рё РјРµРЅСЋ' },
-        { command: 'settings', description: 'РќР°СЃС‚СЂРѕР№РєРё' },
-        { command: 'archive', description: 'РђСЂС…РёРІ' },
+        { command: 'start', description: 'Старт и меню' },
+        { command: 'menu', description: 'Покажи меню' },
+        { command: 'settings', description: 'Настройки' },
+        { command: 'archive', description: 'Архив' },
         { command: 'channel', description: 'Telegram \u043a\u0430\u043d\u0430\u043b' },
-        { command: 'help', description: 'РџРѕРјРѕС‰' },
+        { command: 'help', description: 'Помощ' },
       ],
       language_code: 'bg',
     }, env);
@@ -2390,12 +2390,12 @@ async function ensureTelegramCommands(env: Env): Promise<void> {
     }, env);
 
     await telegramRequest('setMyDescription', {
-      description: 'Р‘СЉР»РіР°СЂСЃРєРё Р±РѕС‚ Р·Р° С‚СЉСЂСЃРµРЅРµ, РѕРїР°С€РєР°, Р°СЂС…РёРІ Рё СЃРІР°Р»СЏРЅРµ РїСЂРµР· DyrakArmy.',
+      description: 'Български бот за търсене, опашка, архив и сваляне през DyrakArmy.',
       language_code: 'bg',
     }, env);
 
     await telegramRequest('setMyShortDescription', {
-      short_description: 'РўСЉСЂСЃРµРЅРµ, Р°СЂС…РёРІ Рё СЃРІР°Р»СЏРЅРµ РЅР° РјСѓР·РёРєР° РїСЂРµР· DyrakArmy.',
+      short_description: 'Търсене, архив и сваляне на музика през DyrakArmy.',
       language_code: 'bg',
     }, env);
 
@@ -2690,7 +2690,7 @@ function sendDocument(chatId: number | string, fileUrl: string, env: Env, extra?
 function downloadLinkMarkup(link: string): Record<string, unknown> {
   return {
     reply_markup: {
-      inline_keyboard: [[{ text: '⬇️ РЎРІР°Р»Рё С„Р°Р№Р»', url: link }]],
+      inline_keyboard: [[{ text: '⬇️ Свали файл', url: link }]],
     },
   };
 }
@@ -2701,17 +2701,17 @@ function isStartCommand(text: string): boolean {
 
 function isHelpCommand(text: string): boolean {
   const normalized = text.trim().toLowerCase();
-  return normalized === '/help' || normalized === 'help' || normalized === 'РїРѕРјРѕС‰';
+  return normalized === '/help' || normalized === 'help' || normalized === 'помощ';
 }
 
 function isArchiveCommand(text: string): boolean {
   const normalized = text.trim().toLowerCase();
-  return normalized === '/archive' || normalized === 'Р°СЂС…РёРІ';
+  return normalized === '/archive' || normalized === 'архив';
 }
 
 function isSettingsCommand(text: string): boolean {
   const normalized = text.trim().toLowerCase();
-  return normalized === '/settings' || normalized === 'РЅР°СЃС‚СЂРѕР№РєРё';
+  return normalized === '/settings' || normalized === 'настройки';
 }
 
 
@@ -2748,11 +2748,11 @@ function normalizeBotLanguage(raw: string | undefined): BotLanguage {
 
 function languageLabel(value: BotLanguage): string {
   const labels: Record<BotLanguage, string> = {
-    bg: 'рџ‡§рџ‡¬ Р‘СЉР»РіР°СЂСЃРєРё',
-    en: 'рџ‡¬рџ‡§ English',
-    es: 'рџ‡Єрџ‡ё EspaГ±ol',
-    ru: 'рџ‡·рџ‡є Р СѓСЃСЃРєРёР№',
-    de: 'рџ‡©рџ‡Є Deutsch',
+    bg: '🇧🇬 Български',
+    en: '🇬🇧 English',
+    es: '🇪🇸 Español',
+    ru: '🇷🇺 Русский',
+    de: '🇩🇪 Deutsch',
   };
   return labels[value];
 }
@@ -2886,10 +2886,10 @@ function searchResultViewLabel(value: SearchResultView): string {
 
 function audioTierLabel(value: AudioQualityTier): string {
   const labels: Record<AudioQualityTier, string> = {
-    low: 'рџ”€ Low',
-    high: 'рџ”Љ High',
-    lossless: 'рџ’ї Lossless',
-    hifi: 'рџЋ§ HiFi',
+    low: '🔈 Low',
+    high: '🔊 High',
+    lossless: '💿 Lossless',
+    hifi: '🎧 HiFi',
   };
   return labels[value];
 }
@@ -2907,7 +2907,7 @@ function captionStyleLabel(value: CaptionStyle): string {
 
 function captionPreviewText(kind: 'track' | 'album', style: CaptionStyle): string {
   if (style === 'none') {
-    return `${kind === 'track' ? 'Track' : 'Album'} Caption: No Caption\nРќСЏРјР° РґР° СЃРµ РёР·РїСЂР°С‰Р° caption.`;
+    return `${kind === 'track' ? 'Track' : 'Album'} Caption: No Caption\nНяма да се изпраща caption.`;
   }
   if (style === 'simple') {
     return `${kind === 'track' ? 'Track' : 'Album'} Caption: Simple\nNova Echo - City Static`;
@@ -2915,20 +2915,20 @@ function captionPreviewText(kind: 'track' | 'album', style: CaptionStyle): strin
   if (style === 'custom') {
     return [
       `${kind === 'track' ? 'Track' : 'Album'} Caption: Custom template`,
-      'РЁР°Р±Р»РѕРЅСЉС‚ СЃРµ СЂРµРґР°РєС‚РёСЂР° РѕС‚ Mini App РЅР°СЃС‚СЂРѕР№РєРёС‚Рµ.',
-      'РџСЂРёРјРµСЂ: {artist} - {title} | {format} {quality}',
+      'Шаблонът се редактира от Mini App настройките.',
+      'Пример: {artist} - {title} | {format} {quality}',
     ].join('\n');
   }
   if (style === 'default') {
     return [
       `${kind === 'track' ? 'Track' : 'Album'} Caption: Default`,
-      'рџЋ§ Album title: City Static',
-      'рџ‘¤ Artist: Nova Echo',
-      'рџ“… Release date: May 17, 2024',
-      'рџЋµ Total tracks: 12',
-      'вЏ± Duration: 44m',
-      'рџЏ· Genre: Indie Electronic',
-      'рџЏў Label: Aurora Lane',
+      '🎧 Album title: City Static',
+      '👤 Artist: Nova Echo',
+      '📅 Release date: May 17, 2024',
+      '🎵 Total tracks: 12',
+      '⏱ Duration: 44m',
+      '🏷 Genre: Indie Electronic',
+      '🏢 Label: Aurora Lane',
     ].join('\n');
   }
   return [
@@ -2945,13 +2945,13 @@ function captionPreviewText(kind: 'track' | 'album', style: CaptionStyle): strin
 
 function serviceLabel(service: string): string {
   const labels: Record<string, string> = {
-    amazon: 'рџ“¦ Amazon',
-    apple: 'рџЌЋ Apple',
-    beatport: 'рџЋ› Beatport',
-    deezer: 'рџЋµ Deezer',
-    kkbox: 'рџџ  KKbox',
-    qobuz: 'рџ”Љ Qobuz',
-    tidal: 'рџЊЉ Tidal',
+    amazon: '📦 Amazon',
+    apple: '🍎 Apple',
+    beatport: '🎛 Beatport',
+    deezer: '🎵 Deezer',
+    kkbox: '🟠 KKbox',
+    qobuz: '🔊 Qobuz',
+    tidal: '🌊 Tidal',
   };
   return labels[service] ?? service;
 }
@@ -3147,8 +3147,8 @@ function buildDownloadCaption(
   link: string,
   settings: TelegramSettings,
 ): string {
-  const artist = result.artist || 'РќРµРёР·РІРµСЃС‚РµРЅ РёР·РїСЉР»РЅРёС‚РµР»';
-  const title = result.title || 'Р¤Р°Р№Р»';
+  const artist = result.artist || 'Неизвестен изпълнител';
+  const title = result.title || 'Файл';
   if (settings.trackCaptionStyle === 'none') {
     return link;
   }
@@ -3157,17 +3157,17 @@ function buildDownloadCaption(
   }
 
   const rows = [
-    '✅ РќРѕРІРѕ СЃРІР°Р»СЏРЅРµ РІ DyrakArmy',
-    `рџЋµ ${artist} - ${title}`,
-    `рџЊђ РР·С‚РѕС‡РЅРёРє: ${sourceLabel(normalizeSourceValue(result.source || job.source))}`,
-    `рџЋ§ Р¤РѕСЂРјР°С‚: ${job.format.toUpperCase()} ${job.quality}`,
+    '✅ Ново сваляне в DyrakArmy',
+    `🎵 ${artist} - ${title}`,
+    `🌐 Източник: ${sourceLabel(normalizeSourceValue(result.source || job.source))}`,
+    `🎧 Формат: ${job.format.toUpperCase()} ${job.quality}`,
   ];
   if (settings.showQualityInfoInCaptions) {
-    rows.push(`вЏ± ${formatDuration(result.duration)} | рџ’ѕ ${formatFileSize(result.file_size)}`);
+    rows.push(`⏱ ${formatDuration(result.duration)} | 💾 ${formatFileSize(result.file_size)}`);
   }
   if (settings.trackCaptionStyle === 'detailed') {
-    rows.push(`рџ†” Job: ${job.id.slice(0, 8)}`);
-    if (result.fallback_used) rows.push('рџ”Ѓ Fallback mirror used');
+    rows.push(`🆔 Job: ${job.id.slice(0, 8)}`);
+    if (result.fallback_used) rows.push('🔁 Fallback mirror used');
   }
   rows.push(link);
   return rows.join('\n');
