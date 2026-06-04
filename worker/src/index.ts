@@ -3,7 +3,7 @@
  * Public API + queue consumer + Telegram webhook
  */
 
-import { downloadRouter } from './api';
+import { downloadRouter, isPrivacyModeEnabledForSyncKey } from './api';
 import { enqueueHistoryEvent, processHistoryEventBatch } from './history';
 import { ensureDeadLetterSchema, ensurePlaylistWorkflowSchema } from './schema';
 import {
@@ -14,7 +14,7 @@ import {
   publishTelegramChannelDownload,
 } from './telegram';
 import type { DownloadJob, DownloaderDownloadResult, Env, JobHistoryEvent, JobStatus } from './types';
-import { detectRequestThreat, jsonError, optionsResponse, sha256HexBytes } from './utils';
+import { detectRequestThreat, jsonError, optionsResponse, readEnvInt, sha256HexBytes } from './utils';
 import {
   buildDownloaderHeaders,
   fetchDownloaderWithFailover,
@@ -25,6 +25,7 @@ import { evaluateOpsAlerts, recordSmokeProbeResult, recordTelemetry } from './te
 import { cleanupStaleKvKeys, resolvePrivateUrl } from './security';
 import { calculateQueueRetryDelayFromEnv } from './retry';
 import { cleanupExpiredJobsAndFiles, shouldRunRetentionCleanup } from './retention';
+import { runReleaseRadarChecks } from './releaseRadar';
 
 const MAX_QUEUE_RETRIES = 5;
 const INVIDIOUS_DEFAULT_BASE_URL = 'https://inv.nadeko.net';
@@ -194,6 +195,10 @@ export default {
     }
 
     await runDownloaderSmokeChecks(env);
+    const releaseRadar = await runReleaseRadarChecks(env).catch((error) => {
+      console.warn('Release Radar scheduled check failed', error);
+      return { checked: 0, notified: 0 };
+    });
     const telegramBackfillPublished = await backfillTelegramChannelPublishes(env);
 
     await evaluateOpsAlerts(env);
@@ -209,6 +214,8 @@ export default {
         controller.cron,
         `kv_cleanup_scanned=${cleanup.scanned}`,
         `kv_cleanup_deleted=${cleanup.deleted}`,
+        `release_radar_checked=${releaseRadar.checked}`,
+        `release_radar_notified=${releaseRadar.notified}`,
         `telegram_channel_backfill=${telegramBackfillPublished}`,
         retention
           ? `retention_jobs=${retention.jobs_deleted};retention_r2=${retention.r2_keys_deleted}`
@@ -332,6 +339,67 @@ async function processDownloadJob(job: DownloadJob, env: Env, attempts: number):
   } catch (error) {
     console.warn('Telegram channel publish skipped', error);
   }
+
+  await applyPrivacyModeAfterSuccess(job, result, env, {
+    normalizedDownloadUrl,
+    r2Key,
+    contentHash,
+  });
+}
+
+async function applyPrivacyModeAfterSuccess(
+  job: DownloadJob,
+  result: DownloaderDownloadResult,
+  env: Env,
+  snapshot: {
+    normalizedDownloadUrl: string | null;
+    r2Key: string | null;
+    contentHash: string | null;
+  },
+): Promise<void> {
+  if (!job.syncKey) return;
+  const enabled = await isPrivacyModeEnabledForSyncKey(env, job.syncKey);
+  if (!enabled) return;
+
+  const ttl = Math.max(3600, readEnvInt(env.DOWNLOAD_TOKEN_TTL_SECONDS, 3600));
+  const now = new Date().toISOString();
+  await env.CACHE.put(`privacy-job:${job.id}`, JSON.stringify({
+    id: job.id,
+    source: result.source ?? job.source,
+    format: job.format,
+    quality: job.quality,
+    status: 'done',
+    attempts: 1,
+    parent_job_id: null,
+    variant_role: 'primary',
+    sync_key: job.syncKey,
+    playlist_folder: null,
+    playlist_index: null,
+    local_relpath: null,
+    result_url: snapshot.normalizedDownloadUrl,
+    r2_key: snapshot.r2Key,
+    title: result.title ?? null,
+    artist: result.artist ?? null,
+    duration: result.duration ?? null,
+    file_size: result.file_size ?? null,
+    fingerprint: job.fingerprint,
+    content_hash: snapshot.contentHash,
+    created_at: job.requestedAt,
+    updated_at: now,
+    finished_at: now,
+  }), { expirationTtl: ttl });
+
+  await env.DB.prepare('DELETE FROM job_history_events WHERE job_id = ?').bind(job.id).run().catch(() => undefined);
+  await env.DB.prepare('DELETE FROM playlist_workflow_jobs WHERE job_id = ?').bind(job.id).run().catch(() => undefined);
+  await env.DB.prepare('DELETE FROM shared_queue_items WHERE job_id = ?').bind(job.id).run().catch(() => undefined);
+  await env.DB.prepare('DELETE FROM telegram_channel_publishes WHERE job_id = ?').bind(job.id).run().catch(() => undefined);
+  await env.DB.prepare('DELETE FROM download_jobs WHERE id = ?').bind(job.id).run();
+  await recordTelemetry(env, {
+    event: 'privacy_job_deleted',
+    status: '200',
+    source: result.source ?? job.source,
+    code: 'PRIVACY_MODE',
+  });
 }
 
 function buildInternalAttemptVariants(

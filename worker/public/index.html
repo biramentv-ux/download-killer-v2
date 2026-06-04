@@ -2196,6 +2196,10 @@
         <div class="surface-card">
           <div class="inline-row">
             <button class="action-btn" id="refreshHistoryBtn">Refresh history</button>
+            <button class="action-btn" id="exportHistoryJsonBtn">Export JSON</button>
+            <button class="action-btn" id="exportHistoryCsvBtn">Export CSV</button>
+            <button class="action-btn" id="importHistoryJsonBtn">Import JSON</button>
+            <input id="importHistoryInput" type="file" accept="application/json,.json" class="hidden">
           </div>
           <div class="history-filter-row">
             <input id="historySearchInput" class="ops-input" type="text" autocomplete="off" placeholder="Search history...">
@@ -2366,6 +2370,12 @@
               <span id="autoDownloadOnPasteLabel">Auto-download on paste URL</span>
             </label>
           </div>
+          <div class="inline-row" style="margin-top:8px;">
+            <label class="option-toggle" for="privacyModeToggle">
+              <input id="privacyModeToggle" type="checkbox">
+              <span id="privacyModeLabel">Privacy Mode / zero-log after successful download</span>
+            </label>
+          </div>
           <div class="inline-row">
             <button class="action-btn" id="copySyncKeyBtn">Copy Sync Key</button>
             <button class="action-btn" id="setSyncKeyBtn">Set Sync Key</button>
@@ -2531,6 +2541,9 @@
         batch_pause_all_done: "Paused {count} active workflows.",
         batch_resume_all_done: "Resumed {count} workflows. Replayed {jobs} jobs.",
         refresh_history: "Refresh history",
+        history_export_json: "Export JSON",
+        history_export_csv: "Export CSV",
+        history_import_json: "Import JSON",
         history_search_placeholder: "Search history...",
         history_filter_all: "All",
         history_filter_done: "Done",
@@ -2639,6 +2652,7 @@
         settings_telegram_mode_bot: "Open bot chat",
         settings_telegram_mode_download: "Open direct download flow",
         settings_auto_paste: "Auto-download on paste URL",
+        settings_privacy_mode: "Privacy Mode / zero-log after successful download",
         sync_copy_key: "Copy Sync Key",
         sync_set_key: "Set Sync Key",
         sync_key_copied: "Sync key copied.",
@@ -2780,6 +2794,9 @@
         batch_pause_all_done: "Паузирани {count} активни workflow задачи.",
         batch_resume_all_done: "Продължени {count} workflow задачи. Върнати {jobs} jobs.",
         refresh_history: "Обнови история",
+        history_export_json: "Експорт JSON",
+        history_export_csv: "Експорт CSV",
+        history_import_json: "Импорт JSON",
         history_search_placeholder: "Търси в историята...",
         history_filter_all: "Всички",
         history_filter_done: "Готови",
@@ -2888,6 +2905,7 @@
 	        settings_telegram_mode_bot: "Отвори чат с бота",
 	        settings_telegram_mode_download: "Отвори директен download flow",
 	        settings_auto_paste: "Авто-сваляне при поставен URL",
+	        settings_privacy_mode: "Privacy Mode / zero-log след успешно сваляне",
 	        sync_copy_key: "Копирай Sync ключ",
 	        sync_set_key: "Задай Sync ключ",
 	        sync_key_copied: "Sync ключът е копиран.",
@@ -3340,6 +3358,7 @@
       quality: "320",
       download_directory: "",
       telegram_link_mode: "bot",
+      privacy_mode: false,
     };
     let versionBlocked = false;
     let activeTab = "download";
@@ -3622,6 +3641,9 @@
       if (payload.telegram_link_mode === "bot" || payload.telegram_link_mode === "download") {
         localStorage.setItem("sd_telegram_link_mode", payload.telegram_link_mode);
       }
+      if (typeof payload.privacy_mode === "boolean") {
+        localStorage.setItem("sd_privacy_mode", payload.privacy_mode ? "1" : "0");
+      }
       if (Object.prototype.hasOwnProperty.call(payload, "revision")) {
         persistPreferencesRevision(payload.revision);
       }
@@ -3641,6 +3663,7 @@
             quality: selectedQuality,
             download_directory: localStorage.getItem("sd_download_directory") || "",
             telegram_link_mode: localStorage.getItem("sd_telegram_link_mode") || "bot",
+            privacy_mode: localStorage.getItem("sd_privacy_mode") === "1",
             base_revision: readPreferencesRevision(),
             client_updated_at: new Date().toISOString(),
             client_id: "web",
@@ -3661,6 +3684,7 @@
       const storedQuality = String(localStorage.getItem("sd_quality") || PREFERENCE_DEFAULTS.quality || "320").toLowerCase();
       const storedDirectory = String(localStorage.getItem("sd_download_directory") || PREFERENCE_DEFAULTS.download_directory || "");
       const storedTelegramMode = String(localStorage.getItem("sd_telegram_link_mode") || PREFERENCE_DEFAULTS.telegram_link_mode || "bot");
+      const storedPrivacyMode = localStorage.getItem("sd_privacy_mode");
 
       currentLang = queryLang || storedLang || normalizeLang(PREFERENCE_DEFAULTS.language) || languageFromBrowser();
       if (["all", "spotify", "youtube", "soundcloud", "deezer", "apple", "podcast"].includes(storedSource)) {
@@ -3675,6 +3699,7 @@
       }
       localStorage.setItem("sd_download_directory", storedDirectory);
       localStorage.setItem("sd_telegram_link_mode", storedTelegramMode === "download" ? "download" : "bot");
+      localStorage.setItem("sd_privacy_mode", storedPrivacyMode === null ? (PREFERENCE_DEFAULTS.privacy_mode ? "1" : "0") : (storedPrivacyMode === "1" ? "1" : "0"));
 
       try {
         const payload = await apiJson(`/preferences?key=${encodeURIComponent(syncKey)}`);
@@ -3877,6 +3902,12 @@
 
       const refreshHistoryBtn = document.getElementById("refreshHistoryBtn");
       if (refreshHistoryBtn) refreshHistoryBtn.textContent = translate("refresh_history");
+      const exportHistoryJsonBtn = document.getElementById("exportHistoryJsonBtn");
+      if (exportHistoryJsonBtn) exportHistoryJsonBtn.textContent = translate("history_export_json");
+      const exportHistoryCsvBtn = document.getElementById("exportHistoryCsvBtn");
+      if (exportHistoryCsvBtn) exportHistoryCsvBtn.textContent = translate("history_export_csv");
+      const importHistoryJsonBtn = document.getElementById("importHistoryJsonBtn");
+      if (importHistoryJsonBtn) importHistoryJsonBtn.textContent = translate("history_import_json");
       const historySearchInput = document.getElementById("historySearchInput");
       if (historySearchInput) historySearchInput.placeholder = translate("history_search_placeholder");
       const historyStatusFilter = document.getElementById("historyStatusFilter");
@@ -3961,6 +3992,12 @@
         const autoDownloadToggle = document.getElementById("autoDownloadOnPasteToggle");
         if (autoDownloadToggle) {
           autoDownloadToggle.checked = localStorage.getItem(AUTO_DOWNLOAD_ON_PASTE_STORAGE_KEY) === "1";
+        }
+        const privacyModeLabel = document.getElementById("privacyModeLabel");
+        if (privacyModeLabel) privacyModeLabel.textContent = translate("settings_privacy_mode");
+        const privacyModeToggle = document.getElementById("privacyModeToggle");
+        if (privacyModeToggle) {
+          privacyModeToggle.checked = localStorage.getItem("sd_privacy_mode") === "1";
         }
         const copySyncKeyBtn = document.getElementById("copySyncKeyBtn");
         if (copySyncKeyBtn) copySyncKeyBtn.textContent = translate("sync_copy_key");
@@ -6742,6 +6779,31 @@
       }
     }
 
+    function exportHistory(format) {
+      const normalized = format === "csv" ? "csv" : "json";
+      const params = new URLSearchParams({ format: normalized, limit: "1000" });
+      if (syncKey) params.set("sync_key", syncKey);
+      window.open(`${API_BASE}/history/export?${params.toString()}`, "_blank", "noopener,noreferrer");
+    }
+
+    async function importHistoryFile(file) {
+      if (!file || !syncKey) return;
+      const meta = document.getElementById("historyMeta");
+      try {
+        const parsed = JSON.parse(await file.text());
+        const items = Array.isArray(parsed.items) ? parsed.items : Array.isArray(parsed.history) ? parsed.history : [];
+        const payload = await apiJson("/history/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: syncKey, items }),
+        });
+        if (meta) meta.textContent = `Imported ${payload.imported || 0} history item(s).`;
+        await loadHistory();
+      } catch (error) {
+        if (meta) meta.textContent = `History import failed: ${error.message || String(error)}`;
+      }
+    }
+
 	    async function checkHealth() {
       const box = document.getElementById("healthBox");
       if (!box) return;
@@ -7128,6 +7190,24 @@
       }
 
 	    document.getElementById("refreshHistoryBtn").addEventListener("click", loadHistory);
+	    const exportHistoryJsonBtn = document.getElementById("exportHistoryJsonBtn");
+	    if (exportHistoryJsonBtn) {
+	      exportHistoryJsonBtn.addEventListener("click", () => exportHistory("json"));
+	    }
+	    const exportHistoryCsvBtn = document.getElementById("exportHistoryCsvBtn");
+	    if (exportHistoryCsvBtn) {
+	      exportHistoryCsvBtn.addEventListener("click", () => exportHistory("csv"));
+	    }
+	    const importHistoryJsonBtn = document.getElementById("importHistoryJsonBtn");
+	    const importHistoryInput = document.getElementById("importHistoryInput");
+	    if (importHistoryJsonBtn && importHistoryInput) {
+	      importHistoryJsonBtn.addEventListener("click", () => importHistoryInput.click());
+	      importHistoryInput.addEventListener("change", () => {
+	        const file = importHistoryInput.files && importHistoryInput.files[0];
+	        void importHistoryFile(file);
+	        importHistoryInput.value = "";
+	      });
+	    }
 	    const historySearchInput = document.getElementById("historySearchInput");
 	    if (historySearchInput) {
 	      historySearchInput.addEventListener("input", () => {
@@ -7250,6 +7330,13 @@
 	        localStorage.setItem("sd_telegram_link_mode", mode);
 	        void savePreferencesPreference();
 	        void loadTelegramButtons();
+	      });
+	    }
+	    const privacyModeToggle = document.getElementById("privacyModeToggle");
+	    if (privacyModeToggle) {
+	      privacyModeToggle.addEventListener("change", () => {
+	        localStorage.setItem("sd_privacy_mode", privacyModeToggle.checked ? "1" : "0");
+	        void savePreferencesPreference();
 	      });
 	    }
 	    window.addEventListener("pywebviewready", () => {

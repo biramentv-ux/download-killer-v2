@@ -48,6 +48,11 @@ import {
   backfillTelegramChannelPublishes,
   getTelegramChannelPublishStatus,
 } from './telegram';
+import {
+  handleReleaseRadarDelete,
+  handleReleaseRadarGet,
+  handleReleaseRadarPost,
+} from './releaseRadar';
 
 interface SearchRequestBody {
   query: string;
@@ -174,9 +179,21 @@ interface PreferencesPayload {
   quality?: string;
   download_directory?: string;
   telegram_link_mode?: string;
+  privacy_mode?: boolean;
   base_revision?: number;
   client_updated_at?: string;
   client_id?: string;
+}
+
+interface HistoryImportBody {
+  key?: string;
+  items?: Array<Record<string, unknown>>;
+}
+
+interface HistoryRequeueBody {
+  job_id?: string;
+  format?: AudioFormat;
+  quality?: AudioQuality;
 }
 
 interface TelegramInfoCache {
@@ -268,6 +285,7 @@ interface PreferencesState {
   quality: AudioQuality;
   download_directory: string;
   telegram_link_mode: 'bot' | 'download';
+  privacy_mode: boolean;
   revision: number;
   field_updated_at: {
     language: string;
@@ -276,6 +294,7 @@ interface PreferencesState {
     quality: string;
     download_directory: string;
     telegram_link_mode: string;
+    privacy_mode: string;
   };
   last_writer: string;
   updated_at: string;
@@ -287,7 +306,8 @@ type PreferenceField =
   | 'format'
   | 'quality'
   | 'download_directory'
-  | 'telegram_link_mode';
+  | 'telegram_link_mode'
+  | 'privacy_mode';
 
 type OpsRole = 'none' | 'viewer' | 'operator' | 'admin';
 
@@ -334,6 +354,7 @@ const PREFERENCE_FIELDS: PreferenceField[] = [
   'quality',
   'download_directory',
   'telegram_link_mode',
+  'privacy_mode',
 ];
 const RELEASE_ARTIFACTS: Array<{
   id: ReleaseArtifactEntry['id'];
@@ -512,6 +533,18 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
     return handleArtistDiscographyQueue(request, env);
   }
 
+  if (path === '/release-radar' && request.method === 'GET') {
+    return handleReleaseRadarGet(request, env);
+  }
+
+  if (path === '/release-radar' && request.method === 'POST') {
+    return handleReleaseRadarPost(request, env);
+  }
+
+  if (path === '/release-radar' && request.method === 'DELETE') {
+    return handleReleaseRadarDelete(request, env);
+  }
+
   if (path === '/batch/pause-all' && request.method === 'POST') {
     return handleBatchPauseAll(request, env);
   }
@@ -572,6 +605,18 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
 
   if (path === '/history' && request.method === 'GET') {
     return handleHistory(request, env);
+  }
+
+  if (path === '/history/export' && request.method === 'GET') {
+    return handleHistoryExport(request, env);
+  }
+
+  if (path === '/history/import' && request.method === 'POST') {
+    return handleHistoryImport(request, env);
+  }
+
+  if (path === '/history/requeue' && request.method === 'POST') {
+    return handleHistoryRequeue(request, env);
   }
 
   if (path === '/stats' && request.method === 'GET') {
@@ -2889,6 +2934,312 @@ async function handleHistory(request: Request, env: Env): Promise<Response> {
   });
 }
 
+async function handleHistoryExport(request: Request, env: Env): Promise<Response> {
+  await ensureDownloadJobMetadataSchema(env);
+  const url = new URL(request.url);
+  const exportFormat = (url.searchParams.get('format') ?? 'json').trim().toLowerCase();
+  const limit = Math.min(1000, Math.max(1, Number.parseInt(url.searchParams.get('limit') ?? '500', 10)));
+  const syncKey = normalizeOptionalSyncKey(url.searchParams.get('sync_key') ?? url.searchParams.get('key'));
+  if ((url.searchParams.has('sync_key') || url.searchParams.has('key')) && !syncKey) {
+    return jsonError(request, env, 'INVALID_SYNC_KEY', 'Sync key is invalid', 400);
+  }
+
+  const selectSql =
+    `SELECT id, source, format, quality, status, title, artist, duration, file_size,
+            result_url, r2_key, content_hash, parent_job_id, variant_role, sync_key,
+            playlist_folder, playlist_index, local_relpath, created_at, finished_at
+     FROM download_jobs`;
+  const whereSql = syncKey ? ' WHERE sync_key = ?' : '';
+  const orderSql = ' ORDER BY created_at DESC LIMIT ?';
+  const rows = syncKey
+    ? await env.DB.prepare(`${selectSql}${whereSql}${orderSql}`).bind(syncKey, limit).all<Record<string, unknown>>()
+    : await env.DB.prepare(`${selectSql}${orderSql}`).bind(limit).all<Record<string, unknown>>();
+
+  const items = await Promise.all((rows.results ?? []).map(async (row) => {
+    let downloadUrl: string | null = null;
+    let streamUrl: string | null = null;
+    if (row.status === 'done' && ((typeof row.r2_key === 'string' && row.r2_key) || (typeof row.result_url === 'string' && row.result_url))) {
+      const available = await isDownloadTargetAvailable(env, row);
+      downloadUrl = available ? await buildDownloadUrl(request, env, String(row.id)) : null;
+      streamUrl = available ? await buildStreamUrl(request, env, String(row.id)) : null;
+    }
+    return {
+      id: row.id,
+      title: row.title ?? null,
+      artist: row.artist ?? null,
+      source: row.source,
+      format: row.format,
+      quality: row.quality,
+      status: row.status,
+      duration: row.duration ?? null,
+      file_size: row.file_size ?? null,
+      content_hash: row.content_hash ?? null,
+      parent_job_id: row.parent_job_id ?? null,
+      variant_role: row.variant_role ?? null,
+      playlist_folder: row.playlist_folder ?? null,
+      playlist_index: row.playlist_index ?? null,
+      local_relpath: row.local_relpath ?? null,
+      created_at: row.created_at ?? null,
+      finished_at: row.finished_at ?? null,
+      download_url: downloadUrl,
+      stream_url: streamUrl,
+      download_available: Boolean(downloadUrl),
+      stream_available: Boolean(streamUrl),
+    };
+  }));
+
+  if (exportFormat === 'csv') {
+    const headers = [
+      'id',
+      'title',
+      'artist',
+      'source',
+      'format',
+      'quality',
+      'status',
+      'duration',
+      'file_size',
+      'content_hash',
+      'playlist_folder',
+      'playlist_index',
+      'local_relpath',
+      'created_at',
+      'finished_at',
+      'download_url',
+      'stream_url',
+    ];
+    const csv = [
+      headers.join(','),
+      ...items.map((item) => headers.map((key) => csvEscape((item as Record<string, unknown>)[key])).join(',')),
+    ].join('\n');
+    return new Response(csv, {
+      headers: {
+        ...corsHeaders(request, env),
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${historyExportFilename('csv')}"`,
+        'Cache-Control': 'no-store',
+      },
+    });
+  }
+
+  return jsonOk(request, env, {
+    exported_at: new Date().toISOString(),
+    format: 'json',
+    total: items.length,
+    items,
+  });
+}
+
+async function handleHistoryImport(request: Request, env: Env): Promise<Response> {
+  const body = await parseJson<HistoryImportBody>(request);
+  const key = String(body?.key ?? '').trim();
+  if (!isValidSyncKey(key)) {
+    return jsonError(request, env, 'INVALID_SYNC_KEY', 'Sync key is invalid', 400);
+  }
+  const rawItems = Array.isArray(body?.items) ? body.items : [];
+  if (!rawItems.length) {
+    return jsonError(request, env, 'HISTORY_IMPORT_EMPTY', 'No history items supplied', 400);
+  }
+
+  await ensureImportedHistoryTable(env);
+  const now = new Date().toISOString();
+  const items = rawItems.slice(0, 1000).map((item) => sanitizeImportedHistoryItem(item, key, now));
+  let imported = 0;
+  for (const item of items) {
+    await env.DB.prepare(
+      `INSERT INTO imported_history_items
+         (id, sync_key, original_job_id, title, artist, source, format, quality, status,
+          duration, file_size, content_hash, download_url, stream_url, created_at, imported_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         sync_key = excluded.sync_key,
+         title = excluded.title,
+         artist = excluded.artist,
+         source = excluded.source,
+         format = excluded.format,
+         quality = excluded.quality,
+         status = excluded.status,
+         duration = excluded.duration,
+         file_size = excluded.file_size,
+         content_hash = excluded.content_hash,
+         download_url = excluded.download_url,
+         stream_url = excluded.stream_url,
+         imported_at = excluded.imported_at`,
+    ).bind(
+      item.id,
+      item.syncKey,
+      item.originalJobId,
+      item.title,
+      item.artist,
+      item.source,
+      item.format,
+      item.quality,
+      item.status,
+      item.duration,
+      item.fileSize,
+      item.contentHash,
+      item.downloadUrl,
+      item.streamUrl,
+      item.createdAt,
+      item.importedAt,
+    ).run();
+    imported += 1;
+  }
+
+  return jsonOk(request, env, {
+    ok: true,
+    imported,
+    skipped: Math.max(0, rawItems.length - imported),
+  });
+}
+
+async function handleHistoryRequeue(request: Request, env: Env): Promise<Response> {
+  const body = await parseJson<HistoryRequeueBody>(request);
+  const jobId = String(body?.job_id ?? '').trim();
+  if (!isUuid(jobId)) {
+    return jsonError(request, env, 'INVALID_JOB_ID', 'Job id is invalid', 400);
+  }
+
+  const row = await getJobRecord(env, jobId);
+  if (!row) {
+    return jsonError(request, env, 'JOB_NOT_FOUND', 'Job not found', 404);
+  }
+
+  const originalUrl = await resolvePrivateUrl(env, 'job', row.id, row.url);
+  if (!originalUrl) {
+    return jsonError(request, env, 'SOURCE_URL_EXPIRED', 'Original source URL is no longer available for requeue', 410);
+  }
+
+  const format = normalizeAudioFormat(body?.format, row.format as AudioFormat);
+  const quality = normalizeAudioQuality(body?.quality, format, row.quality as AudioQuality);
+  const queued = await queueDownloadJob(env, {
+    url: originalUrl,
+    source: row.source,
+    format,
+    quality,
+    syncKey: row.sync_key ?? undefined,
+    title: row.title ?? undefined,
+    artist: row.artist ?? undefined,
+  });
+
+  return jsonOk(request, env, {
+    ok: true,
+    requeued_from: row.id,
+    job_id: queued.jobId,
+    status: queued.status,
+    deduped: queued.deduped,
+    format: queued.format,
+    quality: queued.quality,
+  }, 202);
+}
+
+async function ensureImportedHistoryTable(env: Env): Promise<void> {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS imported_history_items (
+       id              TEXT PRIMARY KEY,
+       sync_key        TEXT NOT NULL,
+       original_job_id TEXT,
+       title           TEXT,
+       artist          TEXT,
+       source          TEXT NOT NULL DEFAULT 'unknown',
+       format          TEXT NOT NULL DEFAULT 'mp3',
+       quality         TEXT NOT NULL DEFAULT '320',
+       status          TEXT NOT NULL DEFAULT 'done',
+       duration        INTEGER,
+       file_size       INTEGER,
+       content_hash    TEXT,
+       download_url    TEXT,
+       stream_url      TEXT,
+       created_at      TEXT,
+       imported_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+     )`,
+  ).run();
+  await env.DB.prepare(
+    'CREATE INDEX IF NOT EXISTS idx_imported_history_sync ON imported_history_items(sync_key, imported_at DESC)',
+  ).run();
+}
+
+function sanitizeImportedHistoryItem(
+  item: Record<string, unknown>,
+  syncKey: string,
+  importedAt: string,
+): {
+  id: string;
+  syncKey: string;
+  originalJobId: string | null;
+  title: string | null;
+  artist: string | null;
+  source: string;
+  format: AudioFormat;
+  quality: AudioQuality;
+  status: string;
+  duration: number | null;
+  fileSize: number | null;
+  contentHash: string | null;
+  downloadUrl: string | null;
+  streamUrl: string | null;
+  createdAt: string | null;
+  importedAt: string;
+} {
+  const originalJobId = isUuid(String(item.id ?? '')) ? String(item.id) : null;
+  const requestedFormat = normalizeAudioFormat(String(item.format ?? ''), 'mp3');
+  return {
+    id: originalJobId ? `${syncKey}:${originalJobId}` : `${syncKey}:${crypto.randomUUID()}`,
+    syncKey,
+    originalJobId,
+    title: nullableHistoryText(item.title, 180),
+    artist: nullableHistoryText(item.artist, 180),
+    source: normalizeSource(String(item.source ?? 'unknown')),
+    format: requestedFormat,
+    quality: normalizeAudioQuality(String(item.quality ?? ''), requestedFormat, '320'),
+    status: safeHistoryText(item.status, 32) || 'done',
+    duration: safeNullableNumber(item.duration),
+    fileSize: safeNullableNumber(item.file_size),
+    contentHash: nullableHistoryText(item.content_hash, 128),
+    downloadUrl: safePublicUrl(item.download_url),
+    streamUrl: safePublicUrl(item.stream_url),
+    createdAt: nullableHistoryText(item.created_at, 64),
+    importedAt,
+  };
+}
+
+function csvEscape(value: unknown): string {
+  if (value === null || typeof value === 'undefined') return '';
+  const text = String(value);
+  if (!/[",\n\r]/.test(text)) return text;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function historyExportFilename(ext: 'json' | 'csv'): string {
+  const date = new Date().toISOString().slice(0, 10);
+  return `dyrakarmy-history-${date}.${ext}`;
+}
+
+function safeHistoryText(value: unknown, max: number): string {
+  return String(value ?? '').replace(/[\x00-\x1F\x7F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function nullableHistoryText(value: unknown, max: number): string | null {
+  const text = safeHistoryText(value, max);
+  return text || null;
+}
+
+function safeNullableNumber(value: unknown): number | null {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function safePublicUrl(value: unknown): string | null {
+  const text = safeHistoryText(value, 2048);
+  if (!text) return null;
+  try {
+    const parsed = new URL(text);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 async function handleStats(request: Request, env: Env): Promise<Response> {
   const summary = await env.DB.prepare(
     `SELECT
@@ -4590,6 +4941,17 @@ async function handlePreferencesGet(request: Request, env: Env): Promise<Respons
   });
 }
 
+export async function isPrivacyModeEnabledForSyncKey(env: Env, syncKey: string | undefined | null): Promise<boolean> {
+  const key = String(syncKey ?? '').trim();
+  if (!isValidSyncKey(key)) return false;
+  try {
+    const stored = await loadPreferencesState(env, key);
+    return normalizePreferencesState(stored).privacy_mode;
+  } catch {
+    return false;
+  }
+}
+
 async function handlePreferencesPost(request: Request, env: Env): Promise<Response> {
   const body = await parseJson<PreferencesPayload>(request);
   const key = body?.key?.trim() ?? '';
@@ -4662,6 +5024,12 @@ async function handlePreferencesPost(request: Request, env: Env): Promise<Respon
         next.telegram_link_mode = value;
         changed = true;
       }
+    } else if (field === 'privacy_mode') {
+      const value = normalizeBooleanPreference(incomingRaw);
+      if (value !== next.privacy_mode) {
+        next.privacy_mode = value;
+        changed = true;
+      }
     }
 
     next.field_updated_at[field] = clientUpdatedAt;
@@ -4717,18 +5085,17 @@ async function handleFileDownload(request: Request, env: Env, token: string): Pr
   const inline = accessUrl.searchParams.get('inline') === '1';
   const rangeHeader = request.headers.get('range');
 
-  const job = await env.DB.prepare(
-    `SELECT title, artist, format, r2_key, result_url FROM download_jobs WHERE id = ?`,
-  ).bind(payload.jobId).first<{
-    title: string | null;
-    artist: string | null;
-    format: string | null;
-    r2_key: string | null;
-    result_url: string | null;
-  }>();
-  if (!job) {
+  const jobRecord = await getJobRecord(env, payload.jobId);
+  if (!jobRecord) {
     return jsonError(request, env, 'JOB_NOT_FOUND', 'Job not found', 404);
   }
+  const job = {
+    title: jobRecord.title,
+    artist: jobRecord.artist,
+    format: jobRecord.format,
+    r2_key: jobRecord.r2_key,
+    result_url: jobRecord.result_url,
+  };
 
   const fallbackExt = (job.format ?? 'bin').toLowerCase();
   const fallbackFilename = formatFileName(job.title ?? 'track', job.artist ?? 'dyrakarmy', fallbackExt);
@@ -4844,7 +5211,7 @@ async function handleFileDownload(request: Request, env: Env, token: string): Pr
 
 async function getJobRecord(env: Env, jobId: string): Promise<JobRecord | null> {
   await ensureDownloadJobMetadataSchema(env);
-  return env.DB.prepare(
+  const row = await env.DB.prepare(
     `SELECT id, url, source, format, quality, status, attempts,
             parent_job_id, variant_role, sync_key, playlist_folder, playlist_index, local_relpath,
             result_url, r2_key, title, artist, duration, file_size,
@@ -4852,6 +5219,53 @@ async function getJobRecord(env: Env, jobId: string): Promise<JobRecord | null> 
      FROM download_jobs
      WHERE id = ?`,
   ).bind(jobId).first<JobRecord>();
+  if (row) return row;
+  return getPrivacyJobSnapshot(env, jobId);
+}
+
+async function getPrivacyJobSnapshot(env: Env, jobId: string): Promise<JobRecord | null> {
+  const snapshot = await env.CACHE.get(`privacy-job:${jobId}`, { type: 'json' }) as Record<string, unknown> | null;
+  if (!snapshot || String(snapshot.id ?? '') !== jobId || snapshot.status !== 'done') return null;
+  const now = new Date().toISOString();
+  return {
+    id: jobId,
+    url: '',
+    source: safeSnapshotString(snapshot.source, 'unknown'),
+    format: safeSnapshotString(snapshot.format, 'mp3'),
+    quality: safeSnapshotString(snapshot.quality, '320'),
+    status: 'done',
+    attempts: Math.max(1, Number(snapshot.attempts ?? 1) || 1),
+    parent_job_id: safeNullableSnapshotString(snapshot.parent_job_id),
+    variant_role: safeSnapshotString(snapshot.variant_role, 'primary'),
+    sync_key: safeNullableSnapshotString(snapshot.sync_key),
+    playlist_folder: safeNullableSnapshotString(snapshot.playlist_folder),
+    playlist_index: Number.isFinite(Number(snapshot.playlist_index)) ? Number(snapshot.playlist_index) : null,
+    local_relpath: safeNullableSnapshotString(snapshot.local_relpath),
+    result_url: safeNullableSnapshotString(snapshot.result_url),
+    r2_key: safeNullableSnapshotString(snapshot.r2_key),
+    title: safeNullableSnapshotString(snapshot.title),
+    artist: safeNullableSnapshotString(snapshot.artist),
+    duration: Number.isFinite(Number(snapshot.duration)) ? Number(snapshot.duration) : null,
+    file_size: Number.isFinite(Number(snapshot.file_size)) ? Number(snapshot.file_size) : null,
+    fingerprint: safeNullableSnapshotString(snapshot.fingerprint),
+    content_hash: safeNullableSnapshotString(snapshot.content_hash),
+    error_code: null,
+    error_message: null,
+    created_at: safeSnapshotString(snapshot.created_at, now),
+    updated_at: safeSnapshotString(snapshot.updated_at, now),
+    finished_at: safeNullableSnapshotString(snapshot.finished_at) ?? now,
+  };
+}
+
+function safeSnapshotString(value: unknown, fallback: string): string {
+  const text = String(value ?? '').trim();
+  return text || fallback;
+}
+
+function safeNullableSnapshotString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  return text || null;
 }
 
 async function hydrateJobRecord(request: Request, env: Env, row: JobRecord): Promise<Record<string, unknown>> {
@@ -5507,6 +5921,7 @@ function normalizePreferencesState(raw: PreferencesState | null | undefined): Pr
     quality: updatedAt,
     download_directory: updatedAt,
     telegram_link_mode: updatedAt,
+    privacy_mode: updatedAt,
   };
 
   return {
@@ -5516,6 +5931,7 @@ function normalizePreferencesState(raw: PreferencesState | null | undefined): Pr
     quality: normalizeAudioQuality(raw?.quality, format, '320'),
     download_directory: normalizeDownloadDirectory(raw?.download_directory),
     telegram_link_mode: normalizeTelegramLinkMode(raw?.telegram_link_mode),
+    privacy_mode: normalizeBooleanPreference(raw?.privacy_mode),
     revision: Math.max(0, normalizePreferenceRevision(raw?.revision)),
     field_updated_at: {
       language: isoFromMs(parseIsoMs(baseFieldTimes.language), updatedAt),
@@ -5524,8 +5940,15 @@ function normalizePreferencesState(raw: PreferencesState | null | undefined): Pr
       quality: isoFromMs(parseIsoMs(baseFieldTimes.quality), updatedAt),
       download_directory: isoFromMs(parseIsoMs(baseFieldTimes.download_directory), updatedAt),
       telegram_link_mode: isoFromMs(parseIsoMs(baseFieldTimes.telegram_link_mode), updatedAt),
+      privacy_mode: isoFromMs(parseIsoMs(baseFieldTimes.privacy_mode), updatedAt),
     },
     last_writer: normalizeClientId(raw?.last_writer),
     updated_at: updatedAt,
   };
+}
+
+function normalizeBooleanPreference(raw: unknown): boolean {
+  if (typeof raw === 'boolean') return raw;
+  const value = String(raw ?? '').trim().toLowerCase();
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on';
 }
