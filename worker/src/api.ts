@@ -180,6 +180,8 @@ interface PreferencesPayload {
   download_directory?: string;
   telegram_link_mode?: string;
   privacy_mode?: boolean;
+  webhook_enabled?: boolean;
+  webhook_url?: string;
   base_revision?: number;
   client_updated_at?: string;
   client_id?: string;
@@ -286,6 +288,8 @@ interface PreferencesState {
   download_directory: string;
   telegram_link_mode: 'bot' | 'download';
   privacy_mode: boolean;
+  webhook_enabled: boolean;
+  webhook_url: string;
   revision: number;
   field_updated_at: {
     language: string;
@@ -295,6 +299,8 @@ interface PreferencesState {
     download_directory: string;
     telegram_link_mode: string;
     privacy_mode: string;
+    webhook_enabled: string;
+    webhook_url: string;
   };
   last_writer: string;
   updated_at: string;
@@ -307,7 +313,9 @@ type PreferenceField =
   | 'quality'
   | 'download_directory'
   | 'telegram_link_mode'
-  | 'privacy_mode';
+  | 'privacy_mode'
+  | 'webhook_enabled'
+  | 'webhook_url';
 
 type OpsRole = 'none' | 'viewer' | 'operator' | 'admin';
 
@@ -355,6 +363,8 @@ const PREFERENCE_FIELDS: PreferenceField[] = [
   'download_directory',
   'telegram_link_mode',
   'privacy_mode',
+  'webhook_enabled',
+  'webhook_url',
 ];
 const RELEASE_ARTIFACTS: Array<{
   id: ReleaseArtifactEntry['id'];
@@ -4069,6 +4079,7 @@ async function handleRuntimeConfig(request: Request, env: Env): Promise<Response
       offline_cache_warming: true,
       archive_browser_v2: true,
       sync_key_claims: true,
+      download_webhook_notifications: true,
     },
     sync_key_claim: {
       endpoint: `${base}/api/sync/claim`,
@@ -4090,6 +4101,9 @@ async function handleRuntimeConfig(request: Request, env: Env): Promise<Response
       quality: '320',
       download_directory: '',
       telegram_link_mode: 'bot',
+      privacy_mode: false,
+      webhook_enabled: false,
+      webhook_url: '',
     },
     updates,
     release_manifest_url: `${base}/api/releases/manifest`,
@@ -4952,6 +4966,24 @@ export async function isPrivacyModeEnabledForSyncKey(env: Env, syncKey: string |
   }
 }
 
+export async function getDownloadWebhookForSyncKey(
+  env: Env,
+  syncKey: string | undefined | null,
+): Promise<{ enabled: boolean; url: string }> {
+  const key = String(syncKey ?? '').trim();
+  if (!isValidSyncKey(key)) return { enabled: false, url: '' };
+  try {
+    const stored = await loadPreferencesState(env, key);
+    const normalized = normalizePreferencesState(stored);
+    return {
+      enabled: normalized.webhook_enabled && Boolean(normalized.webhook_url),
+      url: normalized.webhook_url,
+    };
+  } catch {
+    return { enabled: false, url: '' };
+  }
+}
+
 async function handlePreferencesPost(request: Request, env: Env): Promise<Response> {
   const body = await parseJson<PreferencesPayload>(request);
   const key = body?.key?.trim() ?? '';
@@ -5028,6 +5060,18 @@ async function handlePreferencesPost(request: Request, env: Env): Promise<Respon
       const value = normalizeBooleanPreference(incomingRaw);
       if (value !== next.privacy_mode) {
         next.privacy_mode = value;
+        changed = true;
+      }
+    } else if (field === 'webhook_enabled') {
+      const value = normalizeBooleanPreference(incomingRaw);
+      if (value !== next.webhook_enabled) {
+        next.webhook_enabled = value;
+        changed = true;
+      }
+    } else if (field === 'webhook_url') {
+      const value = normalizeWebhookUrlPreference(incomingRaw);
+      if (value !== next.webhook_url) {
+        next.webhook_url = value;
         changed = true;
       }
     }
@@ -5887,6 +5931,58 @@ function normalizeTelegramLinkMode(raw: string | undefined): 'bot' | 'download' 
   return String(raw ?? '').trim().toLowerCase() === 'download' ? 'download' : 'bot';
 }
 
+function normalizeWebhookUrlPreference(raw: string | undefined): string {
+  const value = String(raw ?? '').trim();
+  if (!value) return '';
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return '';
+  }
+
+  if (parsed.protocol !== 'https:') return '';
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host || isPrivateWebhookHost(host)) return '';
+  parsed.hash = '';
+  return parsed.toString().slice(0, 500);
+}
+
+function isPrivateWebhookHost(host: string): boolean {
+  if (
+    host === 'localhost'
+    || host.endsWith('.localhost')
+    || host === 'local'
+    || host.endsWith('.local')
+    || host.endsWith('.internal')
+    || host.endsWith('.lan')
+    || host.endsWith('.home')
+  ) {
+    return true;
+  }
+
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const parts = ipv4.slice(1).map(Number);
+    if (parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return true;
+    const a = parts[0] ?? 0;
+    const b = parts[1] ?? 0;
+    return a === 10
+      || a === 127
+      || a === 0
+      || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168);
+  }
+
+  if (host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80')) {
+    return true;
+  }
+
+  return false;
+}
+
 function parseIsoMs(raw: string | undefined): number {
   const parsed = Date.parse(String(raw ?? ''));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -5922,6 +6018,8 @@ function normalizePreferencesState(raw: PreferencesState | null | undefined): Pr
     download_directory: updatedAt,
     telegram_link_mode: updatedAt,
     privacy_mode: updatedAt,
+    webhook_enabled: updatedAt,
+    webhook_url: updatedAt,
   };
 
   return {
@@ -5932,6 +6030,8 @@ function normalizePreferencesState(raw: PreferencesState | null | undefined): Pr
     download_directory: normalizeDownloadDirectory(raw?.download_directory),
     telegram_link_mode: normalizeTelegramLinkMode(raw?.telegram_link_mode),
     privacy_mode: normalizeBooleanPreference(raw?.privacy_mode),
+    webhook_enabled: normalizeBooleanPreference(raw?.webhook_enabled),
+    webhook_url: normalizeWebhookUrlPreference(raw?.webhook_url),
     revision: Math.max(0, normalizePreferenceRevision(raw?.revision)),
     field_updated_at: {
       language: isoFromMs(parseIsoMs(baseFieldTimes.language), updatedAt),
@@ -5941,6 +6041,8 @@ function normalizePreferencesState(raw: PreferencesState | null | undefined): Pr
       download_directory: isoFromMs(parseIsoMs(baseFieldTimes.download_directory), updatedAt),
       telegram_link_mode: isoFromMs(parseIsoMs(baseFieldTimes.telegram_link_mode), updatedAt),
       privacy_mode: isoFromMs(parseIsoMs(baseFieldTimes.privacy_mode), updatedAt),
+      webhook_enabled: isoFromMs(parseIsoMs(baseFieldTimes.webhook_enabled), updatedAt),
+      webhook_url: isoFromMs(parseIsoMs(baseFieldTimes.webhook_url), updatedAt),
     },
     last_writer: normalizeClientId(raw?.last_writer),
     updated_at: updatedAt,

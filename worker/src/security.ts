@@ -247,7 +247,7 @@ async function hmacSha256(secret: string, message: string): Promise<Uint8Array> 
   return new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(message)));
 }
 
-async function hmacSha256Hex(secret: string, message: string): Promise<string> {
+export async function hmacSha256Hex(secret: string, message: string): Promise<string> {
   const bytes = await hmacSha256(secret, message);
   return [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
 }

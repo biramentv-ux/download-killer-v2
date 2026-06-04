@@ -3,7 +3,7 @@
  * Public API + queue consumer + Telegram webhook
  */
 
-import { downloadRouter, isPrivacyModeEnabledForSyncKey } from './api';
+import { downloadRouter, getDownloadWebhookForSyncKey, isPrivacyModeEnabledForSyncKey } from './api';
 import { enqueueHistoryEvent, processHistoryEventBatch } from './history';
 import { ensureDeadLetterSchema, ensurePlaylistWorkflowSchema } from './schema';
 import {
@@ -14,7 +14,7 @@ import {
   publishTelegramChannelDownload,
 } from './telegram';
 import type { DownloadJob, DownloaderDownloadResult, Env, JobHistoryEvent, JobStatus } from './types';
-import { detectRequestThreat, jsonError, optionsResponse, readEnvInt, sha256HexBytes } from './utils';
+import { createDownloadToken, detectRequestThreat, jsonError, optionsResponse, readEnvInt, sha256Hex, sha256HexBytes } from './utils';
 import {
   buildDownloaderHeaders,
   fetchDownloaderWithFailover,
@@ -22,7 +22,7 @@ import {
   probeDownloaderOrigins,
 } from './origins';
 import { evaluateOpsAlerts, recordSmokeProbeResult, recordTelemetry } from './telemetry';
-import { cleanupStaleKvKeys, resolvePrivateUrl } from './security';
+import { cleanupStaleKvKeys, hmacSha256Hex, resolvePrivateUrl } from './security';
 import { calculateQueueRetryDelayFromEnv } from './retry';
 import { cleanupExpiredJobsAndFiles, shouldRunRetentionCleanup } from './retention';
 import { runReleaseRadarChecks } from './releaseRadar';
@@ -37,6 +37,10 @@ const INVIDIOUS_FALLBACK_BASE_URLS = [
 const ORIGIN_WARMUP_PATH = '/health';
 const SMOKE_DEFAULT_SPOTIFY_URL = 'https://open.spotify.com/track/5msPBVPfpNMt36L9hsPD0B';
 const SMOKE_DEFAULT_YOUTUBE_URL = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+
+function getPublicBaseUrl(env: Env): string {
+  return String(env.PUBLIC_BASE_URL ?? 'https://dyrakarmy.online').trim().replace(/\/+$/g, '') || 'https://dyrakarmy.online';
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -339,12 +343,118 @@ async function processDownloadJob(job: DownloadJob, env: Env, attempts: number):
   } catch (error) {
     console.warn('Telegram channel publish skipped', error);
   }
+  await notifyDownloadWebhook(job, result, env, {
+    r2Key,
+    contentHash,
+  });
 
   await applyPrivacyModeAfterSuccess(job, result, env, {
     normalizedDownloadUrl,
     r2Key,
     contentHash,
   });
+}
+
+async function notifyDownloadWebhook(
+  job: DownloadJob,
+  result: DownloaderDownloadResult,
+  env: Env,
+  snapshot: {
+    r2Key: string | null;
+    contentHash: string | null;
+  },
+): Promise<void> {
+  if (!job.syncKey) return;
+  const config = await getDownloadWebhookForSyncKey(env, job.syncKey);
+  if (!config.enabled || !config.url) return;
+
+  const ttl = readEnvInt(env.DOWNLOAD_TOKEN_TTL_SECONDS, 3600);
+  const expiresAt = Math.floor(Date.now() / 1000) + ttl;
+  const token = await createDownloadToken(
+    {
+      jobId: job.id,
+      exp: expiresAt,
+    },
+    env.DOWNLOAD_TOKEN_SECRET,
+  );
+  const base = getPublicBaseUrl(env);
+  const downloadUrl = `${base}/api/file/${encodeURIComponent(token)}`;
+  const streamUrl = `${downloadUrl}?inline=1`;
+  const deliveryId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+  const payload = {
+    event: 'download.done',
+    delivery_id: deliveryId,
+    timestamp,
+    job: {
+      id: job.id,
+      status: 'done',
+      source: result.source ?? job.source,
+      format: job.format,
+      quality: job.quality,
+      title: result.title ?? null,
+      artist: result.artist ?? null,
+      duration: result.duration ?? null,
+      file_size: result.file_size ?? null,
+      content_hash: snapshot.contentHash,
+      r2_cached: Boolean(snapshot.r2Key),
+      requested_at: job.requestedAt,
+      finished_at: timestamp,
+    },
+    download: {
+      url: downloadUrl,
+      stream_url: streamUrl,
+      expires_at: new Date(expiresAt * 1000).toISOString(),
+    },
+    sync: {
+      key_hash: await sha256Hex(job.syncKey),
+    },
+  };
+  const body = JSON.stringify(payload);
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    'user-agent': 'DyrakArmy-Webhook/1.0',
+    'x-dyrakarmy-event': 'download.done',
+    'x-dyrakarmy-delivery': deliveryId,
+    'x-dyrakarmy-timestamp': String(Math.floor(Date.now() / 1000)),
+  };
+  const signatureSecret = String(env.DOWNLOAD_WEBHOOK_HMAC_SECRET ?? env.WEBHOOK_HMAC_SECRET ?? '').trim();
+  if (signatureSecret) {
+    headers['x-dyrakarmy-signature'] = `sha256=${await hmacSha256Hex(signatureSecret, `${headers['x-dyrakarmy-timestamp']}.${body}`)}`;
+  }
+
+  const controller = new AbortController();
+  const timeoutMs = Math.max(1000, Math.min(15000, readEnvInt(env.DOWNLOAD_WEBHOOK_TIMEOUT_MS, 5000)));
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(config.url, {
+      method: 'POST',
+      headers,
+      body,
+      signal: controller.signal,
+    });
+    await recordTelemetry(env, {
+      event: 'download_webhook_sent',
+      status: String(response.status),
+      source: result.source ?? job.source,
+      code: response.ok ? 'WEBHOOK_OK' : 'WEBHOOK_HTTP_ERROR',
+      value: response.ok ? 1 : 0,
+    });
+    if (!response.ok) {
+      console.warn(`Download webhook failed for ${job.id}: ${response.status}`);
+    }
+  } catch (error) {
+    console.warn('Download webhook skipped', error);
+    await recordTelemetry(env, {
+      event: 'download_webhook_sent',
+      status: '0',
+      source: result.source ?? job.source,
+      code: 'WEBHOOK_DELIVERY_FAILED',
+      value: 0,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function applyPrivacyModeAfterSuccess(

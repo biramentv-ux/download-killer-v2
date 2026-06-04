@@ -401,6 +401,11 @@ async function handleMessage(msg: TelegramMessage, env: Env): Promise<void> {
     return;
   }
 
+  if (isWebhookCommand(text)) {
+    await handleWebhookCommand(chatId, text, env);
+    return;
+  }
+
   if (isArchiveCommand(text) || text === MENU_LABELS.archive) {
     await sendArchivePanel(chatId, env);
     return;
@@ -2023,6 +2028,8 @@ async function sendHelp(chatId: number, env: Env): Promise<void> {
       '/me - профил и статистика',
       '/radar - Release Radar списък',
       '/radar Artist Name - следи артист за нов release',
+      '/webhook https://... - Zapier/n8n известие при готов download',
+      '/webhook off - изключи webhook известия',
       '/archive - архив',
       '/help - помощ',
     ].join('\n'),
@@ -2125,6 +2132,48 @@ async function handleReleaseRadarMessage(chatId: number, text: string, env: Env)
   });
 }
 
+async function handleWebhookCommand(chatId: number, text: string, env: Env): Promise<void> {
+  const normalized = text.trim();
+  const args = normalized.replace(/^\/webhook(@\w+)?\s*/i, '').trim();
+  if (!args || args.toLowerCase() === 'status') {
+    const current = await getTelegramWebhookPreference(chatId, env);
+    await sendMessage(chatId, env, [
+      '🔔 Webhook Notifications',
+      `Статус: ${current.enabled && current.url ? 'ВКЛ' : 'ИЗКЛ'}`,
+      current.url ? `URL: ${current.url}` : 'URL: не е зададен',
+      '',
+      'Команди:',
+      '/webhook https://hooks.zapier.com/... - включва POST известия',
+      '/webhook off - изключва известията',
+    ].join('\n'));
+    return;
+  }
+
+  if (['off', 'disable', 'stop', 'изключи'].includes(args.toLowerCase())) {
+    await saveTelegramWebhookPreference(chatId, env, false);
+    await sendMessage(chatId, env, '🔕 Webhook известията са изключени.');
+    return;
+  }
+
+  const webhookUrl = normalizeTelegramWebhookUrl(args);
+  if (!webhookUrl) {
+    await sendMessage(chatId, env, [
+      'Невалиден webhook URL.',
+      'Разрешени са само публични HTTPS адреси.',
+      'Пример: /webhook https://hooks.zapier.com/...',
+    ].join('\n'));
+    return;
+  }
+
+  await saveTelegramWebhookPreference(chatId, env, true, webhookUrl);
+  await sendMessage(chatId, env, [
+    '✅ Webhook известията са включени',
+    `URL: ${webhookUrl}`,
+    '',
+    'При готово сваляне DyrakArmy ще изпраща POST payload към този адрес.',
+  ].join('\n'));
+}
+
 async function sendReleaseRadarPanel(chatId: number, env: Env): Promise<void> {
   const settings = await getTelegramSettings(chatId, env);
   const rows = await listTelegramReleaseRadarArtists(chatId, env);
@@ -2172,6 +2221,118 @@ function buildReleaseRadarText(rows: Array<Record<string, unknown>>): string {
     lines.push(`${index + 1}. ${artist} (${source})${last}`);
   });
   return lines.join('\n');
+}
+
+async function getTelegramWebhookPreference(chatId: number, env: Env): Promise<{ enabled: boolean; url: string }> {
+  try {
+    const row = await env.DB.prepare('SELECT payload FROM user_preferences WHERE sync_key = ? LIMIT 1')
+      .bind(telegramSyncKey(chatId))
+      .first<{ payload: string | null }>();
+    if (!row?.payload) return { enabled: false, url: '' };
+    const payload = JSON.parse(row.payload) as Record<string, unknown>;
+    const url = normalizeTelegramWebhookUrl(typeof payload.webhook_url === 'string' ? payload.webhook_url : '');
+    return {
+      enabled: typeof payload.webhook_enabled === 'boolean' ? payload.webhook_enabled : false,
+      url,
+    };
+  } catch {
+    return { enabled: false, url: '' };
+  }
+}
+
+async function saveTelegramWebhookPreference(
+  chatId: number,
+  env: Env,
+  enabled: boolean,
+  webhookUrl?: string,
+): Promise<void> {
+  const key = telegramSyncKey(chatId);
+  let existing: Record<string, unknown> = {};
+  try {
+    const row = await env.DB.prepare('SELECT payload FROM user_preferences WHERE sync_key = ? LIMIT 1')
+      .bind(key)
+      .first<{ payload: string | null }>();
+    if (row?.payload) existing = JSON.parse(row.payload) as Record<string, unknown>;
+  } catch {
+    existing = {};
+  }
+
+  const now = new Date().toISOString();
+  const existingFieldTimes = asRecord(existing.field_updated_at) ?? {};
+  const currentRevision = Number(existing.revision ?? 0);
+  const nextUrl = webhookUrl === undefined
+    ? normalizeTelegramWebhookUrl(typeof existing.webhook_url === 'string' ? existing.webhook_url : '')
+    : normalizeTelegramWebhookUrl(webhookUrl);
+  const payload = {
+    ...existing,
+    webhook_enabled: enabled && Boolean(nextUrl),
+    webhook_url: nextUrl,
+    revision: Number.isFinite(currentRevision) ? currentRevision + 1 : 1,
+    field_updated_at: {
+      ...existingFieldTimes,
+      webhook_enabled: now,
+      webhook_url: now,
+    },
+    last_writer: 'telegram',
+    updated_at: now,
+    updated_from: 'telegram',
+  };
+
+  await env.DB.prepare(
+    `INSERT INTO user_preferences (sync_key, payload, updated_at)
+     VALUES (?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(sync_key) DO UPDATE SET
+       payload = excluded.payload,
+       updated_at = CURRENT_TIMESTAMP`,
+  ).bind(key, JSON.stringify(payload)).run();
+  await env.CACHE.put(`prefs:${key}`, JSON.stringify(payload), { expirationTtl: 86400 });
+}
+
+function normalizeTelegramWebhookUrl(raw: string): string {
+  const value = String(raw ?? '').trim();
+  if (!value) return '';
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return '';
+  }
+  if (parsed.protocol !== 'https:') return '';
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host || isPrivateTelegramWebhookHost(host)) return '';
+  parsed.hash = '';
+  return parsed.toString().slice(0, 500);
+}
+
+function isPrivateTelegramWebhookHost(host: string): boolean {
+  if (
+    host === 'localhost'
+    || host.endsWith('.localhost')
+    || host === 'local'
+    || host.endsWith('.local')
+    || host.endsWith('.internal')
+    || host.endsWith('.lan')
+    || host.endsWith('.home')
+  ) {
+    return true;
+  }
+
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const parts = ipv4.slice(1).map(Number);
+    if (parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return true;
+    const a = parts[0] ?? 0;
+    const b = parts[1] ?? 0;
+    return a === 10
+      || a === 127
+      || a === 0
+      || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168);
+  }
+
+  if (host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80')) return true;
+  return false;
 }
 
 async function sendArchivePanel(chatId: number, env: Env): Promise<void> {
@@ -2539,7 +2700,7 @@ function formatTelegramFailureText(errorMessage: string): string {
 }
 
 async function ensureTelegramCommands(env: Env): Promise<void> {
-  const marker = await env.CACHE.get('tg:commands:bg:v6');
+  const marker = await env.CACHE.get('tg:commands:bg:v7');
   if (marker === '1') return;
 
   try {
@@ -2550,6 +2711,7 @@ async function ensureTelegramCommands(env: Env): Promise<void> {
         { command: 'settings', description: 'Настройки' },
         { command: 'me', description: 'Профил и статистика' },
         { command: 'radar', description: 'Release Radar за артисти' },
+        { command: 'webhook', description: 'Zapier/n8n webhook известия' },
         { command: 'archive', description: 'Архив' },
         { command: 'channel', description: 'Telegram \u043a\u0430\u043d\u0430\u043b' },
         { command: 'help', description: 'Помощ' },
@@ -2576,7 +2738,7 @@ async function ensureTelegramCommands(env: Env): Promise<void> {
     }, env);
 
     await ensureTelegramWebhookAllowedUpdates(env);
-    await env.CACHE.put('tg:commands:bg:v6', '1', { expirationTtl: 86400 });
+    await env.CACHE.put('tg:commands:bg:v7', '1', { expirationTtl: 86400 });
   } catch (error) {
     console.warn('Unable to set Telegram commands/menu', error);
   }
@@ -2676,6 +2838,8 @@ async function saveTelegramSyncedPreferences(chatId: number, settings: TelegramS
         download_directory: typeof existingFieldTimes.download_directory === 'string' ? existingFieldTimes.download_directory : now,
         telegram_link_mode: typeof existingFieldTimes.telegram_link_mode === 'string' ? existingFieldTimes.telegram_link_mode : now,
         privacy_mode: now,
+        webhook_enabled: typeof existingFieldTimes.webhook_enabled === 'string' ? existingFieldTimes.webhook_enabled : now,
+        webhook_url: typeof existingFieldTimes.webhook_url === 'string' ? existingFieldTimes.webhook_url : now,
       },
       last_writer: 'telegram',
       updated_at: now,
@@ -2902,6 +3066,11 @@ function isProfileCommand(text: string): boolean {
 function isReleaseRadarCommand(text: string): boolean {
   const normalized = text.trim().toLowerCase();
   return normalized === '/radar' || normalized.startsWith('/radar ') || normalized.startsWith('/radar@') || normalized === 'release radar';
+}
+
+function isWebhookCommand(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  return normalized === '/webhook' || normalized.startsWith('/webhook ') || normalized.startsWith('/webhook@');
 }
 
 function isChannelCommand(text: string): boolean {

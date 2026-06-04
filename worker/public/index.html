@@ -2376,6 +2376,19 @@
               <span id="privacyModeLabel">Privacy Mode / zero-log after successful download</span>
             </label>
           </div>
+          <div class="inline-row" style="margin-top:8px;">
+            <label class="option-toggle" for="webhookEnabledToggle">
+              <input id="webhookEnabledToggle" type="checkbox">
+              <span id="webhookEnabledLabel">Webhook Notifications</span>
+            </label>
+          </div>
+          <div class="inline-row" style="margin-top:8px;">
+            <label class="soft" for="webhookUrlInput" id="webhookUrlLabel">Zapier/n8n webhook URL</label>
+          </div>
+          <div class="inline-row">
+            <input id="webhookUrlInput" class="ops-input" type="url" autocomplete="off" placeholder="https://hooks.zapier.com/...">
+          </div>
+          <div class="soft" id="webhookHint" style="margin-top:6px;">POST is sent when a download is ready.</div>
           <div class="inline-row">
             <button class="action-btn" id="copySyncKeyBtn">Copy Sync Key</button>
             <button class="action-btn" id="setSyncKeyBtn">Set Sync Key</button>
@@ -2653,6 +2666,10 @@
         settings_telegram_mode_download: "Open direct download flow",
         settings_auto_paste: "Auto-download on paste URL",
         settings_privacy_mode: "Privacy Mode / zero-log after successful download",
+        settings_webhook_enabled: "Webhook Notifications",
+        settings_webhook_url: "Zapier/n8n webhook URL",
+        settings_webhook_url_placeholder: "https://hooks.zapier.com/...",
+        settings_webhook_hint: "Sends POST when a download is ready. HTTPS public URLs only.",
         sync_copy_key: "Copy Sync Key",
         sync_set_key: "Set Sync Key",
         sync_key_copied: "Sync key copied.",
@@ -2906,6 +2923,10 @@
 	        settings_telegram_mode_download: "Отвори директен download flow",
 	        settings_auto_paste: "Авто-сваляне при поставен URL",
 	        settings_privacy_mode: "Privacy Mode / zero-log след успешно сваляне",
+	        settings_webhook_enabled: "Webhook известия",
+	        settings_webhook_url: "Zapier/n8n webhook URL",
+	        settings_webhook_url_placeholder: "https://hooks.zapier.com/...",
+	        settings_webhook_hint: "Изпраща POST при готово сваляне. Разрешени са само публични HTTPS URL-и.",
 	        sync_copy_key: "Копирай Sync ключ",
 	        sync_set_key: "Задай Sync ключ",
 	        sync_key_copied: "Sync ключът е копиран.",
@@ -3359,6 +3380,8 @@
       download_directory: "",
       telegram_link_mode: "bot",
       privacy_mode: false,
+      webhook_enabled: false,
+      webhook_url: "",
     };
     let versionBlocked = false;
     let activeTab = "download";
@@ -3644,6 +3667,12 @@
       if (typeof payload.privacy_mode === "boolean") {
         localStorage.setItem("sd_privacy_mode", payload.privacy_mode ? "1" : "0");
       }
+      if (typeof payload.webhook_enabled === "boolean") {
+        localStorage.setItem("sd_webhook_enabled", payload.webhook_enabled ? "1" : "0");
+      }
+      if (typeof payload.webhook_url === "string") {
+        localStorage.setItem("sd_webhook_url", payload.webhook_url);
+      }
       if (Object.prototype.hasOwnProperty.call(payload, "revision")) {
         persistPreferencesRevision(payload.revision);
       }
@@ -3664,6 +3693,8 @@
             download_directory: localStorage.getItem("sd_download_directory") || "",
             telegram_link_mode: localStorage.getItem("sd_telegram_link_mode") || "bot",
             privacy_mode: localStorage.getItem("sd_privacy_mode") === "1",
+            webhook_enabled: localStorage.getItem("sd_webhook_enabled") === "1",
+            webhook_url: localStorage.getItem("sd_webhook_url") || "",
             base_revision: readPreferencesRevision(),
             client_updated_at: new Date().toISOString(),
             client_id: "web",
@@ -3685,6 +3716,8 @@
       const storedDirectory = String(localStorage.getItem("sd_download_directory") || PREFERENCE_DEFAULTS.download_directory || "");
       const storedTelegramMode = String(localStorage.getItem("sd_telegram_link_mode") || PREFERENCE_DEFAULTS.telegram_link_mode || "bot");
       const storedPrivacyMode = localStorage.getItem("sd_privacy_mode");
+      const storedWebhookEnabled = localStorage.getItem("sd_webhook_enabled");
+      const storedWebhookUrl = String(localStorage.getItem("sd_webhook_url") || PREFERENCE_DEFAULTS.webhook_url || "");
 
       currentLang = queryLang || storedLang || normalizeLang(PREFERENCE_DEFAULTS.language) || languageFromBrowser();
       if (["all", "spotify", "youtube", "soundcloud", "deezer", "apple", "podcast"].includes(storedSource)) {
@@ -3700,6 +3733,8 @@
       localStorage.setItem("sd_download_directory", storedDirectory);
       localStorage.setItem("sd_telegram_link_mode", storedTelegramMode === "download" ? "download" : "bot");
       localStorage.setItem("sd_privacy_mode", storedPrivacyMode === null ? (PREFERENCE_DEFAULTS.privacy_mode ? "1" : "0") : (storedPrivacyMode === "1" ? "1" : "0"));
+      localStorage.setItem("sd_webhook_enabled", storedWebhookEnabled === null ? (PREFERENCE_DEFAULTS.webhook_enabled ? "1" : "0") : (storedWebhookEnabled === "1" ? "1" : "0"));
+      localStorage.setItem("sd_webhook_url", storedWebhookUrl);
 
       try {
         const payload = await apiJson(`/preferences?key=${encodeURIComponent(syncKey)}`);
@@ -3999,6 +4034,23 @@
         if (privacyModeToggle) {
           privacyModeToggle.checked = localStorage.getItem("sd_privacy_mode") === "1";
         }
+        const webhookEnabledLabel = document.getElementById("webhookEnabledLabel");
+        if (webhookEnabledLabel) webhookEnabledLabel.textContent = translate("settings_webhook_enabled");
+        const webhookEnabledToggle = document.getElementById("webhookEnabledToggle");
+        if (webhookEnabledToggle) {
+          webhookEnabledToggle.checked = localStorage.getItem("sd_webhook_enabled") === "1";
+        }
+        const webhookUrlLabel = document.getElementById("webhookUrlLabel");
+        if (webhookUrlLabel) webhookUrlLabel.textContent = translate("settings_webhook_url");
+        const webhookUrlInput = document.getElementById("webhookUrlInput");
+        if (webhookUrlInput) {
+          webhookUrlInput.placeholder = translate("settings_webhook_url_placeholder");
+          if (document.activeElement !== webhookUrlInput) {
+            webhookUrlInput.value = localStorage.getItem("sd_webhook_url") || "";
+          }
+        }
+        const webhookHint = document.getElementById("webhookHint");
+        if (webhookHint) webhookHint.textContent = translate("settings_webhook_hint");
         const copySyncKeyBtn = document.getElementById("copySyncKeyBtn");
         if (copySyncKeyBtn) copySyncKeyBtn.textContent = translate("sync_copy_key");
         const setSyncKeyBtn = document.getElementById("setSyncKeyBtn");
@@ -7336,6 +7388,20 @@
 	    if (privacyModeToggle) {
 	      privacyModeToggle.addEventListener("change", () => {
 	        localStorage.setItem("sd_privacy_mode", privacyModeToggle.checked ? "1" : "0");
+	        void savePreferencesPreference();
+	      });
+	    }
+	    const webhookEnabledToggle = document.getElementById("webhookEnabledToggle");
+	    if (webhookEnabledToggle) {
+	      webhookEnabledToggle.addEventListener("change", () => {
+	        localStorage.setItem("sd_webhook_enabled", webhookEnabledToggle.checked ? "1" : "0");
+	        void savePreferencesPreference();
+	      });
+	    }
+	    const webhookUrlInput = document.getElementById("webhookUrlInput");
+	    if (webhookUrlInput) {
+	      webhookUrlInput.addEventListener("change", () => {
+	        localStorage.setItem("sd_webhook_url", String(webhookUrlInput.value || "").trim());
 	        void savePreferencesPreference();
 	      });
 	    }
