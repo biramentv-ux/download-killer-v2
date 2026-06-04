@@ -2436,18 +2436,18 @@
           <div id="sharedQueueList" class="shared-queue-list"></div>
         </div>
         <div class="surface-card">
-          <div class="inline-row">
+          <form class="inline-row" id="opsTokenForm" autocomplete="off" onsubmit="return false;">
             <input id="opsTokenInput" class="ops-input" type="password" autocomplete="off" placeholder="OPS read token">
-            <button class="action-btn" id="refreshOpsBtn">Load Ops Summary</button>
-          </div>
+            <button class="action-btn" id="refreshOpsBtn" type="button">Load Ops Summary</button>
+          </form>
           <div class="inline-row">
             <input id="opsReplayWorkflowInput" class="ops-input" type="text" autocomplete="off" placeholder="workflow id (UUID)">
-            <button class="action-btn" id="replayWorkflowBtn">Replay Workflow</button>
+            <button class="action-btn" id="replayWorkflowBtn" type="button">Replay Workflow</button>
           </div>
           <div class="inline-row">
             <input id="opsReplayJobIdsInput" class="ops-input" type="text" autocomplete="off" placeholder="job ids (comma separated UUIDs)">
-            <button class="action-btn" id="replayJobsBtn">Replay Job IDs</button>
-            <button class="action-btn" id="replayRecentFailedBtn">Replay Failed 1h</button>
+            <button class="action-btn" id="replayJobsBtn" type="button">Replay Job IDs</button>
+            <button class="action-btn" id="replayRecentFailedBtn" type="button">Replay Failed 1h</button>
           </div>
           <pre id="opsSummaryBox" class="ops-box">Ops summary not loaded.</pre>
         </div>
