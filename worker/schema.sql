@@ -34,6 +34,10 @@ CREATE TABLE IF NOT EXISTS download_jobs (
   quality_score INTEGER,
   quality_grade TEXT,
   quality_details TEXT,
+  audio_normalized INTEGER NOT NULL DEFAULT 0,
+  normalization_mode TEXT NOT NULL DEFAULT 'off',
+  normalization_target_lufs REAL,
+  audio_analysis TEXT,
   error_code    TEXT,
   error_message TEXT,
   chat_id       INTEGER,
@@ -53,6 +57,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_parent       ON download_jobs(parent_job_id)
 CREATE INDEX IF NOT EXISTS idx_jobs_sync_created ON download_jobs(sync_key, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_variant_role ON download_jobs(variant_role);
 CREATE INDEX IF NOT EXISTS idx_jobs_quality_score ON download_jobs(quality_score);
+CREATE INDEX IF NOT EXISTS idx_jobs_audio_normalization ON download_jobs(normalization_mode, audio_normalized);
 
 CREATE TABLE IF NOT EXISTS scheduled_downloads (
   id             TEXT PRIMARY KEY,

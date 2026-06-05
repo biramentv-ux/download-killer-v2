@@ -66,6 +66,10 @@ async function ensureDownloadJobMetadataSchemaInternal(env: Env): Promise<void> 
     ['quality_score', 'INTEGER'],
     ['quality_grade', 'TEXT'],
     ['quality_details', 'TEXT'],
+    ['audio_normalized', 'INTEGER NOT NULL DEFAULT 0'],
+    ['normalization_mode', "TEXT NOT NULL DEFAULT 'off'"],
+    ['normalization_target_lufs', 'REAL'],
+    ['audio_analysis', 'TEXT'],
   ];
 
   for (const [name, definition] of requiredColumns) {
@@ -79,6 +83,7 @@ async function ensureDownloadJobMetadataSchemaInternal(env: Env): Promise<void> 
     env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_jobs_sync_created ON download_jobs(sync_key, created_at DESC)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_jobs_variant_role ON download_jobs(variant_role)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_jobs_quality_score ON download_jobs(quality_score)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_jobs_audio_normalization ON download_jobs(normalization_mode, audio_normalized)'),
   ]);
 
   await env.DB.prepare(

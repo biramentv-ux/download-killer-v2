@@ -2389,6 +2389,19 @@
             <input id="webhookUrlInput" class="ops-input" type="url" autocomplete="off" placeholder="https://hooks.zapier.com/...">
           </div>
           <div class="soft" id="webhookHint" style="margin-top:6px;">POST is sent when a download is ready.</div>
+          <div class="inline-row" style="margin-top:12px;">
+            <label class="soft" for="audioNormalizationSelect" id="audioNormalizationLabel">Audio normalization</label>
+            <select id="audioNormalizationSelect" class="ops-input" style="max-width:280px;">
+              <option value="off">Off</option>
+              <option value="ebu_r128">EBU R128 loudness</option>
+              <option value="replaygain">ReplayGain compatible</option>
+            </select>
+          </div>
+          <div class="inline-row" style="margin-top:8px;">
+            <label class="soft" for="normalizationTargetInput" id="normalizationTargetLabel">Target loudness LUFS</label>
+            <input id="normalizationTargetInput" class="ops-input" type="number" min="-24" max="-10" step="0.5" value="-14" style="max-width:180px;">
+          </div>
+          <div class="soft" id="audioNormalizationHint" style="margin-top:6px;">When enabled, ffmpeg normalizes the final audio before delivery and stores analysis metrics for comparison.</div>
           <div class="inline-row">
             <button class="action-btn" id="copySyncKeyBtn">Copy Sync Key</button>
             <button class="action-btn" id="setSyncKeyBtn">Set Sync Key</button>
@@ -2670,6 +2683,12 @@
         settings_webhook_url: "Zapier/n8n webhook URL",
         settings_webhook_url_placeholder: "https://hooks.zapier.com/...",
         settings_webhook_hint: "Sends POST when a download is ready. HTTPS public URLs only.",
+        settings_audio_normalization: "Audio normalization",
+        settings_audio_normalization_off: "Off",
+        settings_audio_normalization_ebu: "EBU R128 loudness",
+        settings_audio_normalization_replaygain: "ReplayGain compatible",
+        settings_normalization_target: "Target loudness LUFS",
+        settings_audio_normalization_hint: "When enabled, ffmpeg normalizes the final audio before delivery and stores analysis metrics for comparison.",
         sync_copy_key: "Copy Sync Key",
         sync_set_key: "Set Sync Key",
         sync_key_copied: "Sync key copied.",
@@ -2927,6 +2946,12 @@
 	        settings_webhook_url: "Zapier/n8n webhook URL",
 	        settings_webhook_url_placeholder: "https://hooks.zapier.com/...",
 	        settings_webhook_hint: "Изпраща POST при готово сваляне. Разрешени са само публични HTTPS URL-и.",
+	        settings_audio_normalization: "Аудио нормализация",
+	        settings_audio_normalization_off: "Изключена",
+	        settings_audio_normalization_ebu: "EBU R128 сила на звука",
+	        settings_audio_normalization_replaygain: "ReplayGain съвместима",
+	        settings_normalization_target: "Целева сила LUFS",
+	        settings_audio_normalization_hint: "Когато е включено, ffmpeg нормализира крайния файл преди доставка и пази metrics за сравнение.",
 	        sync_copy_key: "Копирай Sync ключ",
 	        sync_set_key: "Задай Sync ключ",
 	        sync_key_copied: "Sync ключът е копиран.",
@@ -3382,6 +3407,8 @@
       privacy_mode: false,
       webhook_enabled: false,
       webhook_url: "",
+      audio_normalization: "off",
+      normalization_target_lufs: -14,
     };
     let versionBlocked = false;
     let activeTab = "download";
@@ -3640,6 +3667,32 @@
       localStorage.setItem(PREFS_REVISION_STORAGE_KEY, String(normalized));
     }
 
+    function normalizeAudioNormalizationMode(value) {
+      const normalized = String(value || "off").trim().toLowerCase().replace(/[-\s]+/g, "_");
+      if (normalized === "replaygain" || normalized === "replay_gain") return "replaygain";
+      if (normalized === "ebu_r128" || normalized === "r128" || normalized === "loudnorm") return "ebu_r128";
+      return "off";
+    }
+
+    function getAudioNormalizationMode() {
+      return normalizeAudioNormalizationMode(localStorage.getItem("sd_audio_normalization") || PREFERENCE_DEFAULTS.audio_normalization || "off");
+    }
+
+    function normalizeNormalizationTargetLufs(value, mode = getAudioNormalizationMode()) {
+      if (mode === "off") return null;
+      const fallback = mode === "replaygain" ? -18 : -14;
+      const parsed = Number(value ?? fallback);
+      if (!Number.isFinite(parsed)) return fallback;
+      return Math.min(-10, Math.max(-24, Math.round(parsed * 10) / 10));
+    }
+
+    function getNormalizationTargetLufs() {
+      return normalizeNormalizationTargetLufs(
+        localStorage.getItem("sd_normalization_target_lufs") || PREFERENCE_DEFAULTS.normalization_target_lufs,
+        getAudioNormalizationMode(),
+      );
+    }
+
     function applyRemotePreferencePayload(payload) {
       if (!payload || typeof payload !== "object") return;
       if (payload.language) {
@@ -3673,6 +3726,14 @@
       if (typeof payload.webhook_url === "string") {
         localStorage.setItem("sd_webhook_url", payload.webhook_url);
       }
+      if (typeof payload.audio_normalization === "string") {
+        localStorage.setItem("sd_audio_normalization", normalizeAudioNormalizationMode(payload.audio_normalization));
+      }
+      if (Object.prototype.hasOwnProperty.call(payload, "normalization_target_lufs")) {
+        const mode = normalizeAudioNormalizationMode(payload.audio_normalization || localStorage.getItem("sd_audio_normalization"));
+        const target = normalizeNormalizationTargetLufs(payload.normalization_target_lufs, mode);
+        if (target !== null) localStorage.setItem("sd_normalization_target_lufs", String(target));
+      }
       if (Object.prototype.hasOwnProperty.call(payload, "revision")) {
         persistPreferencesRevision(payload.revision);
       }
@@ -3695,6 +3756,8 @@
             privacy_mode: localStorage.getItem("sd_privacy_mode") === "1",
             webhook_enabled: localStorage.getItem("sd_webhook_enabled") === "1",
             webhook_url: localStorage.getItem("sd_webhook_url") || "",
+            audio_normalization: getAudioNormalizationMode(),
+            normalization_target_lufs: getNormalizationTargetLufs(),
             base_revision: readPreferencesRevision(),
             client_updated_at: new Date().toISOString(),
             client_id: "web",
@@ -3718,6 +3781,11 @@
       const storedPrivacyMode = localStorage.getItem("sd_privacy_mode");
       const storedWebhookEnabled = localStorage.getItem("sd_webhook_enabled");
       const storedWebhookUrl = String(localStorage.getItem("sd_webhook_url") || PREFERENCE_DEFAULTS.webhook_url || "");
+      const storedAudioNormalization = normalizeAudioNormalizationMode(localStorage.getItem("sd_audio_normalization") || PREFERENCE_DEFAULTS.audio_normalization || "off");
+      const storedNormalizationTarget = normalizeNormalizationTargetLufs(
+        localStorage.getItem("sd_normalization_target_lufs") || PREFERENCE_DEFAULTS.normalization_target_lufs,
+        storedAudioNormalization,
+      );
 
       currentLang = queryLang || storedLang || normalizeLang(PREFERENCE_DEFAULTS.language) || languageFromBrowser();
       if (["all", "spotify", "youtube", "soundcloud", "deezer", "apple", "podcast"].includes(storedSource)) {
@@ -3735,6 +3803,10 @@
       localStorage.setItem("sd_privacy_mode", storedPrivacyMode === null ? (PREFERENCE_DEFAULTS.privacy_mode ? "1" : "0") : (storedPrivacyMode === "1" ? "1" : "0"));
       localStorage.setItem("sd_webhook_enabled", storedWebhookEnabled === null ? (PREFERENCE_DEFAULTS.webhook_enabled ? "1" : "0") : (storedWebhookEnabled === "1" ? "1" : "0"));
       localStorage.setItem("sd_webhook_url", storedWebhookUrl);
+      localStorage.setItem("sd_audio_normalization", storedAudioNormalization);
+      if (storedNormalizationTarget !== null) {
+        localStorage.setItem("sd_normalization_target_lufs", String(storedNormalizationTarget));
+      }
 
       try {
         const payload = await apiJson(`/preferences?key=${encodeURIComponent(syncKey)}`);
@@ -4051,6 +4123,27 @@
         }
         const webhookHint = document.getElementById("webhookHint");
         if (webhookHint) webhookHint.textContent = translate("settings_webhook_hint");
+        const audioNormalizationLabel = document.getElementById("audioNormalizationLabel");
+        if (audioNormalizationLabel) audioNormalizationLabel.textContent = translate("settings_audio_normalization");
+        const audioNormalizationSelect = document.getElementById("audioNormalizationSelect");
+        if (audioNormalizationSelect) {
+          const offOption = audioNormalizationSelect.querySelector("option[value='off']");
+          const ebuOption = audioNormalizationSelect.querySelector("option[value='ebu_r128']");
+          const replayGainOption = audioNormalizationSelect.querySelector("option[value='replaygain']");
+          if (offOption) offOption.textContent = translate("settings_audio_normalization_off");
+          if (ebuOption) ebuOption.textContent = translate("settings_audio_normalization_ebu");
+          if (replayGainOption) replayGainOption.textContent = translate("settings_audio_normalization_replaygain");
+          audioNormalizationSelect.value = getAudioNormalizationMode();
+        }
+        const normalizationTargetLabel = document.getElementById("normalizationTargetLabel");
+        if (normalizationTargetLabel) normalizationTargetLabel.textContent = translate("settings_normalization_target");
+        const normalizationTargetInput = document.getElementById("normalizationTargetInput");
+        if (normalizationTargetInput && document.activeElement !== normalizationTargetInput) {
+          normalizationTargetInput.value = String(getNormalizationTargetLufs() ?? -14);
+          normalizationTargetInput.disabled = getAudioNormalizationMode() === "off";
+        }
+        const audioNormalizationHint = document.getElementById("audioNormalizationHint");
+        if (audioNormalizationHint) audioNormalizationHint.textContent = translate("settings_audio_normalization_hint");
         const copySyncKeyBtn = document.getElementById("copySyncKeyBtn");
         if (copySyncKeyBtn) copySyncKeyBtn.textContent = translate("sync_copy_key");
         const setSyncKeyBtn = document.getElementById("setSyncKeyBtn");
@@ -5485,6 +5578,17 @@
       `;
     }
 
+    function audioAnalysisMarkup(analysis, normalized, normalizationMode) {
+      if (!analysis || typeof analysis !== "object") return "";
+      const parts = [];
+      if (analysis.bit_rate_kbps) parts.push(`${Math.round(Number(analysis.bit_rate_kbps))} kbps`);
+      if (analysis.dynamic_range_db) parts.push(`DR ${Number(analysis.dynamic_range_db).toFixed(1)} dB`);
+      if (analysis.loudness_lufs) parts.push(`${Number(analysis.loudness_lufs).toFixed(1)} LUFS`);
+      if (analysis.sample_rate) parts.push(`${Math.round(Number(analysis.sample_rate) / 1000)} kHz`);
+      const norm = normalized ? ` | normalized ${escapeHtml(normalizationMode || "on")}` : "";
+      return parts.length ? `<div class="item-meta">Audio: ${parts.map(escapeHtml).join(" | ")}${norm}</div>` : "";
+    }
+
     async function saveRemoteFileWithDialog(downloadUrl, suggestedName) {
       if (!isDesktopMode()) return;
       try {
@@ -5928,6 +6032,9 @@
           source,
           format: normalizedFormat,
           quality: normalizedQuality,
+          normalize_audio: getAudioNormalizationMode() !== "off",
+          normalization_mode: getAudioNormalizationMode(),
+          normalization_target_lufs: getNormalizationTargetLufs(),
           title: track.title || "",
           artist: track.artist || "",
           added_by: "web",
@@ -5961,6 +6068,9 @@
           status: payload.status || "queued",
           downloadUrl: null,
           streamUrl: null,
+          audioAnalysis: null,
+          audioNormalized: getAudioNormalizationMode() !== "off",
+          normalizationMode: getAudioNormalizationMode(),
           error: null,
           createdAt: Date.now(),
         };
@@ -5983,6 +6093,9 @@
           status: "failed",
           downloadUrl: null,
           streamUrl: null,
+          audioAnalysis: null,
+          audioNormalized: getAudioNormalizationMode() !== "off",
+          normalizationMode: getAudioNormalizationMode(),
           error: error.message || String(error),
           createdAt: Date.now(),
         });
@@ -6483,6 +6596,7 @@
             <div class="item-meta">#${job.id.slice(0, 8)} | ${job.format.toUpperCase()} ${job.quality} | ${job.status}${isWorkflowJob(job) ? ` | ${workflowControlLabel(job.controlState)}` : ""}</div>
             ${isWorkflowJob(job) ? `<div class="item-meta">${workflowProgressMeta(job)}</div>` : ""}
             ${isWorkflowJob(job) && job.workflowPhase ? `<div class="item-meta">phase: ${job.workflowPhase}</div>` : ""}
+            ${audioAnalysisMarkup(job.audioAnalysis, job.audioNormalized, job.normalizationMode)}
             ${job.downloadUrl ? downloadActionMarkup(job.downloadUrl, translate("download_file"), buildSuggestedFileName(job.title, job.artist, job.format)) : ""}
             ${job.streamUrl ? audioPreviewMarkup(job.streamUrl) : ""}
             ${isWorkflowJob(job) && job.archiveStatus === "building" ? `<div class="item-meta">${translate("workflow_archive_building")}</div>` : ""}
@@ -6696,6 +6810,9 @@
       job.status = latest.status || job.status;
       job.downloadUrl = latest.download_url || job.downloadUrl;
       job.streamUrl = latest.stream_url || job.streamUrl;
+      job.audioAnalysis = latest.audio_analysis || job.audioAnalysis || null;
+      job.audioNormalized = Boolean(latest.audio_normalized);
+      job.normalizationMode = latest.normalization_mode || job.normalizationMode || "off";
       if (latest.error_message) {
         job.error = latest.error_message;
       } else if (job.status === "done" && latest.download_available === false) {
@@ -6799,6 +6916,7 @@
           <div class="item-title">${row.artist || translate("unknown_artist")} - ${row.title || row.id}</div>
           <div class="item-meta">${sourceLabel(row.source)} | ${(row.format || "").toUpperCase()} ${row.quality || ""} | ${row.status}</div>
           <div class="item-meta">${row.created_at || ""}</div>
+          ${audioAnalysisMarkup(row.audio_analysis, row.audio_normalized, row.normalization_mode)}
           ${row.download_url ? downloadActionMarkup(row.download_url, translate("download"), buildSuggestedFileName(row.title || translate("unknown_track"), row.artist || translate("unknown_artist"), row.format || "mp3")) : ""}
           ${row.stream_url ? audioPreviewMarkup(row.stream_url) : ""}
           ${shareActionMarkup(row.id)}
@@ -7402,6 +7520,28 @@
 	    if (webhookUrlInput) {
 	      webhookUrlInput.addEventListener("change", () => {
 	        localStorage.setItem("sd_webhook_url", String(webhookUrlInput.value || "").trim());
+	        void savePreferencesPreference();
+	      });
+	    }
+	    const audioNormalizationSelect = document.getElementById("audioNormalizationSelect");
+	    const normalizationTargetInput = document.getElementById("normalizationTargetInput");
+	    if (audioNormalizationSelect) {
+	      audioNormalizationSelect.addEventListener("change", () => {
+	        const mode = normalizeAudioNormalizationMode(audioNormalizationSelect.value);
+	        localStorage.setItem("sd_audio_normalization", mode);
+	        const target = normalizeNormalizationTargetLufs(normalizationTargetInput ? normalizationTargetInput.value : null, mode);
+	        if (target !== null) localStorage.setItem("sd_normalization_target_lufs", String(target));
+	        if (normalizationTargetInput) normalizationTargetInput.disabled = mode === "off";
+	        void savePreferencesPreference();
+	      });
+	    }
+	    if (normalizationTargetInput) {
+	      normalizationTargetInput.addEventListener("change", () => {
+	        const target = normalizeNormalizationTargetLufs(normalizationTargetInput.value, getAudioNormalizationMode());
+	        if (target !== null) {
+	          normalizationTargetInput.value = String(target);
+	          localStorage.setItem("sd_normalization_target_lufs", String(target));
+	        }
 	        void savePreferencesPreference();
 	      });
 	    }

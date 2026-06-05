@@ -52,6 +52,7 @@ ARCHIVE_METADATA_CACHE_FILE = Path(os.getenv('ARCHIVE_METADATA_CACHE_FILE', str(
 ARCHIVE_AUDIO_EXTENSIONS = {'.flac', '.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus', '.webm'}
 ARCHIVE_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif'}
 ARCHIVE_ALLOWED_FILE_EXTENSIONS = ARCHIVE_AUDIO_EXTENSIONS | ARCHIVE_IMAGE_EXTENSIONS
+AUDIO_ANALYSIS_AFTER_DOWNLOAD = os.getenv('AUDIO_ANALYSIS_AFTER_DOWNLOAD', '1').strip().lower() not in {'0', 'false', 'no', 'off'}
 
 app = FastAPI(title='SoundDrop Downloader API', version='7.1.0')
 WORKFLOW_STATE: dict[str, dict[str, Any]] = {}
@@ -139,6 +140,9 @@ class DownloadRequest(BaseModel):
   playlist_folder: str | None = None
   playlist_index: int | None = None
   local_relpath: str | None = None
+  normalize_audio: bool = False
+  normalization_mode: str = 'off'
+  normalization_target_lufs: float | None = None
 
 
 class SmokeRequest(BaseModel):
@@ -164,6 +168,10 @@ class DownloadResponse(BaseModel):
   fallback_used: bool
   mime_type: str
   filename: str
+  audio_normalized: bool = False
+  normalization_mode: str = 'off'
+  normalization_target_lufs: float | None = None
+  audio_analysis: dict[str, Any] | None = None
 
 
 class SmokeResponse(BaseModel):
@@ -1911,6 +1919,189 @@ def source_fallback_chain(url: str, requested_source: str) -> list[str]:
   return output
 
 
+def normalize_normalization_mode(raw: str | None, normalize_audio: bool = False) -> str:
+  value = str(raw or '').strip().lower().replace('-', '_').replace(' ', '_')
+  if value in {'replaygain', 'replay_gain'}:
+    return 'replaygain'
+  if value in {'ebu_r128', 'r128', 'loudnorm'}:
+    return 'ebu_r128'
+  return 'ebu_r128' if normalize_audio else 'off'
+
+
+def normalize_target_lufs(raw: float | None, mode: str) -> float | None:
+  if mode == 'off':
+    return None
+  fallback = -18.0 if mode == 'replaygain' else -14.0
+  try:
+    value = float(raw if raw is not None else fallback)
+  except Exception:
+    value = fallback
+  return min(-10.0, max(-24.0, round(value, 1)))
+
+
+def bitrate_for_quality(audio_quality: str, fallback: str = '320') -> str:
+  if audio_quality in {'96', '128', '192', '256', '320'}:
+    return audio_quality
+  return fallback
+
+
+def ffmpeg_encoder_args(audio_format: str, audio_quality: str) -> list[str]:
+  bitrate = bitrate_for_quality(audio_quality, '320')
+  if audio_format == 'mp3':
+    return ['-c:a', 'libmp3lame', '-b:a', f'{bitrate}k']
+  if audio_format == 'm4a':
+    return ['-c:a', 'aac', '-b:a', f'{bitrate_for_quality(audio_quality, "256")}k']
+  if audio_format == 'opus':
+    return ['-c:a', 'libopus', '-b:a', f'{bitrate_for_quality(audio_quality, "256")}k']
+  if audio_format == 'ogg':
+    return ['-c:a', 'libvorbis', '-q:a', '6']
+  if audio_format == 'wav':
+    return ['-c:a', 'pcm_s16le']
+  return ['-c:a', 'flac']
+
+
+def parse_ffmpeg_metric(pattern: str, text: str) -> float | None:
+  matches = re.findall(pattern, text, flags=re.I | re.M)
+  if not matches:
+    return None
+  try:
+    raw = matches[-1]
+    if isinstance(raw, tuple):
+      raw = raw[-1]
+    return float(str(raw).strip())
+  except Exception:
+    return None
+
+
+def audio_analysis_from_metadata(path: Path, metadata: dict[str, Any]) -> dict[str, Any]:
+  stream = audio_stream(metadata)
+  format_info = metadata.get('format', {}) if isinstance(metadata.get('format'), dict) else {}
+  bit_rate = parse_int(format_info.get('bit_rate') or stream.get('bit_rate'))
+  sample_rate = parse_int(stream.get('sample_rate'))
+  channels = parse_int(stream.get('channels'))
+  duration = parse_int(format_info.get('duration') or stream.get('duration'))
+  return {
+    'codec': str(stream.get('codec_name') or '').strip() or None,
+    'container': str(format_info.get('format_name') or path.suffix.replace('.', '')).strip() or None,
+    'bit_rate': bit_rate,
+    'bit_rate_kbps': round(bit_rate / 1000) if bit_rate else None,
+    'sample_rate': sample_rate,
+    'channels': channels,
+    'duration': duration,
+  }
+
+
+def analyze_audio_file(path: Path) -> dict[str, Any]:
+  metadata = ffprobe_metadata(path)
+  analysis = audio_analysis_from_metadata(path, metadata)
+  try:
+    ebur128 = subprocess.run(
+      [
+        'ffmpeg',
+        '-hide_banner',
+        '-nostats',
+        '-i',
+        str(path),
+        '-filter_complex',
+        'ebur128=peak=true',
+        '-f',
+        'null',
+        '-',
+      ],
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      text=True,
+      timeout=120,
+      check=False,
+    )
+    ebur_text = f'{ebur128.stdout}\n{ebur128.stderr}'
+    analysis['loudness_lufs'] = parse_ffmpeg_metric(r'\bI:\s*(-?\d+(?:\.\d+)?)\s*LUFS', ebur_text)
+    analysis['loudness_range_lu'] = parse_ffmpeg_metric(r'\bLRA:\s*(\d+(?:\.\d+)?)\s*LU', ebur_text)
+    analysis['true_peak_dbfs'] = parse_ffmpeg_metric(r'\bPeak:\s*(-?\d+(?:\.\d+)?)\s*dBFS', ebur_text)
+  except Exception:
+    analysis.setdefault('loudness_lufs', None)
+    analysis.setdefault('loudness_range_lu', None)
+    analysis.setdefault('true_peak_dbfs', None)
+
+  try:
+    volumedetect = subprocess.run(
+      [
+        'ffmpeg',
+        '-hide_banner',
+        '-nostats',
+        '-i',
+        str(path),
+        '-af',
+        'volumedetect',
+        '-f',
+        'null',
+        '-',
+      ],
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      text=True,
+      timeout=120,
+      check=False,
+    )
+    volume_text = f'{volumedetect.stdout}\n{volumedetect.stderr}'
+    mean_volume = parse_ffmpeg_metric(r'mean_volume:\s*(-?\d+(?:\.\d+)?)\s*dB', volume_text)
+    max_volume = parse_ffmpeg_metric(r'max_volume:\s*(-?\d+(?:\.\d+)?)\s*dB', volume_text)
+    analysis['mean_volume_db'] = mean_volume
+    analysis['max_volume_db'] = max_volume
+    lra = analysis.get('loudness_range_lu')
+    if isinstance(lra, (int, float)):
+      analysis['dynamic_range_db'] = round(float(lra), 1)
+    elif mean_volume is not None and max_volume is not None:
+      analysis['dynamic_range_db'] = round(abs(max_volume - mean_volume), 1)
+    else:
+      analysis['dynamic_range_db'] = None
+  except Exception:
+    analysis.setdefault('mean_volume_db', None)
+    analysis.setdefault('max_volume_db', None)
+    analysis.setdefault('dynamic_range_db', None)
+
+  return analysis
+
+
+def normalize_audio_file(path: Path, mode: str, target_lufs: float | None, audio_format: str, audio_quality: str) -> Path:
+  if mode == 'off':
+    return path
+  if target_lufs is None:
+    target_lufs = normalize_target_lufs(None, mode) or -14.0
+  output_path = path.with_name(f'{path.stem}.normalized.{audio_format}')
+  filter_chain = f'loudnorm=I={target_lufs}:TP=-1.5:LRA=11'
+  command = [
+    'ffmpeg',
+    '-y',
+    '-hide_banner',
+    '-nostats',
+    '-i',
+    str(path),
+    '-vn',
+    '-af',
+    filter_chain,
+    *ffmpeg_encoder_args(audio_format, audio_quality),
+    str(output_path),
+  ]
+  completed = subprocess.run(
+    command,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True,
+    timeout=600,
+    check=False,
+  )
+  if completed.returncode != 0 or not output_path.exists() or output_path.stat().st_size <= 0:
+    details = (completed.stderr or completed.stdout or 'normalization failed').strip()[:800]
+    raise RuntimeError(f'Audio normalization failed: {details}')
+  try:
+    path.unlink(missing_ok=True)
+  except TypeError:
+    if path.exists():
+      path.unlink()
+  return output_path
+
+
 def run_download(job_id: str, url: str, audio_format: str, audio_quality: str) -> tuple[Path, dict[str, Any]]:
   work_dir = WORK_DIR / safe_job_dir_name(job_id)
   work_dir.mkdir(parents=True, exist_ok=True)
@@ -2808,6 +2999,7 @@ def internal_download(payload: DownloadRequest) -> DownloadResponse:
   selected_info: dict[str, Any] | None = None
   selected_url = payload.url
   selected_source = detect_source(payload.url, payload.source)
+  selected_quality = audio_quality
   fallback_used = False
 
   for source_candidate in source_fallback_chain(payload.url, payload.source):
@@ -2838,6 +3030,7 @@ def internal_download(payload: DownloadRequest) -> DownloadResponse:
         selected_info = info
         selected_url = resolved_url
         selected_source = resolved_source
+        selected_quality = quality_candidate
         fallback_used = attempt_fallback_used
         break
       except Exception as download_error:
@@ -2856,11 +3049,23 @@ def internal_download(payload: DownloadRequest) -> DownloadResponse:
   target = STORAGE_DIR / file_id
   target.parent.mkdir(parents=True, exist_ok=True)
 
+  normalization_mode = normalize_normalization_mode(payload.normalization_mode, payload.normalize_audio)
+  normalization_target_lufs = normalize_target_lufs(payload.normalization_target_lufs, normalization_mode)
+  if normalization_mode != 'off':
+    selected_output = normalize_audio_file(
+      selected_output,
+      normalization_mode,
+      normalization_target_lufs,
+      audio_format,
+      selected_quality,
+    )
+
   shutil.move(str(selected_output), target)
   shutil.rmtree(selected_output.parent, ignore_errors=True)
 
   stat = target.stat()
   mime_type = mimetypes.guess_type(target.name)[0] or 'application/octet-stream'
+  audio_analysis = analyze_audio_file(target) if AUDIO_ANALYSIS_AFTER_DOWNLOAD else None
 
   title = str(selected_info.get('track') or selected_info.get('title') or 'Unknown Title')
   artist = str(selected_info.get('artist') or selected_info.get('uploader') or selected_info.get('channel') or 'Unknown Artist')
@@ -2884,6 +3089,10 @@ def internal_download(payload: DownloadRequest) -> DownloadResponse:
     fallback_used=fallback_used,
     mime_type=mime_type,
     filename=display_filename,
+    audio_normalized=normalization_mode != 'off',
+    normalization_mode=normalization_mode,
+    normalization_target_lufs=normalization_target_lufs,
+    audio_analysis=audio_analysis,
   )
 
 

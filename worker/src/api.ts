@@ -1,11 +1,18 @@
 import type {
   AudioFormat,
+  AudioNormalizationMode,
   AudioQuality,
   DownloadJob,
   DownloaderSearchResult,
   Env,
   JobStatus,
 } from './types';
+import {
+  compareAudioAnalyses,
+  normalizeAudioAnalysis,
+  normalizeAudioNormalizationMode,
+  normalizeNormalizationTargetLufs,
+} from './audioProcessing';
 import {
   buildDownloaderHeaders,
   fetchDownloaderWithFailover,
@@ -111,6 +118,16 @@ interface DownloadRequestBody {
   quality?: AudioQuality;
   sync_key?: string;
   client_id?: string;
+  normalize_audio?: boolean;
+  normalization_mode?: string;
+  normalization_target_lufs?: number | string;
+}
+
+interface AudioCompareRequestBody {
+  left_job_id?: string;
+  right_job_id?: string;
+  job_id_a?: string;
+  job_id_b?: string;
 }
 
 interface OpsTelegramChannelBackfillRequestBody {
@@ -139,6 +156,9 @@ interface SharedQueueRequestBody {
   title?: string;
   artist?: string;
   added_by?: string;
+  normalize_audio?: boolean;
+  normalization_mode?: string;
+  normalization_target_lufs?: number | string;
 }
 
 interface QueuedDownloadResult {
@@ -234,6 +254,8 @@ interface PreferencesPayload {
   privacy_mode?: boolean;
   webhook_enabled?: boolean;
   webhook_url?: string;
+  audio_normalization?: string;
+  normalization_target_lufs?: number | string;
   base_revision?: number;
   client_updated_at?: string;
   client_id?: string;
@@ -294,6 +316,10 @@ interface JobRecord {
   created_at: string;
   updated_at: string;
   finished_at: string | null;
+  audio_normalized?: number | null;
+  normalization_mode?: string | null;
+  normalization_target_lufs?: number | null;
+  audio_analysis?: string | null;
 }
 
 interface ExistingFingerprintJob {
@@ -345,6 +371,8 @@ interface PreferencesState {
   privacy_mode: boolean;
   webhook_enabled: boolean;
   webhook_url: string;
+  audio_normalization: AudioNormalizationMode;
+  normalization_target_lufs: number | null;
   revision: number;
   field_updated_at: {
     language: string;
@@ -356,6 +384,8 @@ interface PreferencesState {
     privacy_mode: string;
     webhook_enabled: string;
     webhook_url: string;
+    audio_normalization: string;
+    normalization_target_lufs: string;
   };
   last_writer: string;
   updated_at: string;
@@ -370,7 +400,9 @@ type PreferenceField =
   | 'telegram_link_mode'
   | 'privacy_mode'
   | 'webhook_enabled'
-  | 'webhook_url';
+  | 'webhook_url'
+  | 'audio_normalization'
+  | 'normalization_target_lufs';
 
 type OpsRole = 'none' | 'viewer' | 'operator' | 'admin';
 
@@ -420,6 +452,8 @@ const PREFERENCE_FIELDS: PreferenceField[] = [
   'privacy_mode',
   'webhook_enabled',
   'webhook_url',
+  'audio_normalization',
+  'normalization_target_lufs',
 ];
 const RELEASE_ARTIFACTS: Array<{
   id: ReleaseArtifactEntry['id'];
@@ -583,6 +617,11 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
   if (path === '/quality/batch-score' && request.method === 'POST') {
     await ensureDownloadJobMetadataSchema(env);
     return handleBatchScore(request, env);
+  }
+
+  if (path === '/audio/compare' && request.method === 'POST') {
+    await ensureDownloadJobMetadataSchema(env);
+    return handleAudioCompare(request, env);
   }
 
   const qualityScoreMatch = path.match(/^\/quality\/([0-9a-f-]{36})$/i);
@@ -1194,12 +1233,20 @@ async function handleDownload(request: Request, env: Env): Promise<Response> {
     return jsonError(request, env, 'INVALID_SYNC_KEY', 'Sync key is invalid', 400);
   }
 
+  const normalizationMode = normalizeRequestedNormalizationMode(body, env);
+  const normalizationTargetLufs = normalizeNormalizationTargetLufs(
+    body.normalization_target_lufs ?? env.AUDIO_NORMALIZATION_TARGET_LUFS,
+    normalizationMode,
+  );
+
   const queued = await queueDownloadJob(env, {
     url,
     source: body.source,
     format: body.format,
     quality: body.quality,
     syncKey,
+    normalizationMode,
+    normalizationTargetLufs,
   });
 
   return jsonOk(request, env, {
@@ -1308,6 +1355,12 @@ async function handleSharedQueuePost(request: Request, env: Env): Promise<Respon
     return jsonError(request, env, policy.code ?? 'URL_BLOCKED', policy.message ?? 'URL is blocked', 400);
   }
 
+  const normalizationMode = normalizeRequestedNormalizationMode(body as DownloadRequestBody, env);
+  const normalizationTargetLufs = normalizeNormalizationTargetLufs(
+    body?.normalization_target_lufs ?? env.AUDIO_NORMALIZATION_TARGET_LUFS,
+    normalizationMode,
+  );
+
   const queued = await queueDownloadJob(env, {
     url,
     source: body?.source,
@@ -1316,6 +1369,8 @@ async function handleSharedQueuePost(request: Request, env: Env): Promise<Respon
     title: body?.title,
     artist: body?.artist,
     syncKey: key,
+    normalizationMode,
+    normalizationTargetLufs,
   });
 
   await ensureSharedQueueTable(env);
@@ -1469,6 +1524,8 @@ async function queueDownloadJob(
     playlistFolder?: string | null;
     playlistIndex?: number | null;
     localRelpath?: string | null;
+    normalizationMode?: AudioNormalizationMode;
+    normalizationTargetLufs?: number | null;
   },
 ): Promise<QueuedDownloadResult> {
   await ensureDownloadJobMetadataSchema(env);
@@ -1476,7 +1533,12 @@ async function queueDownloadJob(
   const format = normalizeAudioFormat(input.format, 'mp3');
   const quality = normalizeAudioQuality(input.quality, format, format === 'flac' || format === 'wav' ? 'lossless' : '320');
   const source = normalizeSource(input.source ?? detectSourceFromUrl(url));
-  const fingerprint = await createJobFingerprint(url, format, quality);
+  const normalizationMode = normalizeAudioNormalizationMode(input.normalizationMode);
+  const normalizationTargetLufs = normalizeNormalizationTargetLufs(input.normalizationTargetLufs, normalizationMode);
+  const fingerprintUrl = normalizationMode === 'off'
+    ? url
+    : `${url}#audio-normalization=${normalizationMode}:${normalizationTargetLufs ?? ''}`;
+  const fingerprint = await createJobFingerprint(fingerprintUrl, format, quality);
   const dedupeKey = `dedupe:${fingerprint}`;
   const syncKey = normalizeOptionalSyncKey(input.syncKey ?? undefined);
   const variantRole = input.variantRole ?? 'primary';
@@ -1512,6 +1574,8 @@ async function queueDownloadJob(
       localRelpath,
       requestedFormat: format,
       variantRole,
+      normalizationMode,
+      normalizationTargetLufs,
     });
     await enqueueHistoryEvent(env, {
       jobId: existing.id,
@@ -1547,8 +1611,8 @@ async function queueDownloadJob(
     `INSERT INTO download_jobs (
       id, url, source, format, quality, status, attempts, fingerprint,
       parent_job_id, variant_role, sync_key, playlist_folder, playlist_index, local_relpath,
-      title, artist, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      title, artist, audio_normalized, normalization_mode, normalization_target_lufs, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
   ).bind(
     jobId,
     urlHash,
@@ -1564,6 +1628,8 @@ async function queueDownloadJob(
     localRelpath,
     input.title ?? null,
     input.artist ?? null,
+    normalizationMode,
+    normalizationTargetLufs,
   ).run();
 
   await env.DOWNLOAD_QUEUE.send({
@@ -1579,6 +1645,9 @@ async function queueDownloadJob(
     playlistFolder: playlistFolder ?? undefined,
     playlistIndex: playlistIndex ?? undefined,
     localRelpath: localRelpath ?? undefined,
+    normalizeAudio: normalizationMode !== 'off',
+    normalizationMode,
+    normalizationTargetLufs,
     requestedAt: new Date().toISOString(),
   });
 
@@ -1609,9 +1678,11 @@ async function queueDownloadJob(
     playlistFolder,
     playlistIndex,
     localRelpath,
-    requestedFormat: format,
-    variantRole,
-  });
+      requestedFormat: format,
+      variantRole,
+      normalizationMode,
+      normalizationTargetLufs,
+    });
 
   return {
     jobId,
@@ -1640,6 +1711,8 @@ async function maybeQueueMobileVariant(
     localRelpath?: string | null;
     requestedFormat: AudioFormat;
     variantRole: 'primary' | 'mobile';
+    normalizationMode?: AudioNormalizationMode;
+    normalizationTargetLufs?: number | null;
   },
 ): Promise<QueuedDownloadResult | null> {
   if (env.AUTO_MOBILE_VARIANT_ENABLED === '0') return null;
@@ -1693,6 +1766,8 @@ async function maybeQueueMobileVariant(
     playlistFolder: input.playlistFolder,
     playlistIndex: input.playlistIndex,
     localRelpath: input.localRelpath,
+    normalizationMode: input.normalizationMode,
+    normalizationTargetLufs: input.normalizationTargetLufs,
   });
 
   await recordTelemetry(env, {
@@ -3381,6 +3456,59 @@ async function handleJobStatus(request: Request, env: Env, jobId: string): Promi
   return jsonOk(request, env, { job: await hydrateJobRecord(request, env, row) });
 }
 
+async function handleAudioCompare(request: Request, env: Env): Promise<Response> {
+  const ip = getClientAddress(request);
+  const rl = await rateLimit(env.CACHE, `audio-compare:${ip}`, 20, 60);
+  if (rl.limited) {
+    return jsonError(request, env, 'RATE_LIMITED', 'Too many audio comparison requests', 429, true);
+  }
+
+  const body = await parseJson<AudioCompareRequestBody>(request);
+  const leftJobId = String(body?.left_job_id ?? body?.job_id_a ?? '').trim();
+  const rightJobId = String(body?.right_job_id ?? body?.job_id_b ?? '').trim();
+  if (!isUuid(leftJobId) || !isUuid(rightJobId) || leftJobId === rightJobId) {
+    return jsonError(request, env, 'INVALID_AUDIO_COMPARE_INPUT', 'Two different valid job ids are required', 400);
+  }
+
+  const [leftRow, rightRow] = await Promise.all([
+    getJobRecord(env, leftJobId),
+    getJobRecord(env, rightJobId),
+  ]);
+  if (!leftRow || !rightRow) {
+    return jsonError(request, env, 'JOB_NOT_FOUND', 'One or both jobs were not found', 404);
+  }
+  if (leftRow.status !== 'done' || rightRow.status !== 'done') {
+    return jsonError(request, env, 'AUDIO_COMPARE_NOT_READY', 'Both jobs must be done before comparison', 409, true);
+  }
+
+  const leftAnalysis = normalizeAudioAnalysis(leftRow.audio_analysis);
+  const rightAnalysis = normalizeAudioAnalysis(rightRow.audio_analysis);
+  if (!leftAnalysis || !rightAnalysis) {
+    return jsonError(request, env, 'AUDIO_ANALYSIS_UNAVAILABLE', 'Audio analysis is not available for one or both jobs', 409, true);
+  }
+
+  return jsonOk(request, env, {
+    left: audioComparisonJobSummary(leftRow, leftAnalysis),
+    right: audioComparisonJobSummary(rightRow, rightAnalysis),
+    comparison: compareAudioAnalyses(leftAnalysis, rightAnalysis),
+  });
+}
+
+function audioComparisonJobSummary(row: JobRecord, analysis: ReturnType<typeof normalizeAudioAnalysis>): Record<string, unknown> {
+  return {
+    id: row.id,
+    title: row.title,
+    artist: row.artist,
+    source: row.source,
+    format: row.format,
+    quality: row.quality,
+    audio_normalized: Boolean(row.audio_normalized),
+    normalization_mode: row.normalization_mode ?? 'off',
+    normalization_target_lufs: row.normalization_target_lufs ?? null,
+    analysis,
+  };
+}
+
 async function handleJobEvents(request: Request, env: Env, jobId: string): Promise<Response> {
   const initial = await getJobRecord(env, jobId);
   if (!initial) {
@@ -3461,7 +3589,9 @@ async function handleHistory(request: Request, env: Env): Promise<Response> {
   const selectSql =
     `SELECT id, source, format, quality, status, title, artist, duration, file_size,
             result_url, r2_key, content_hash, parent_job_id, variant_role, sync_key,
-            playlist_folder, playlist_index, local_relpath, created_at
+            playlist_folder, playlist_index, local_relpath,
+            audio_normalized, normalization_mode, normalization_target_lufs, audio_analysis,
+            created_at
      FROM download_jobs`;
   const whereSql = syncKey ? ' WHERE sync_key = ?' : '';
   const orderSql = ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
@@ -3485,13 +3615,23 @@ async function handleHistory(request: Request, env: Env): Promise<Response> {
         const streamUrl = downloadUrl ? await buildStreamUrl(request, env, String(row.id)) : null;
         return {
           ...row,
+          audio_analysis: normalizeAudioAnalysis(row.audio_analysis),
+          audio_normalized: Boolean(row.audio_normalized),
           download_url: downloadUrl,
           stream_url: streamUrl,
           download_available: Boolean(downloadUrl),
           stream_available: Boolean(streamUrl),
         };
       }
-      return { ...row, download_url: null, stream_url: null, download_available: false, stream_available: false };
+      return {
+        ...row,
+        audio_analysis: normalizeAudioAnalysis(row.audio_analysis),
+        audio_normalized: Boolean(row.audio_normalized),
+        download_url: null,
+        stream_url: null,
+        download_available: false,
+        stream_available: false,
+      };
     }),
   );
 
@@ -3516,7 +3656,9 @@ async function handleHistoryExport(request: Request, env: Env): Promise<Response
   const selectSql =
     `SELECT id, source, format, quality, status, title, artist, duration, file_size,
             result_url, r2_key, content_hash, parent_job_id, variant_role, sync_key,
-            playlist_folder, playlist_index, local_relpath, created_at, finished_at
+            playlist_folder, playlist_index, local_relpath,
+            audio_normalized, normalization_mode, normalization_target_lufs, audio_analysis,
+            created_at, finished_at
      FROM download_jobs`;
   const whereSql = syncKey ? ' WHERE sync_key = ?' : '';
   const orderSql = ' ORDER BY created_at DESC LIMIT ?';
@@ -3543,6 +3685,10 @@ async function handleHistoryExport(request: Request, env: Env): Promise<Response
       duration: row.duration ?? null,
       file_size: row.file_size ?? null,
       content_hash: row.content_hash ?? null,
+      audio_normalized: Boolean(row.audio_normalized),
+      normalization_mode: row.normalization_mode ?? 'off',
+      normalization_target_lufs: row.normalization_target_lufs ?? null,
+      audio_analysis: normalizeAudioAnalysis(row.audio_analysis),
       parent_job_id: row.parent_job_id ?? null,
       variant_role: row.variant_role ?? null,
       playlist_folder: row.playlist_folder ?? null,
@@ -3569,6 +3715,9 @@ async function handleHistoryExport(request: Request, env: Env): Promise<Response
       'duration',
       'file_size',
       'content_hash',
+      'audio_normalized',
+      'normalization_mode',
+      'normalization_target_lufs',
       'playlist_folder',
       'playlist_index',
       'local_relpath',
@@ -4645,6 +4794,8 @@ async function handleRuntimeConfig(request: Request, env: Env): Promise<Response
       metadata_quality_score_v1: true,
       scheduled_downloads_v1: true,
       source_health_dashboard_v1: true,
+      audio_quality_compare_v1: true,
+      audio_normalization_v1: true,
     },
     sync_key_claim: {
       endpoint: `${base}/api/sync/claim`,
@@ -4669,6 +4820,8 @@ async function handleRuntimeConfig(request: Request, env: Env): Promise<Response
       privacy_mode: false,
       webhook_enabled: false,
       webhook_url: '',
+      audio_normalization: 'off',
+      normalization_target_lufs: -14,
     },
     updates,
     release_manifest_url: `${base}/api/releases/manifest`,
@@ -5661,6 +5814,19 @@ async function handlePreferencesPost(request: Request, env: Env): Promise<Respon
         next.webhook_url = value;
         changed = true;
       }
+    } else if (field === 'audio_normalization') {
+      const value = normalizeAudioNormalizationMode(incomingRaw);
+      if (value !== next.audio_normalization) {
+        next.audio_normalization = value;
+        next.normalization_target_lufs = normalizeNormalizationTargetLufs(next.normalization_target_lufs, value);
+        changed = true;
+      }
+    } else if (field === 'normalization_target_lufs') {
+      const value = normalizeNormalizationTargetLufs(incomingRaw, next.audio_normalization);
+      if (value !== next.normalization_target_lufs) {
+        next.normalization_target_lufs = value;
+        changed = true;
+      }
     }
 
     next.field_updated_at[field] = clientUpdatedAt;
@@ -5846,7 +6012,9 @@ async function getJobRecord(env: Env, jobId: string): Promise<JobRecord | null> 
     `SELECT id, url, source, format, quality, status, attempts,
             parent_job_id, variant_role, sync_key, playlist_folder, playlist_index, local_relpath,
             result_url, r2_key, title, artist, duration, file_size,
-            fingerprint, content_hash, error_code, error_message, created_at, updated_at, finished_at
+            fingerprint, content_hash, error_code, error_message,
+            audio_normalized, normalization_mode, normalization_target_lufs, audio_analysis,
+            created_at, updated_at, finished_at
      FROM download_jobs
      WHERE id = ?`,
   ).bind(jobId).first<JobRecord>();
@@ -5882,6 +6050,10 @@ async function getPrivacyJobSnapshot(env: Env, jobId: string): Promise<JobRecord
     content_hash: safeNullableSnapshotString(snapshot.content_hash),
     error_code: null,
     error_message: null,
+    audio_normalized: Number.isFinite(Number(snapshot.audio_normalized)) ? Number(snapshot.audio_normalized) : 0,
+    normalization_mode: safeSnapshotString(snapshot.normalization_mode, 'off'),
+    normalization_target_lufs: Number.isFinite(Number(snapshot.normalization_target_lufs)) ? Number(snapshot.normalization_target_lufs) : null,
+    audio_analysis: safeNullableSnapshotString(snapshot.audio_analysis),
     created_at: safeSnapshotString(snapshot.created_at, now),
     updated_at: safeSnapshotString(snapshot.updated_at, now),
     finished_at: safeNullableSnapshotString(snapshot.finished_at) ?? now,
@@ -5907,12 +6079,17 @@ async function hydrateJobRecord(request: Request, env: Env, row: JobRecord): Pro
     downloadUrl = available ? await buildDownloadUrl(request, env, row.id) : null;
     streamUrl = available ? await buildStreamUrl(request, env, row.id) : null;
   }
-  const { url: storedUrl, ...safeRow } = row;
+  const analysis = normalizeAudioAnalysis(row.audio_analysis);
+  const { url: storedUrl, audio_analysis: _storedAnalysis, ...safeRow } = row;
 
   return {
     ...safeRow,
     url: null,
     url_hash: await safeUrlHash(storedUrl),
+    audio_normalized: Boolean(row.audio_normalized),
+    normalization_mode: row.normalization_mode ?? 'off',
+    normalization_target_lufs: row.normalization_target_lufs ?? null,
+    audio_analysis: analysis,
     download_url: downloadUrl,
     stream_url: streamUrl,
     download_available: Boolean(downloadUrl),
@@ -6545,6 +6722,16 @@ function normalizeAudioQuality(
   return AUDIO_QUALITIES.includes(candidate as AudioQuality) ? (candidate as AudioQuality) : fallback;
 }
 
+function normalizeRequestedNormalizationMode(body: DownloadRequestBody, env: Env): AudioNormalizationMode {
+  if (Object.prototype.hasOwnProperty.call(body, 'normalization_mode')) {
+    return normalizeAudioNormalizationMode(body.normalization_mode);
+  }
+  if (body.normalize_audio) {
+    return normalizeAudioNormalizationMode(env.AUDIO_NORMALIZATION_DEFAULT_MODE || 'ebu_r128');
+  }
+  return 'off';
+}
+
 function normalizePreferenceSource(raw: string | undefined): string {
   const source = normalizeSource(raw);
   if (source === 'unknown') return 'all';
@@ -6647,10 +6834,13 @@ function normalizePreferencesState(raw: PreferencesState | null | undefined): Pr
     quality: updatedAt,
     download_directory: updatedAt,
     telegram_link_mode: updatedAt,
-    privacy_mode: updatedAt,
-    webhook_enabled: updatedAt,
-    webhook_url: updatedAt,
-  };
+      privacy_mode: updatedAt,
+      webhook_enabled: updatedAt,
+      webhook_url: updatedAt,
+      audio_normalization: updatedAt,
+      normalization_target_lufs: updatedAt,
+    };
+  const audioNormalization = normalizeAudioNormalizationMode(raw?.audio_normalization);
 
   return {
     language: normalizeLanguage(raw?.language),
@@ -6662,6 +6852,8 @@ function normalizePreferencesState(raw: PreferencesState | null | undefined): Pr
     privacy_mode: normalizeBooleanPreference(raw?.privacy_mode),
     webhook_enabled: normalizeBooleanPreference(raw?.webhook_enabled),
     webhook_url: normalizeWebhookUrlPreference(raw?.webhook_url),
+    audio_normalization: audioNormalization,
+    normalization_target_lufs: normalizeNormalizationTargetLufs(raw?.normalization_target_lufs, audioNormalization),
     revision: Math.max(0, normalizePreferenceRevision(raw?.revision)),
     field_updated_at: {
       language: isoFromMs(parseIsoMs(baseFieldTimes.language), updatedAt),
@@ -6673,6 +6865,8 @@ function normalizePreferencesState(raw: PreferencesState | null | undefined): Pr
       privacy_mode: isoFromMs(parseIsoMs(baseFieldTimes.privacy_mode), updatedAt),
       webhook_enabled: isoFromMs(parseIsoMs(baseFieldTimes.webhook_enabled), updatedAt),
       webhook_url: isoFromMs(parseIsoMs(baseFieldTimes.webhook_url), updatedAt),
+      audio_normalization: isoFromMs(parseIsoMs(baseFieldTimes.audio_normalization), updatedAt),
+      normalization_target_lufs: isoFromMs(parseIsoMs(baseFieldTimes.normalization_target_lufs), updatedAt),
     },
     last_writer: normalizeClientId(raw?.last_writer),
     updated_at: updatedAt,

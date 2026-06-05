@@ -20,6 +20,10 @@ interface StoredJob {
   file_size: number | null;
   result_url: string | null;
   r2_key: string | null;
+  audio_normalized?: number;
+  normalization_mode?: string | null;
+  normalization_target_lufs?: number | null;
+  audio_analysis?: string | null;
 }
 
 class MemoryKv {
@@ -104,7 +108,7 @@ class FakeStatement {
     }
 
     if (this.sql.includes("SET status = 'done'")) {
-      const job = this.db.jobs.get(String(this.values[8] ?? ''));
+      const job = this.db.jobs.get(String(this.values[12] ?? ''));
       if (job) {
         job.status = 'done';
         job.source = String(this.values[0] ?? job.source);
@@ -114,6 +118,10 @@ class FakeStatement {
         job.artist = String(this.values[5] ?? '');
         job.duration = Number(this.values[6] ?? 0);
         job.file_size = Number(this.values[7] ?? 0);
+        job.audio_normalized = Number(this.values[8] ?? 0);
+        job.normalization_mode = String(this.values[9] ?? 'off');
+        job.normalization_target_lufs = this.values[10] === null || this.values[10] === undefined ? null : Number(this.values[10]);
+        job.audio_analysis = this.values[11] ? String(this.values[11]) : null;
       }
     }
 
@@ -153,8 +161,12 @@ describe('Telegram queue completion publishing', () => {
       duration: null,
       file_size: null,
       result_url: null,
-      r2_key: null,
-    });
+        r2_key: null,
+        audio_normalized: 0,
+        normalization_mode: 'off',
+        normalization_target_lufs: null,
+        audio_analysis: null,
+      });
 
     const message = {
       body: job,

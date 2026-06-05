@@ -1,5 +1,6 @@
 export type AudioFormat = 'mp3' | 'flac' | 'ogg' | 'm4a' | 'opus' | 'wav';
 export type AudioQuality = '320' | '256' | '192' | '128' | '96' | 'best' | 'lossless';
+export type AudioNormalizationMode = 'off' | 'replaygain' | 'ebu_r128';
 export type JobStatus = 'queued' | 'processing' | 'paused' | 'done' | 'failed';
 
 export interface DownloadJob {
@@ -15,6 +16,9 @@ export interface DownloadJob {
   playlistFolder?: string;
   playlistIndex?: number;
   localRelpath?: string;
+  normalizeAudio?: boolean;
+  normalizationMode?: AudioNormalizationMode;
+  normalizationTargetLufs?: number | null;
   chatId?: number;
   messageId?: number;
   requestedAt: string;
@@ -54,6 +58,10 @@ export interface DownloaderDownloadResult {
   fallback_used?: boolean;
   mime_type?: string;
   filename?: string;
+  audio_normalized?: boolean;
+  normalization_mode?: AudioNormalizationMode;
+  normalization_target_lufs?: number | null;
+  audio_analysis?: Record<string, unknown> | null;
 }
 
 export interface Env {
@@ -146,6 +154,9 @@ export interface Env {
   DOWNLOAD_WEBHOOK_HMAC_SECRET?: string;
   DOWNLOAD_WEBHOOK_TIMEOUT_MS?: string;
   SCHEDULER_MAX_DUE_PER_TICK?: string;
+  AUDIO_NORMALIZATION_DEFAULT_MODE?: string;
+  AUDIO_NORMALIZATION_TARGET_LUFS?: string;
+  AUDIO_ANALYSIS_AFTER_DOWNLOAD?: string;
 
   CORS_ORIGINS?: string;
   DOWNLOAD_TOKEN_TTL_SECONDS?: string;

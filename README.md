@@ -88,6 +88,11 @@ Cloudflare Worker backend + external downloader service (FastAPI + yt-dlp + ffmp
    - Source health dashboard backed by KV + Analytics Engine events from real downloader attempts.
    - Automatic source recommendation endpoint for client-side fallback decisions.
 
+15. Audio processing:
+   - Optional post-download normalization: `off`, `replaygain`, or `ebu_r128` with target LUFS clamp.
+   - Downloader returns ffprobe/ffmpeg analysis metrics: bitrate, sample rate, dynamic range, loudness and peak data.
+   - New comparison endpoint ranks two completed jobs by available bitrate/dynamic-range/loudness metrics.
+
 ## Runtime architecture
 
 1. Web UI / Telegram call Worker endpoints.
@@ -99,7 +104,7 @@ Cloudflare Worker backend + external downloader service (FastAPI + yt-dlp + ffmp
 ## Worker endpoints
 
 - `POST /api/search` body: `{ query, source? }`
-- `POST /api/download` body: `{ url, source?, format?, quality? }`
+- `POST /api/download` body: `{ url, source?, format?, quality?, normalize_audio?, normalization_mode?, normalization_target_lufs? }`
 - `POST /api/playlist/resolve` body: `{ url, source? }`
 - `POST /api/playlist/queue` body: `{ url, source?, format?, quality? }`
 - `GET /api/playlist/workflow/:id`
@@ -119,6 +124,7 @@ Cloudflare Worker backend + external downloader service (FastAPI + yt-dlp + ffmp
 - `GET /api/quality/:jobId`
 - `GET /api/quality/report?syncKey=:sync_key`
 - `POST /api/quality/batch-score?syncKey=:sync_key`
+- `POST /api/audio/compare` body: `{ left_job_id, right_job_id }`
 - `GET /api/schedule?syncKey=:sync_key&status=pending|all`
 - `POST /api/schedule` body: `{ url, syncKey, scheduledAt, format?, quality?, source?, recurrence?, wifiOnly? }`
 - `PATCH /api/schedule/:id` body: `{ syncKey, scheduledAt?, recurrence?, wifiOnly? }`
@@ -130,7 +136,7 @@ Cloudflare Worker backend + external downloader service (FastAPI + yt-dlp + ffmp
 - `GET /api/ops/summary` (requires `Authorization: Bearer <OPS_READ_TOKEN|OPS_OPERATOR_TOKEN|OPS_ADMIN_TOKEN>`)
 - `POST /api/ops/replay` (requires `Authorization: Bearer <OPS_OPERATOR_TOKEN|OPS_ADMIN_TOKEN>`)
 - `GET /api/preferences?key=:sync_key`
-- `POST /api/preferences` body: `{ key, language, source, format, quality, download_directory, telegram_link_mode, base_revision?, client_updated_at?, client_id? }`
+- `POST /api/preferences` body: `{ key, language, source, format, quality, download_directory, telegram_link_mode, privacy_mode?, webhook_enabled?, webhook_url?, audio_normalization?, normalization_target_lufs?, base_revision?, client_updated_at?, client_id? }`
 - `GET /api/telegram/info`
 - `POST /telegram/webhook`
 - `GET /api/health`
@@ -152,7 +158,7 @@ Error contract:
 All internal endpoints require header `X-API-Key`.
 
 - `POST /internal/search` body: `{ query, source, limit }`
-- `POST /internal/download` body: `{ job_id, url, source, format, quality }`
+- `POST /internal/download` body: `{ job_id, url, source, format, quality, normalize_audio?, normalization_mode?, normalization_target_lufs? }`
 - `POST /internal/smoke` body: `{ url, source, format, quality }`
 - `POST /internal/playlist/resolve` body: `{ url, source }`
 - `POST /internal/playlist/workflow/start` body: `{ workflow_id?, url, source, format, quality, batch_size? }`
@@ -436,17 +442,20 @@ Worker vars/secrets:
 - `JOB_RETENTION_ENABLED`, `JOB_RETENTION_DAYS`, `JOB_RETENTION_BATCH_SIZE` - daily cron cleanup for terminal jobs, dead-letter audit rows, old playlist workflows, and unreferenced R2 files.
 - `KV_CLEANUP_PREFIXES`, `KV_CLEANUP_MAX_KEYS` - stale KV cleanup scope for keys accidentally written without TTL.
 - `API_JSON_COMPRESSION_ENABLED` - optional Worker-side JSON compression flag. Keep `0` unless edge responses have been validated with correct `Content-Encoding` headers.
+- `AUDIO_NORMALIZATION_DEFAULT_MODE` - default mode used when a client sends `normalize_audio: true` without an explicit mode (`ebu_r128` fallback).
+- `AUDIO_NORMALIZATION_TARGET_LUFS` - Worker default target LUFS for normalized downloads.
 
 Downloader vars:
 
 - `PLAYLIST_WORKFLOW_BATCH_SIZE` - batch size for workflow chunk processing.
 - `PLAYLIST_WORKFLOW_RETENTION_SECONDS` - retention window for in-memory workflow status.
 - `TEMPORAL_NAMESPACE`, `TEMPORAL_ADDRESS`, `TEMPORAL_API_KEY` - Temporal Cloud config (optional; local workflow mode remains available when unset).
+- `AUDIO_ANALYSIS_AFTER_DOWNLOAD` - downloader flag, enabled by default; set `0` to skip ffmpeg analysis after conversion.
 
 ## Notes
 
 - Queue lifecycle: `queued -> processing -> done|failed`
-- Request dedupe: fingerprint (`url|format|quality`) in KV
+- Request dedupe: fingerprint (`url|format|quality`, plus normalization mode/target when enabled) in KV
 - File dedupe: global SHA-256 cache in R2 (when enabled)
 - Retention cleanup: daily cron deletes only terminal `done/failed` jobs older than the retention window and deletes R2 objects only after DB references are gone.
 - Download links are tokenized and time-limited
