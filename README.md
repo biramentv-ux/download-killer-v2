@@ -76,6 +76,12 @@ Cloudflare Worker backend + external downloader service (FastAPI + yt-dlp + ffmp
    - Update channel metadata endpoint (`/api/updates`) for desktop/extension/mobile forced-update UX.
    - Synthetic smoke alerts upgraded with per-source fail + recovery Telegram notifications.
 
+13. Share cards, discography aliases, source attempts, and onboarding:
+   - Direct share aliases: `GET /api/share/:jobId` and `GET /api/share/:jobId/card.svg`.
+   - Discography aliases: `GET /api/discography/search`, `GET /api/discography/release/:id/tracks`, `POST /api/discography/queue`.
+   - Source fallback attempt tracking: `GET /api/jobs/:id/attempts`, `POST /api/jobs/:id/retry-next`, `POST /api/jobs/:id/attempt-result`.
+   - New user tutorial deliverables live in `tutorials/` as PPTX, DOCX, and Markdown.
+
 ## Runtime architecture
 
 1. Web UI / Telegram call Worker endpoints.

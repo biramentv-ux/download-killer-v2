@@ -14,6 +14,10 @@ interface FakeJobRow {
   status: string;
   title: string;
   artist: string;
+  sync_key?: string | null;
+  source_attempts?: string | null;
+  current_source?: string | null;
+  retry_count?: number | null;
   duration?: number;
   file_size?: number;
   result_url?: string | null;
@@ -123,6 +127,9 @@ class FakeStatement {
           'playlist_folder',
           'playlist_index',
           'local_relpath',
+          'source_attempts',
+          'current_source',
+          'retry_count',
         ].map((name) => ({ name })) as T[],
       };
     }
@@ -288,6 +295,14 @@ describe('share preview cards', () => {
     expect(cardHead.status).toBe(200);
     expect(cardHead.headers.get('Content-Type')).toContain('image/svg+xml');
 
+    const directPage = await downloadRouter(new Request(`https://dyrakarmy.online/api/share/${JOB_ID}`), env);
+    expect(directPage.status).toBe(200);
+    await expect(directPage.text()).resolves.toContain('og:title');
+
+    const directCard = await downloadRouter(new Request(`https://dyrakarmy.online/api/share/${JOB_ID}/card.svg`), env);
+    expect(directCard.status).toBe(200);
+    expect(directCard.headers.get('Content-Type')).toContain('image/svg+xml');
+
     const token = payload.share_url.split('/share/')[1]!;
     const fileAttempt = await downloadRouter(new Request(`https://dyrakarmy.online/api/file/${token}`), env);
     expect(fileAttempt.status).not.toBe(200);
@@ -295,6 +310,42 @@ describe('share preview cards', () => {
 });
 
 describe('artist discography queue', () => {
+  it('exposes the provided discography search alias', async () => {
+    const { env } = createTestContext();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/internal/artist/discography')) {
+        return Response.json({
+          title: 'Daft Punk Discography',
+          source: 'artist',
+          total: 1,
+          tracks: [{
+            id: 'mb-1',
+            title: 'One More Time',
+            artist: 'Daft Punk',
+            duration: 320,
+            source: 'youtube',
+            url: 'ytsearch1:Daft Punk - One More Time audio',
+          }],
+        });
+      }
+      return Response.json({ ok: true });
+    }));
+
+    const response = await downloadRouter(new Request('https://dyrakarmy.online/api/discography/search?q=Daft%20Punk&source=spotify&limit=1'), env);
+    expect(response.status).toBe(200);
+    const payload = await response.json() as {
+      artist: { name: string };
+      tracks: unknown[];
+      releases: unknown[];
+      cached: boolean;
+    };
+    expect(payload.artist.name).toBe('Daft Punk');
+    expect(payload.tracks).toHaveLength(1);
+    expect(payload.releases).toHaveLength(1);
+    expect(payload.cached).toBe(false);
+  });
+
   it('queues trusted yt-dlp search targets from downloader discography results', async () => {
     const { env, downloadQueue } = createTestContext();
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
@@ -339,6 +390,47 @@ describe('artist discography queue', () => {
     expect(downloadQueue.messages).toHaveLength(1);
     expect(downloadQueue.messages[0]?.url).toBe('ytsearch1:Daft Punk - One More Time audio');
     expect(downloadQueue.messages[0]?.syncKey).toBe('sync1234');
+  });
+});
+
+describe('source fallback attempts', () => {
+  it('returns source attempts and manually queues the next fallback source', async () => {
+    const { db, env, downloadQueue } = createTestContext();
+    db.jobs.set(JOB_ID, {
+      id: JOB_ID,
+      url: 'https://open.spotify.com/track/test',
+      source: 'spotify',
+      format: 'mp3',
+      quality: '320',
+      status: 'failed',
+      title: 'One More Time',
+      artist: 'Daft Punk',
+      sync_key: 'sync1234',
+      source_attempts: '[]',
+      current_source: 'spotify',
+      retry_count: 0,
+      duration: 0,
+      file_size: 0,
+      result_url: null,
+      r2_key: null,
+      created_at: '2026-06-03T00:00:00Z',
+    });
+
+    const attemptsResponse = await downloadRouter(new Request(`https://dyrakarmy.online/api/jobs/${JOB_ID}/attempts`), env);
+    expect(attemptsResponse.status).toBe(200);
+    const attemptsPayload = await attemptsResponse.json() as { next_source: string; attempts: unknown[] };
+    expect(attemptsPayload.next_source).toBe('youtube_music');
+    expect(attemptsPayload.attempts).toHaveLength(0);
+
+    const retryResponse = await downloadRouter(new Request(`https://dyrakarmy.online/api/jobs/${JOB_ID}/retry-next`, {
+      method: 'POST',
+    }), env);
+    expect(retryResponse.status).toBe(202);
+    const retryPayload = await retryResponse.json() as { next_source: string; target: string };
+    expect(retryPayload.next_source).toBe('youtube_music');
+    expect(retryPayload.target).toBe('ytmsearch1:Daft Punk - One More Time');
+    expect(downloadQueue.messages.at(-1)?.source).toBe('youtube_music');
+    expect(downloadQueue.messages.at(-1)?.syncKey).toBe('sync1234');
   });
 });
 

@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS download_jobs (
   playlist_folder TEXT,
   playlist_index  INTEGER,
   local_relpath   TEXT,
+  source_attempts TEXT NOT NULL DEFAULT '[]',
+  current_source  TEXT,
+  retry_count     INTEGER NOT NULL DEFAULT 0,
   content_hash  TEXT,
   result_url    TEXT,
   r2_key        TEXT,
@@ -224,6 +227,16 @@ CREATE TABLE IF NOT EXISTS release_radar_events (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_release_radar_events_unique
   ON release_radar_events(radar_id, release_key);
 CREATE INDEX IF NOT EXISTS idx_release_radar_events_time ON release_radar_events(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS discography_cache (
+  artist_key TEXT PRIMARY KEY,
+  data       TEXT NOT NULL,
+  source     TEXT NOT NULL,
+  cached_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_discography_cache_expires ON discography_cache(expires_at);
 
 CREATE TABLE IF NOT EXISTS sync_key_claims (
   sync_key           TEXT PRIMARY KEY,

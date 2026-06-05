@@ -53,6 +53,16 @@ import {
   handleReleaseRadarGet,
   handleReleaseRadarPost,
 } from './releaseRadar';
+import {
+  SOURCE_LABELS,
+  appendStartedAttempt,
+  buildFallbackTarget,
+  getNextFallbackSource,
+  markAttemptResult,
+  normalizeFallbackSource,
+  parseSourceAttempts,
+  type SourceAttempt,
+} from './sourceFallback';
 
 interface SearchRequestBody {
   query: string;
@@ -156,6 +166,30 @@ interface ArtistDiscographyRequestBody {
   limit?: number;
 }
 
+interface DiscographyQueueRequestBody {
+  releases?: string[];
+  tracks?: Array<{
+    url?: string;
+    title?: string;
+    artist?: string;
+    releaseTitle?: string;
+    source?: string;
+  }>;
+  format?: AudioFormat;
+  quality?: AudioQuality;
+  syncKey?: string;
+  sync_key?: string;
+  source?: string;
+}
+
+interface SourceAttemptResultBody {
+  source?: string;
+  success?: boolean;
+  error?: string;
+  resultUrl?: string;
+  result_url?: string;
+}
+
 interface PlaylistResolveResult {
   payload: PlaylistResolveResponse | null;
   errorCode?: string;
@@ -225,6 +259,9 @@ interface JobRecord {
   playlist_folder: string | null;
   playlist_index: number | null;
   local_relpath: string | null;
+  source_attempts?: string | null;
+  current_source?: string | null;
+  retry_count?: number | null;
   status: JobStatus;
   attempts: number;
   result_url: string | null;
@@ -517,6 +554,11 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
     return handleSharePreview(request, env);
   }
 
+  const shareJobCardMatch = path.match(/^\/share\/([0-9a-f-]{36})\/card\.svg$/i);
+  if (shareJobCardMatch && (request.method === 'GET' || request.method === 'HEAD')) {
+    return handleShareCardByJobId(request, env, shareJobCardMatch[1]!);
+  }
+
   const shareCardMatch = path.match(/^\/share\/card\/([^/]+)\.svg$/i);
   if (shareCardMatch && (request.method === 'GET' || request.method === 'HEAD')) {
     return handleShareCard(request, env, decodeURIComponent(shareCardMatch[1]!));
@@ -524,7 +566,11 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
 
   const sharePageMatch = path.match(/^\/share\/([^/]+)$/i);
   if (sharePageMatch && (request.method === 'GET' || request.method === 'HEAD')) {
-    return handleSharePage(request, env, decodeURIComponent(sharePageMatch[1]!));
+    const shareIdOrToken = decodeURIComponent(sharePageMatch[1]!);
+    if (isUuid(shareIdOrToken)) {
+      return handleSharePageByJobId(request, env, shareIdOrToken);
+    }
+    return handleSharePage(request, env, shareIdOrToken);
   }
 
   if (path === '/download' && request.method === 'POST') {
@@ -537,6 +583,19 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
 
   if (path === '/playlist/queue' && request.method === 'POST') {
     return handlePlaylistQueue(request, env);
+  }
+
+  if (path === '/discography/search' && request.method === 'GET') {
+    return handleDiscographySearch(request, env);
+  }
+
+  const discographyTracklistMatch = path.match(/^\/discography\/release\/([^/]+)\/tracks$/i);
+  if (discographyTracklistMatch && request.method === 'GET') {
+    return handleDiscographyTracklist(request, env, decodeURIComponent(discographyTracklistMatch[1]!));
+  }
+
+  if (path === '/discography/queue' && request.method === 'POST') {
+    return handleDiscographyQueue(request, env);
   }
 
   if (path === '/artist/discography/queue' && request.method === 'POST') {
@@ -606,6 +665,21 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
   const jobResumeMatch = path.match(/^\/job\/([0-9a-f-]{36})\/resume$/i);
   if (jobResumeMatch && request.method === 'POST') {
     return handleJobControl(request, env, jobResumeMatch[1]!, 'resume');
+  }
+
+  const sourceAttemptsMatch = path.match(/^\/jobs\/([0-9a-f-]{36})\/attempts$/i);
+  if (sourceAttemptsMatch && request.method === 'GET') {
+    return handleSourceAttempts(request, env, sourceAttemptsMatch[1]!);
+  }
+
+  const sourceRetryNextMatch = path.match(/^\/jobs\/([0-9a-f-]{36})\/retry-next$/i);
+  if (sourceRetryNextMatch && request.method === 'POST') {
+    return handleRetryNextSource(request, env, sourceRetryNextMatch[1]!);
+  }
+
+  const sourceAttemptResultMatch = path.match(/^\/jobs\/([0-9a-f-]{36})\/attempt-result$/i);
+  if (sourceAttemptResultMatch && request.method === 'POST') {
+    return handleSourceAttemptResult(request, env, sourceAttemptResultMatch[1]!);
   }
 
   const jobStatusMatch = path.match(/^\/job\/([0-9a-f-]{36})$/i);
@@ -892,6 +966,26 @@ async function handleSharePreview(request: Request, env: Env): Promise<Response>
     description: shareDescription(row),
     expires_in_seconds: ttl,
   });
+}
+
+async function handleSharePageByJobId(request: Request, env: Env, jobId: string): Promise<Response> {
+  const row = await getShareJobRecord(env, jobId);
+  if (!row) {
+    return htmlResponse('<!doctype html><title>DyrakArmy Share</title><p>Shared track was not found.</p>', 404);
+  }
+  const ttl = readEnvInt(env.SHARE_TOKEN_TTL_SECONDS, 7 * 24 * 60 * 60);
+  const token = await createShareToken(jobId, Math.floor(Date.now() / 1000) + ttl, env.DOWNLOAD_TOKEN_SECRET);
+  return handleSharePage(request, env, token);
+}
+
+async function handleShareCardByJobId(request: Request, env: Env, jobId: string): Promise<Response> {
+  const row = await getShareJobRecord(env, jobId);
+  if (!row) {
+    return new Response('Shared track was not found', { status: 404 });
+  }
+  const ttl = readEnvInt(env.SHARE_TOKEN_TTL_SECONDS, 7 * 24 * 60 * 60);
+  const token = await createShareToken(jobId, Math.floor(Date.now() / 1000) + ttl, env.DOWNLOAD_TOKEN_SECRET);
+  return handleShareCard(request, env, token);
 }
 
 async function handleSharePage(request: Request, env: Env, token: string): Promise<Response> {
@@ -1841,6 +1935,204 @@ async function handlePlaylistQueue(request: Request, env: Env): Promise<Response
   }, 202);
 }
 
+async function handleDiscographySearch(request: Request, env: Env): Promise<Response> {
+  const ip = getClientAddress(request);
+  const rl = await rateLimit(env.CACHE, `discography-search:${ip}`, 10, 60);
+  if (rl.limited) {
+    return jsonError(request, env, 'RATE_LIMITED', 'Too many discography search requests', 429, true);
+  }
+
+  const url = new URL(request.url);
+  const artist = normalizeArtistQuery(url.searchParams.get('q') ?? url.searchParams.get('artist') ?? '');
+  if (!artist) {
+    return jsonError(request, env, 'INVALID_ARTIST', 'Artist name is required', 400);
+  }
+  const source = normalizeSource(url.searchParams.get('source') ?? 'youtube');
+  const limit = Math.max(1, Math.min(100, Number.parseInt(url.searchParams.get('limit') ?? '50', 10) || 50));
+  const cacheKey = `discography:${source}:${artist.toLowerCase()}:${limit}`;
+  try {
+    const cached = await env.CACHE.get(cacheKey, { type: 'json' }) as Record<string, unknown> | null;
+    if (cached) {
+      return jsonOk(request, env, { ...cached, cached: true });
+    }
+  } catch {
+    // Cache is best effort.
+  }
+
+  const resolved = await fetchArtistDiscography(env, artist, source, limit);
+  if (!resolved.payload) {
+    return jsonError(
+      request,
+      env,
+      resolved.errorCode ?? 'DISCOGRAPHY_SEARCH_FAILED',
+      resolved.errorMessage ?? 'Discography provider failed',
+      502,
+      resolved.retryable,
+    );
+  }
+
+  const payload = {
+    artist: {
+      id: await sha256Hex(`${source}:${artist.toLowerCase()}`),
+      name: artist,
+      source,
+    },
+    title: resolved.payload.title || `${artist} Discography`,
+    source: resolved.payload.source || source,
+    total: resolved.payload.tracks.length,
+    tracks: resolved.payload.tracks,
+    releases: groupDiscographyTracksAsReleases(resolved.payload.tracks, artist, resolved.payload.source || source),
+    cached_at: new Date().toISOString(),
+  };
+  try {
+    await env.CACHE.put(cacheKey, JSON.stringify(payload), { expirationTtl: 86_400 });
+  } catch {
+    // Cache is best effort.
+  }
+  return jsonOk(request, env, { ...payload, cached: false });
+}
+
+async function handleDiscographyTracklist(request: Request, env: Env, releaseId: string): Promise<Response> {
+  const url = new URL(request.url);
+  const source = normalizeSource(url.searchParams.get('source') ?? 'youtube');
+  const cacheKey = `discography-tracklist:${source}:${releaseId}`;
+  try {
+    const cached = await env.CACHE.get(cacheKey, { type: 'json' }) as { tracks?: PlaylistTrack[] } | null;
+    if (cached?.tracks) {
+      return jsonOk(request, env, { tracks: cached.tracks, cached: true });
+    }
+  } catch {
+    // Cache is best effort.
+  }
+
+  try {
+    const failover = await fetchDownloaderWithFailover(env, '/internal/discography/tracklist', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': env.DOWNLOADER_API_KEY,
+      },
+      body: JSON.stringify({ release_id: releaseId, releaseId, source }),
+    });
+    if (!failover.response.ok) {
+      const details = await failover.response.text();
+      return jsonError(request, env, 'TRACKLIST_FAILED', details.slice(0, 240) || 'Tracklist provider failed', 502, true);
+    }
+    const payload = await failover.response.json() as { tracks?: PlaylistTrack[]; results?: PlaylistTrack[] };
+    const tracks = Array.isArray(payload.tracks) ? payload.tracks : Array.isArray(payload.results) ? payload.results : [];
+    await env.CACHE.put(cacheKey, JSON.stringify({ tracks }), { expirationTtl: 86_400 }).catch(() => undefined);
+    return jsonOk(request, env, { release_id: releaseId, source, tracks, total: tracks.length, cached: false });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return jsonError(request, env, 'TRACKLIST_UNREACHABLE', `Tracklist provider is unreachable: ${message.slice(0, 160)}`, 502, true);
+  }
+}
+
+async function handleDiscographyQueue(request: Request, env: Env): Promise<Response> {
+  await ensurePlaylistWorkflowSchema(env);
+  await ensureDownloadJobMetadataSchema(env);
+  const ip = getClientAddress(request);
+  const rl = await rateLimit(env.CACHE, `discography-queue:${ip}`, 5, 60);
+  if (rl.limited) {
+    return jsonError(request, env, 'RATE_LIMITED', 'Too many discography queue requests', 429, true);
+  }
+
+  const body = await parseJson<DiscographyQueueRequestBody>(request);
+  const format = normalizeAudioFormat(body?.format, 'mp3');
+  const quality = normalizeAudioQuality(body?.quality, format, format === 'flac' || format === 'wav' ? 'lossless' : '320');
+  const syncKey = normalizeOptionalSyncKey(body?.sync_key ?? body?.syncKey);
+  if ((body?.sync_key || body?.syncKey) && !syncKey) {
+    return jsonError(request, env, 'INVALID_SYNC_KEY', 'Sync key is invalid', 400);
+  }
+  const source = normalizeSource(body?.source ?? 'youtube');
+  const maxTracks = Math.max(1, Math.min(500, readEnvInt(env.ARTIST_DISCOGRAPHY_MAX_TRACKS, 100)));
+  const tracks: Array<{ url: string; title: string; artist: string; source: string; releaseTitle?: string }> = [];
+
+  for (const track of body?.tracks ?? []) {
+    const target = String(track.url ?? '').trim();
+    if (!target) continue;
+    tracks.push({
+      url: target,
+      title: String(track.title ?? '').trim() || 'Track',
+      artist: String(track.artist ?? '').trim() || 'Unknown Artist',
+      source: normalizeSource(track.source ?? source),
+      releaseTitle: String(track.releaseTitle ?? '').trim() || undefined,
+    });
+    if (tracks.length >= maxTracks) break;
+  }
+
+  for (const releaseId of body?.releases ?? []) {
+    if (tracks.length >= maxTracks) break;
+    const tracklist = await fetchDiscographyTracklist(env, String(releaseId), source);
+    for (const item of tracklist) {
+      if (tracks.length >= maxTracks) break;
+      tracks.push({
+        url: String(item.url ?? '').trim(),
+        title: String(item.title ?? '').trim() || 'Track',
+        artist: String(item.artist ?? '').trim() || 'Unknown Artist',
+        source: normalizeSource(item.source ?? source),
+      });
+    }
+  }
+
+  const filtered = tracks.filter((track) => track.url && isAllowedDiscographyTarget(track.url, env));
+  if (!filtered.length) {
+    return jsonError(request, env, 'NO_TRACKS_TO_QUEUE', 'No trusted discography tracks were provided', 400);
+  }
+
+  const workflowId = crypto.randomUUID();
+  const workflowSourceHash = await sha256Hex(`discography:${source}:${filtered.map((track) => track.url).join('|')}`);
+  await env.DB.prepare(
+    `INSERT INTO playlist_workflows (
+      workflow_id, source_url, source, status, phase, total_tracks,
+      queued_count, processing_count, done_count, failed_count, deduped_count,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, 'processing', 'queued', 0, 0, 0, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+  ).bind(workflowId, workflowSourceHash, 'discography').run();
+
+  const jobIds: string[] = [];
+  let accepted = 0;
+  let deduped = 0;
+  for (let index = 0; index < filtered.length; index += 1) {
+    const track = filtered[index]!;
+    const folderTitle = track.releaseTitle || 'Discography';
+    const pathInfo = formatPlaylistRelPath(folderTitle, index + 1, track.title, track.artist, format, filtered.length);
+    const queued = await queueDownloadJob(env, {
+      url: track.url,
+      source: track.source,
+      format,
+      quality,
+      title: track.title,
+      artist: track.artist,
+      syncKey,
+      playlistFolder: pathInfo.folder,
+      playlistIndex: index + 1,
+      localRelpath: pathInfo.relpath,
+    });
+    jobIds.push(queued.jobId);
+    if (queued.deduped) deduped += 1;
+    else accepted += 1;
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO playlist_workflow_jobs (workflow_id, job_id, is_deduped)
+       VALUES (?, ?, ?)`,
+    ).bind(workflowId, queued.jobId, queued.deduped ? 1 : 0).run();
+  }
+
+  const rollup = await syncPlaylistWorkflowRollup(env, workflowId, filtered.length);
+  return jsonOk(request, env, {
+    workflow_id: workflowId,
+    status: deriveWorkflowStatus(rollup, filtered.length),
+    phase: deriveWorkflowPhase(deriveWorkflowStatus(rollup, filtered.length), rollup),
+    source,
+    total: filtered.length,
+    accepted,
+    deduped,
+    queued: accepted + deduped,
+    rejected: tracks.length - filtered.length,
+    job_ids: jobIds.slice(0, 100),
+  }, 202);
+}
+
 async function handleArtistDiscographyQueue(request: Request, env: Env): Promise<Response> {
   await ensurePlaylistWorkflowSchema(env);
   await ensureDownloadJobMetadataSchema(env);
@@ -2562,6 +2854,195 @@ async function handleJobControl(
 
   const updated = await getJobRecord(env, jobId);
   return jsonOk(request, env, { ok: true, action, job: updated ? await hydrateJobRecord(request, env, updated) : null });
+}
+
+async function handleSourceAttempts(request: Request, env: Env, jobId: string): Promise<Response> {
+  const row = await getJobSourceAttemptRow(env, jobId);
+  if (!row) {
+    return jsonError(request, env, 'JOB_NOT_FOUND', 'Job not found', 404);
+  }
+  const attempts = parseSourceAttempts(row.source_attempts);
+  return jsonOk(request, env, {
+    job_id: row.id,
+    status: row.status,
+    current_source: row.current_source || row.source,
+    retry_count: Number(row.retry_count ?? 0),
+    attempts,
+    source_labels: SOURCE_LABELS,
+    next_source: getNextFallbackSource({
+      originalUrl: row.original_url || row.source || '',
+      title: row.title,
+      artist: row.artist,
+      sourceAttempts: attempts,
+    }),
+  });
+}
+
+async function handleRetryNextSource(request: Request, env: Env, jobId: string): Promise<Response> {
+  const row = await getJobSourceAttemptRow(env, jobId);
+  if (!row) {
+    return jsonError(request, env, 'JOB_NOT_FOUND', 'Job not found', 404);
+  }
+  if (row.status === 'done') {
+    return jsonError(request, env, 'JOB_ALREADY_DONE', 'Job is already done', 409);
+  }
+
+  const originalUrl = row.original_url || row.source || `${row.artist ?? ''} ${row.title ?? ''}`;
+  const attempts = parseSourceAttempts(row.source_attempts);
+  const nextSource = getNextFallbackSource({
+    originalUrl,
+    title: row.title,
+    artist: row.artist,
+    sourceAttempts: attempts,
+  });
+  if (!nextSource) {
+    await env.DB.prepare(
+      `UPDATE download_jobs
+       SET status = 'failed',
+           error_code = 'SOURCE_FALLBACK_EXHAUSTED',
+           error_message = 'All source fallback attempts are exhausted',
+           updated_at = CURRENT_TIMESTAMP,
+           finished_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    ).bind(jobId).run();
+    return jsonError(request, env, 'SOURCE_FALLBACK_EXHAUSTED', 'All source fallback attempts are exhausted', 409, false);
+  }
+
+  const format = normalizeAudioFormat(row.format, 'mp3');
+  const quality = normalizeAudioQuality(row.quality, format, '320');
+  const fallbackTarget = buildFallbackTarget(originalUrl, nextSource, row.title, row.artist);
+  const fingerprint = await createJobFingerprint(fallbackTarget, format, quality);
+  const updatedAttempts = appendStartedAttempt(attempts, nextSource);
+
+  await env.DB.prepare(
+    `UPDATE download_jobs
+     SET status = 'queued',
+         current_source = ?,
+         source_attempts = ?,
+         retry_count = COALESCE(retry_count, 0) + 1,
+         attempts = 0,
+         error_code = NULL,
+         error_message = NULL,
+         finished_at = NULL,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+  ).bind(nextSource, JSON.stringify(updatedAttempts), jobId).run();
+
+  await env.DOWNLOAD_QUEUE.send({
+    id: row.id,
+    url: fallbackTarget,
+    source: nextSource,
+    format,
+    quality,
+    fingerprint,
+    syncKey: row.sync_key ?? undefined,
+    requestedAt: new Date().toISOString(),
+  });
+
+  await enqueueHistoryEvent(env, {
+    jobId,
+    event: 'queued',
+    status: 'queued',
+    source: nextSource,
+    detail: `source fallback retry via ${SOURCE_LABELS[nextSource]}`,
+  });
+  await recordTelemetry(env, {
+    event: 'source_fallback_retry',
+    status: '202',
+    source: nextSource,
+    code: row.source,
+  });
+
+  return jsonOk(request, env, {
+    retrying: true,
+    job_id: jobId,
+    next_source: nextSource,
+    next_source_label: SOURCE_LABELS[nextSource],
+    attempt: updatedAttempts.length,
+    target: fallbackTarget,
+  }, 202);
+}
+
+async function handleSourceAttemptResult(request: Request, env: Env, jobId: string): Promise<Response> {
+  if (request.headers.get('X-API-Key') !== env.DOWNLOADER_API_KEY) {
+    return jsonError(request, env, 'UNAUTHORIZED', 'Invalid downloader API key', 401);
+  }
+  const body = await parseJson<SourceAttemptResultBody>(request);
+  const source = normalizeFallbackSource(body?.source);
+  if (!source) {
+    return jsonError(request, env, 'INVALID_SOURCE', 'A valid source is required', 400);
+  }
+  const row = await getJobSourceAttemptRow(env, jobId);
+  if (!row) {
+    return jsonError(request, env, 'JOB_NOT_FOUND', 'Job not found', 404);
+  }
+
+  const attempts = parseSourceAttempts(row.source_attempts);
+  const updated = markAttemptResult(
+    attempts,
+    source,
+    Boolean(body?.success),
+    body?.error,
+    body?.result_url ?? body?.resultUrl,
+  );
+  await env.DB.prepare(
+    `UPDATE download_jobs
+     SET source_attempts = ?,
+         current_source = ?,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+  ).bind(JSON.stringify(updated), source, jobId).run();
+
+  if (body?.success === false) {
+    return handleRetryNextSource(request, env, jobId);
+  }
+
+  return jsonOk(request, env, { ok: true, job_id: jobId, attempts: updated });
+}
+
+async function getJobSourceAttemptRow(env: Env, jobId: string): Promise<{
+  id: string;
+  url: string;
+  original_url: string | null;
+  source: string;
+  format: string;
+  quality: string;
+  status: JobStatus;
+  title: string | null;
+  artist: string | null;
+  fingerprint: string | null;
+  sync_key: string | null;
+  source_attempts: string | null;
+  current_source: string | null;
+  retry_count: number | null;
+} | null> {
+  await ensureDownloadJobMetadataSchema(env);
+  const row = await env.DB.prepare(
+    `SELECT id, url, source, format, quality, status, title, artist, fingerprint, sync_key,
+            source_attempts, current_source, retry_count
+     FROM download_jobs
+     WHERE id = ?`,
+  ).bind(jobId).first<{
+    id: string;
+    url: string;
+    source: string;
+    format: string;
+    quality: string;
+    status: JobStatus;
+    title: string | null;
+    artist: string | null;
+    fingerprint: string | null;
+    sync_key: string | null;
+    source_attempts: string | null;
+    current_source: string | null;
+    retry_count: number | null;
+  }>();
+  if (!row) return null;
+  const originalUrl = await resolvePrivateUrl(env, 'job', row.id, row.url);
+  return {
+    ...row,
+    original_url: originalUrl,
+  };
 }
 
 async function replayQueuedWorkflowJobs(env: Env, workflowId: string): Promise<number> {
@@ -4080,6 +4561,9 @@ async function handleRuntimeConfig(request: Request, env: Env): Promise<Response
       archive_browser_v2: true,
       sync_key_claims: true,
       download_webhook_notifications: true,
+      share_card_direct_job_alias: true,
+      discography_search_v1: true,
+      source_fallback_attempts_v1: true,
     },
     sync_key_claim: {
       endpoint: `${base}/api/sync/claim`,
@@ -5721,6 +6205,49 @@ async function fetchArtistDiscography(
       retryable: true,
     };
   }
+}
+
+async function fetchDiscographyTracklist(env: Env, releaseId: string, source: string): Promise<PlaylistTrack[]> {
+  const cacheKey = `discography-tracklist:${source}:${releaseId}`;
+  try {
+    const cached = await env.CACHE.get(cacheKey, { type: 'json' }) as { tracks?: PlaylistTrack[] } | null;
+    if (cached?.tracks) return cached.tracks;
+  } catch {
+    // Cache is best effort.
+  }
+
+  const failover = await fetchDownloaderWithFailover(env, '/internal/discography/tracklist', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': env.DOWNLOADER_API_KEY,
+    },
+    body: JSON.stringify({ release_id: releaseId, releaseId, source }),
+  });
+  if (!failover.response.ok) return [];
+  const payload = await failover.response.json() as { tracks?: PlaylistTrack[]; results?: PlaylistTrack[] };
+  const tracks = Array.isArray(payload.tracks) ? payload.tracks : Array.isArray(payload.results) ? payload.results : [];
+  await env.CACHE.put(cacheKey, JSON.stringify({ tracks }), { expirationTtl: 86_400 }).catch(() => undefined);
+  return tracks;
+}
+
+function groupDiscographyTracksAsReleases(tracks: PlaylistTrack[], artist: string, source: string): Array<Record<string, unknown>> {
+  return [{
+    id: stableTextId(`${source}:${artist}:all`),
+    title: `${artist} Discography`,
+    type: 'compilation',
+    source,
+    trackCount: tracks.length,
+    tracks: tracks.slice(0, 100),
+  }];
+}
+
+function stableTextId(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 96) || 'discography';
 }
 
 async function resolvePlaylistViaInvidious(

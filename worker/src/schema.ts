@@ -55,6 +55,9 @@ async function ensureDownloadJobMetadataSchemaInternal(env: Env): Promise<void> 
     ['playlist_folder', 'TEXT'],
     ['playlist_index', 'INTEGER'],
     ['local_relpath', 'TEXT'],
+    ['source_attempts', "TEXT NOT NULL DEFAULT '[]'"],
+    ['current_source', 'TEXT'],
+    ['retry_count', 'INTEGER NOT NULL DEFAULT 0'],
   ];
 
   for (const [name, definition] of requiredColumns) {
