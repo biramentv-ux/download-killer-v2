@@ -24,8 +24,16 @@ CREATE TABLE IF NOT EXISTS download_jobs (
   r2_key        TEXT,
   title         TEXT,
   artist        TEXT,
+  album         TEXT,
+  genre         TEXT,
+  release_year  TEXT,
+  track_number  INTEGER,
+  thumbnail_url TEXT,
   duration      INTEGER,
   file_size     INTEGER,
+  quality_score INTEGER,
+  quality_grade TEXT,
+  quality_details TEXT,
   error_code    TEXT,
   error_message TEXT,
   chat_id       INTEGER,
@@ -44,6 +52,32 @@ CREATE INDEX IF NOT EXISTS idx_jobs_content_hash ON download_jobs(content_hash);
 CREATE INDEX IF NOT EXISTS idx_jobs_parent       ON download_jobs(parent_job_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_sync_created ON download_jobs(sync_key, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_variant_role ON download_jobs(variant_role);
+CREATE INDEX IF NOT EXISTS idx_jobs_quality_score ON download_jobs(quality_score);
+
+CREATE TABLE IF NOT EXISTS scheduled_downloads (
+  id             TEXT PRIMARY KEY,
+  url            TEXT NOT NULL,
+  title          TEXT,
+  artist         TEXT,
+  thumbnail      TEXT,
+  source         TEXT NOT NULL DEFAULT 'unknown',
+  format         TEXT NOT NULL DEFAULT 'mp3',
+  quality        TEXT NOT NULL DEFAULT '320',
+  sync_key       TEXT NOT NULL,
+  scheduled_at   TEXT NOT NULL,
+  recurrence     TEXT, -- NULL | daily | weekly | monthly
+  wifi_only      INTEGER NOT NULL DEFAULT 0,
+  status         TEXT NOT NULL DEFAULT 'pending', -- pending | triggered | cancelled | done
+  last_triggered TEXT,
+  next_run       TEXT,
+  job_id         TEXT,
+  created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_downloads_next ON scheduled_downloads(next_run, status);
+CREATE INDEX IF NOT EXISTS idx_scheduled_downloads_sync ON scheduled_downloads(sync_key, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scheduled_downloads_job ON scheduled_downloads(job_id);
 
 CREATE TABLE IF NOT EXISTS job_history_events (
   id         TEXT PRIMARY KEY,

@@ -17,7 +17,7 @@ export async function hashPrivateUrl(url: string): Promise<string> {
 
 export async function hashAndCachePrivateUrl(
   env: Env,
-  scope: 'job' | 'workflow' | 'shared',
+  scope: 'job' | 'workflow' | 'shared' | 'schedule',
   id: string,
   url: string,
 ): Promise<string> {
@@ -43,7 +43,7 @@ export async function hashAndCachePrivateUrl(
 
 export async function refreshPrivateUrlCache(
   env: Env,
-  scope: 'job' | 'workflow' | 'shared',
+  scope: 'job' | 'workflow' | 'shared' | 'schedule',
   id: string,
   url: string,
 ): Promise<string> {
@@ -52,7 +52,7 @@ export async function refreshPrivateUrlCache(
 
 export async function resolvePrivateUrl(
   env: Env,
-  scope: 'job' | 'workflow' | 'shared',
+  scope: 'job' | 'workflow' | 'shared' | 'schedule',
   id: string,
   storedValue?: string | null,
 ): Promise<string | null> {

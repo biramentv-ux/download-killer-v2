@@ -26,6 +26,8 @@ import { cleanupStaleKvKeys, hmacSha256Hex, resolvePrivateUrl } from './security
 import { calculateQueueRetryDelayFromEnv } from './retry';
 import { cleanupExpiredJobsAndFiles, shouldRunRetentionCleanup } from './retention';
 import { runReleaseRadarChecks } from './releaseRadar';
+import { runSchedulerCron } from './scheduler';
+import { classifySourceError, recordSourceAttempt } from './sourceHealth';
 
 const MAX_QUEUE_RETRIES = 5;
 const INVIDIOUS_DEFAULT_BASE_URL = 'https://inv.nadeko.net';
@@ -199,6 +201,10 @@ export default {
     }
 
     await runDownloaderSmokeChecks(env);
+    const scheduler = await runSchedulerCron(env).catch((error) => {
+      console.warn('Scheduled downloads cron failed', error);
+      return { due: 0, triggered: 0, failed: 1 };
+    });
     const releaseRadar = await runReleaseRadarChecks(env).catch((error) => {
       console.warn('Release Radar scheduled check failed', error);
       return { checked: 0, notified: 0 };
@@ -220,6 +226,9 @@ export default {
         `kv_cleanup_deleted=${cleanup.deleted}`,
         `release_radar_checked=${releaseRadar.checked}`,
         `release_radar_notified=${releaseRadar.notified}`,
+        `scheduler_due=${scheduler.due}`,
+        `scheduler_triggered=${scheduler.triggered}`,
+        `scheduler_failed=${scheduler.failed}`,
         `telegram_channel_backfill=${telegramBackfillPublished}`,
         retention
           ? `retention_jobs=${retention.jobs_deleted};retention_r2=${retention.r2_keys_deleted}`
@@ -676,7 +685,15 @@ async function downloadViaInternalService(
         local_relpath: job.localRelpath,
       }),
     }).catch((error) => {
-      throw classifyDownloaderOriginError(error, source);
+      const classified = classifyDownloaderOriginError(error, source);
+      recordSourceAttempt({
+        source,
+        success: false,
+        responseMs: Date.now() - startedAt,
+        error: classified.message,
+        errorType: classifySourceError(classified.message),
+      }, env);
+      throw classified;
     });
   const response = failover.response;
 
@@ -691,13 +708,33 @@ async function downloadViaInternalService(
 
   if (!response.ok) {
     const details = await response.text();
+    recordSourceAttempt({
+      source,
+      success: false,
+      responseMs: Date.now() - startedAt,
+      error: `Downloader API failed (${response.status}): ${details}`,
+      errorType: classifySourceError(details),
+    }, env);
     throw new Error(`Downloader API failed (${response.status}): ${details}`);
   }
 
   const result = await response.json<DownloaderDownloadResult>();
   if (!result.download_url) {
+    recordSourceAttempt({
+      source,
+      success: false,
+      responseMs: Date.now() - startedAt,
+      error: 'Downloader API did not return download_url',
+      errorType: 'invalid_response',
+    }, env);
     throw new Error('Downloader API did not return download_url');
   }
+
+  recordSourceAttempt({
+    source,
+    success: true,
+    responseMs: Date.now() - startedAt,
+  }, env);
 
   return result;
 }

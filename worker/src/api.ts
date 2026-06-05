@@ -54,6 +54,24 @@ import {
   handleReleaseRadarPost,
 } from './releaseRadar';
 import {
+  handleBatchScore,
+  handleGetScore,
+  handleQualityReport,
+  handleScoreJob,
+} from './metadataQuality';
+import {
+  handleCancelSchedule,
+  handleCreateSchedule,
+  handleListSchedules,
+  handleUpdateSchedule,
+} from './scheduler';
+import {
+  handleRecommendSource,
+  handleSourceDetail,
+  handleSourcesHealth,
+  resetSourceHealth,
+} from './sourceHealth';
+import {
   SOURCE_LABELS,
   appendStartedAttempt,
   buildFallbackTarget,
@@ -478,6 +496,24 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
     return jsonOk(request, env, { ok: true, service: 'dyrakarmy-worker' });
   }
 
+  if (path === '/health/sources' && request.method === 'GET') {
+    return handleSourcesHealth(request, env);
+  }
+
+  if (path === '/health/recommend' && request.method === 'GET') {
+    return handleRecommendSource(request, env);
+  }
+
+  const sourceHealthResetMatch = path.match(/^\/health\/sources\/([^/]+)\/reset$/i);
+  if (sourceHealthResetMatch && request.method === 'POST') {
+    return handleSourceHealthReset(request, env, decodeURIComponent(sourceHealthResetMatch[1]!));
+  }
+
+  const sourceHealthDetailMatch = path.match(/^\/health\/sources\/([^/]+)$/i);
+  if (sourceHealthDetailMatch && request.method === 'GET') {
+    return handleSourceDetail(request, env, decodeURIComponent(sourceHealthDetailMatch[1]!));
+  }
+
   if (path === '/runtime-config' && request.method === 'GET') {
     return handleRuntimeConfig(request, env);
   }
@@ -532,6 +568,48 @@ export async function downloadRouter(request: Request, env: Env): Promise<Respon
 
   if (path === '/preferences' && request.method === 'POST') {
     return handlePreferencesPost(request, env);
+  }
+
+  if (path === '/quality/score' && request.method === 'POST') {
+    await ensureDownloadJobMetadataSchema(env);
+    return handleScoreJob(request, env);
+  }
+
+  if (path === '/quality/report' && request.method === 'GET') {
+    await ensureDownloadJobMetadataSchema(env);
+    return handleQualityReport(request, env);
+  }
+
+  if (path === '/quality/batch-score' && request.method === 'POST') {
+    await ensureDownloadJobMetadataSchema(env);
+    return handleBatchScore(request, env);
+  }
+
+  const qualityScoreMatch = path.match(/^\/quality\/([0-9a-f-]{36})$/i);
+  if (qualityScoreMatch && request.method === 'GET') {
+    await ensureDownloadJobMetadataSchema(env);
+    return handleGetScore(request, env, qualityScoreMatch[1]!);
+  }
+
+  if (path === '/schedule' && request.method === 'GET') {
+    await ensureDownloadJobMetadataSchema(env);
+    return handleListSchedules(request, env);
+  }
+
+  if (path === '/schedule' && request.method === 'POST') {
+    await ensureDownloadJobMetadataSchema(env);
+    return handleCreateSchedule(request, env);
+  }
+
+  const scheduleMatch = path.match(/^\/schedule\/([0-9a-f-]{36})$/i);
+  if (scheduleMatch && request.method === 'PATCH') {
+    await ensureDownloadJobMetadataSchema(env);
+    return handleUpdateSchedule(request, env, scheduleMatch[1]!);
+  }
+
+  if (scheduleMatch && request.method === 'DELETE') {
+    await ensureDownloadJobMetadataSchema(env);
+    return handleCancelSchedule(request, env, scheduleMatch[1]!);
   }
 
   if (path === '/sync/claim' && request.method === 'POST') {
@@ -4564,6 +4642,9 @@ async function handleRuntimeConfig(request: Request, env: Env): Promise<Response
       share_card_direct_job_alias: true,
       discography_search_v1: true,
       source_fallback_attempts_v1: true,
+      metadata_quality_score_v1: true,
+      scheduled_downloads_v1: true,
+      source_health_dashboard_v1: true,
     },
     sync_key_claim: {
       endpoint: `${base}/api/sync/claim`,
@@ -4599,6 +4680,28 @@ async function handleRuntimeConfig(request: Request, env: Env): Promise<Response
     status: '200',
   });
   return jsonOk(request, env, payload);
+}
+
+async function handleSourceHealthReset(request: Request, env: Env, source: string): Promise<Response> {
+  const auth = resolveOpsAuthContext(request, env);
+  if (!hasOpsRole(auth, 'admin')) {
+    await writeOpsAuditEvent(env, request, 'source_health_reset', auth, 'denied', { source });
+    return jsonError(request, env, 'FORBIDDEN', 'Source health reset requires admin role', 403);
+  }
+
+  const reset = await resetSourceHealth(env, source);
+  if (!reset) {
+    await writeOpsAuditEvent(env, request, 'source_health_reset', auth, 'failed', { source, reason: 'unknown_source' });
+    return jsonError(request, env, 'UNKNOWN_SOURCE', 'Unknown source', 404);
+  }
+
+  await writeOpsAuditEvent(env, request, 'source_health_reset', auth, 'success', { source: reset.source });
+  await recordTelemetry(env, {
+    event: 'source_health_reset',
+    status: '200',
+    source: reset.source,
+  });
+  return jsonOk(request, env, { ok: true, source: reset.source, health: reset });
 }
 
 function readOpsTokenFromRequest(request: Request): string {

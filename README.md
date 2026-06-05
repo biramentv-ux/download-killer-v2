@@ -82,6 +82,12 @@ Cloudflare Worker backend + external downloader service (FastAPI + yt-dlp + ffmp
    - Source fallback attempt tracking: `GET /api/jobs/:id/attempts`, `POST /api/jobs/:id/retry-next`, `POST /api/jobs/:id/attempt-result`.
    - New user tutorial deliverables live in `tutorials/` as PPTX, DOCX, and Markdown.
 
+14. Metadata quality, scheduled downloads, and source health:
+   - Metadata quality score for completed jobs with grade/report endpoints.
+   - Scheduled downloads with one-time or recurring runs, privacy-preserving URL hashing, and queue integration.
+   - Source health dashboard backed by KV + Analytics Engine events from real downloader attempts.
+   - Automatic source recommendation endpoint for client-side fallback decisions.
+
 ## Runtime architecture
 
 1. Web UI / Telegram call Worker endpoints.
@@ -109,6 +115,18 @@ Cloudflare Worker backend + external downloader service (FastAPI + yt-dlp + ffmp
 - `GET /api/runtime-config`
 - `GET /api/updates`
 - `GET /api/releases/manifest`
+- `POST /api/quality/score` body: `{ jobId }`
+- `GET /api/quality/:jobId`
+- `GET /api/quality/report?syncKey=:sync_key`
+- `POST /api/quality/batch-score?syncKey=:sync_key`
+- `GET /api/schedule?syncKey=:sync_key&status=pending|all`
+- `POST /api/schedule` body: `{ url, syncKey, scheduledAt, format?, quality?, source?, recurrence?, wifiOnly? }`
+- `PATCH /api/schedule/:id` body: `{ syncKey, scheduledAt?, recurrence?, wifiOnly? }`
+- `DELETE /api/schedule/:id?syncKey=:sync_key`
+- `GET /api/health/sources`
+- `GET /api/health/sources/:source`
+- `GET /api/health/recommend?format=mp3&quality=320`
+- `POST /api/health/sources/:source/reset` (requires admin ops token)
 - `GET /api/ops/summary` (requires `Authorization: Bearer <OPS_READ_TOKEN|OPS_OPERATOR_TOKEN|OPS_ADMIN_TOKEN>`)
 - `POST /api/ops/replay` (requires `Authorization: Bearer <OPS_OPERATOR_TOKEN|OPS_ADMIN_TOKEN>`)
 - `GET /api/preferences?key=:sync_key`

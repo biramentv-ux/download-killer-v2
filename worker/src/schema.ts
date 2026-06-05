@@ -58,6 +58,14 @@ async function ensureDownloadJobMetadataSchemaInternal(env: Env): Promise<void> 
     ['source_attempts', "TEXT NOT NULL DEFAULT '[]'"],
     ['current_source', 'TEXT'],
     ['retry_count', 'INTEGER NOT NULL DEFAULT 0'],
+    ['album', 'TEXT'],
+    ['genre', 'TEXT'],
+    ['release_year', 'TEXT'],
+    ['track_number', 'INTEGER'],
+    ['thumbnail_url', 'TEXT'],
+    ['quality_score', 'INTEGER'],
+    ['quality_grade', 'TEXT'],
+    ['quality_details', 'TEXT'],
   ];
 
   for (const [name, definition] of requiredColumns) {
@@ -70,6 +78,36 @@ async function ensureDownloadJobMetadataSchemaInternal(env: Env): Promise<void> 
     env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_jobs_parent ON download_jobs(parent_job_id)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_jobs_sync_created ON download_jobs(sync_key, created_at DESC)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_jobs_variant_role ON download_jobs(variant_role)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_jobs_quality_score ON download_jobs(quality_score)'),
+  ]);
+
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS scheduled_downloads (
+      id             TEXT PRIMARY KEY,
+      url            TEXT NOT NULL,
+      title          TEXT,
+      artist         TEXT,
+      thumbnail      TEXT,
+      source         TEXT NOT NULL DEFAULT 'unknown',
+      format         TEXT NOT NULL DEFAULT 'mp3',
+      quality        TEXT NOT NULL DEFAULT '320',
+      sync_key       TEXT NOT NULL,
+      scheduled_at   TEXT NOT NULL,
+      recurrence     TEXT,
+      wifi_only      INTEGER NOT NULL DEFAULT 0,
+      status         TEXT NOT NULL DEFAULT 'pending',
+      last_triggered TEXT,
+      next_run       TEXT,
+      job_id         TEXT,
+      created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+
+  await env.DB.batch([
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_scheduled_downloads_next ON scheduled_downloads(next_run, status)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_scheduled_downloads_sync ON scheduled_downloads(sync_key, created_at DESC)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_scheduled_downloads_job ON scheduled_downloads(job_id)'),
   ]);
 }
 
