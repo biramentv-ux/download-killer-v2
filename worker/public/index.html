@@ -735,6 +735,37 @@
       margin-top: 4px;
     }
 
+    .audio-compare-panel {
+      margin-top: 12px;
+      border: 1px solid rgba(229, 82, 214, 0.26);
+      border-radius: 16px;
+      padding: 12px;
+      background: linear-gradient(135deg, rgba(229, 82, 214, 0.1), rgba(99, 230, 255, 0.08));
+      display: grid;
+      gap: 10px;
+    }
+
+    .audio-compare-selection {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .audio-compare-slot,
+    .audio-compare-result {
+      border: 1px solid rgba(126, 166, 238, 0.18);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(4, 10, 26, 0.55);
+      color: #dce9ff;
+      font-size: 0.76rem;
+      line-height: 1.45;
+    }
+
+    .audio-compare-result strong {
+      color: #63e6ff;
+    }
+
     .item-link {
       color: #79cfff;
       text-decoration: none;
@@ -2214,6 +2245,16 @@
             <button class="action-btn" id="clearDoneHistoryBtn">Hide done</button>
           </div>
           <div id="historyMeta" class="soft">Recent jobs</div>
+          <div id="audioComparePanel" class="audio-compare-panel">
+            <div class="label" id="audioCompareTitle">Audio quality comparison</div>
+            <div class="soft" id="audioCompareHint">Select two completed jobs to compare bitrate, loudness, and dynamic range.</div>
+            <div class="audio-compare-selection" id="audioCompareSelection"></div>
+            <div class="inline-row">
+              <button class="action-btn" id="runAudioCompareBtn">Compare selected</button>
+              <button class="action-btn" id="clearAudioCompareBtn">Clear comparison</button>
+            </div>
+            <div id="audioCompareResult" class="audio-compare-result soft">No comparison yet.</div>
+          </div>
         </div>
         <div id="historyList"></div>
       </div>
@@ -2689,6 +2730,17 @@
         settings_audio_normalization_replaygain: "ReplayGain compatible",
         settings_normalization_target: "Target loudness LUFS",
         settings_audio_normalization_hint: "When enabled, ffmpeg normalizes the final audio before delivery and stores analysis metrics for comparison.",
+        audio_compare_title: "Audio quality comparison",
+        audio_compare_hint: "Select two completed jobs to compare bitrate, loudness, and dynamic range.",
+        audio_compare_select: "Select for compare",
+        audio_compare_run: "Compare selected",
+        audio_compare_clear: "Clear comparison",
+        audio_compare_empty: "No comparison yet.",
+        audio_compare_slot_empty: "Empty slot",
+        audio_compare_need_two: "Select two completed jobs first.",
+        audio_compare_loading: "Comparing audio metrics...",
+        audio_compare_result: "Winner: {winner}. Score {leftScore} vs {rightScore}. Bitrate Δ {bitrateDelta} kbps, DR Δ {dynamicRangeDelta} dB, loudness Δ {loudnessDelta} LUFS.",
+        audio_compare_failed: "Audio comparison failed: {message}",
         sync_copy_key: "Copy Sync Key",
         sync_set_key: "Set Sync Key",
         sync_key_copied: "Sync key copied.",
@@ -2948,11 +3000,22 @@
 	        settings_webhook_hint: "Изпраща POST при готово сваляне. Разрешени са само публични HTTPS URL-и.",
 	        settings_audio_normalization: "Аудио нормализация",
 	        settings_audio_normalization_off: "Изключена",
-	        settings_audio_normalization_ebu: "EBU R128 сила на звука",
-	        settings_audio_normalization_replaygain: "ReplayGain съвместима",
-	        settings_normalization_target: "Целева сила LUFS",
-	        settings_audio_normalization_hint: "Когато е включено, ffmpeg нормализира крайния файл преди доставка и пази metrics за сравнение.",
-	        sync_copy_key: "Копирай Sync ключ",
+        settings_audio_normalization_ebu: "EBU R128 сила на звука",
+        settings_audio_normalization_replaygain: "ReplayGain съвместима",
+        settings_normalization_target: "Целева сила LUFS",
+        settings_audio_normalization_hint: "Когато е включено, ffmpeg нормализира крайния файл преди доставка и пази metrics за сравнение.",
+        audio_compare_title: "Сравнение на аудио качество",
+        audio_compare_hint: "Избери две завършени задачи, за да сравниш bitrate, сила и динамичен обхват.",
+        audio_compare_select: "Избери за сравнение",
+        audio_compare_run: "Сравни избраните",
+        audio_compare_clear: "Изчисти сравнението",
+        audio_compare_empty: "Още няма сравнение.",
+        audio_compare_slot_empty: "Празен слот",
+        audio_compare_need_two: "Първо избери две завършени задачи.",
+        audio_compare_loading: "Сравнявам аудио метриките...",
+        audio_compare_result: "Победител: {winner}. Резултат {leftScore} срещу {rightScore}. Bitrate Δ {bitrateDelta} kbps, DR Δ {dynamicRangeDelta} dB, loudness Δ {loudnessDelta} LUFS.",
+        audio_compare_failed: "Грешка при аудио сравнение: {message}",
+        sync_copy_key: "Копирай Sync ключ",
 	        sync_set_key: "Задай Sync ключ",
 	        sync_key_copied: "Sync ключът е копиран.",
 	        sync_invalid_key: "Невалиден формат на Sync ключ.",
@@ -3418,6 +3481,7 @@
     const workflowZipInFlight = new Set();
     let historyRowsCache = [];
     const hiddenDoneHistoryIds = new Set();
+    const audioCompareSelection = [];
     let historyTotalRows = 0;
     let archiveTracksCache = [];
     let archiveTotalRows = 0;
@@ -4029,6 +4093,15 @@
       }
       const clearDoneHistoryBtn = document.getElementById("clearDoneHistoryBtn");
       if (clearDoneHistoryBtn) clearDoneHistoryBtn.textContent = translate("history_hide_done");
+      const audioCompareTitle = document.getElementById("audioCompareTitle");
+      if (audioCompareTitle) audioCompareTitle.textContent = translate("audio_compare_title");
+      const audioCompareHint = document.getElementById("audioCompareHint");
+      if (audioCompareHint) audioCompareHint.textContent = translate("audio_compare_hint");
+      const runAudioCompareBtn = document.getElementById("runAudioCompareBtn");
+      if (runAudioCompareBtn) runAudioCompareBtn.textContent = translate("audio_compare_run");
+      const clearAudioCompareBtn = document.getElementById("clearAudioCompareBtn");
+      if (clearAudioCompareBtn) clearAudioCompareBtn.textContent = translate("audio_compare_clear");
+      renderAudioCompareSelection();
 
       const checkHealthBtn = document.getElementById("checkHealthBtn");
       if (checkHealthBtn) checkHealthBtn.textContent = translate("check_health");
@@ -5589,6 +5662,123 @@
       return parts.length ? `<div class="item-meta">Audio: ${parts.map(escapeHtml).join(" | ")}${norm}</div>` : "";
     }
 
+    function audioCompareActionMarkup(jobId, status) {
+      if (!jobId || String(status || "").toLowerCase() !== "done") return "";
+      return `<button class="item-link item-action" data-action="select-audio-compare" data-job-id="${escapeHtml(jobId)}">${translate("audio_compare_select")}</button>`;
+    }
+
+    function audioCompareLabel(record) {
+      if (!record) return translate("audio_compare_slot_empty");
+      const title = record.title || record.id || "job";
+      const artist = record.artist || translate("unknown_artist");
+      const format = record.format ? String(record.format).toUpperCase() : "";
+      const quality = record.quality || "";
+      return `${artist} - ${title} (${format} ${quality})`.trim();
+    }
+
+    function findAudioCompareRecord(jobId) {
+      const id = String(jobId || "");
+      if (!id) return null;
+      const queueJob = queueJobs.get(id);
+      if (queueJob) return queueJob;
+      return historyRowsCache.find((row) => String(row.id || "") === id) || null;
+    }
+
+    function renderAudioCompareSelection() {
+      const selection = document.getElementById("audioCompareSelection");
+      const result = document.getElementById("audioCompareResult");
+      if (!selection) return;
+      const slots = [0, 1].map((index) => {
+        const item = audioCompareSelection[index];
+        return `<div class="audio-compare-slot">${escapeHtml(item ? audioCompareLabel(item) : translate("audio_compare_slot_empty"))}</div>`;
+      });
+      selection.innerHTML = slots.join("");
+      if (result && !result.dataset.state) {
+        result.textContent = translate("audio_compare_empty");
+      }
+    }
+
+    function selectAudioCompareJob(jobId) {
+      const record = findAudioCompareRecord(jobId);
+      if (!record || String(record.status || "").toLowerCase() !== "done") return;
+      const existingIndex = audioCompareSelection.findIndex((item) => String(item.id || "") === String(jobId));
+      if (existingIndex >= 0) {
+        audioCompareSelection.splice(existingIndex, 1);
+      }
+      audioCompareSelection.push({
+        id: String(record.id || jobId),
+        title: record.title || "",
+        artist: record.artist || "",
+        format: record.format || "",
+        quality: record.quality || "",
+      });
+      while (audioCompareSelection.length > 2) audioCompareSelection.shift();
+      renderAudioCompareSelection();
+    }
+
+    function clearAudioCompare() {
+      audioCompareSelection.splice(0, audioCompareSelection.length);
+      const result = document.getElementById("audioCompareResult");
+      if (result) {
+        result.dataset.state = "";
+        result.textContent = translate("audio_compare_empty");
+      }
+      renderAudioCompareSelection();
+    }
+
+    function formatAudioCompareDelta(value, digits = 1) {
+      const num = Number(value || 0);
+      return Number.isFinite(num) ? num.toFixed(digits) : "0.0";
+    }
+
+    async function runAudioCompare() {
+      const result = document.getElementById("audioCompareResult");
+      if (audioCompareSelection.length < 2) {
+        if (result) {
+          result.dataset.state = "error";
+          result.textContent = translate("audio_compare_need_two");
+        }
+        return;
+      }
+      if (result) {
+        result.dataset.state = "loading";
+        result.textContent = translate("audio_compare_loading");
+      }
+      try {
+        const payload = await apiJson("/audio/compare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            left_job_id: audioCompareSelection[0].id,
+            right_job_id: audioCompareSelection[1].id,
+          }),
+        });
+        const comparison = payload.comparison || {};
+        const deltas = comparison.deltas || {};
+        const winner = comparison.winner === "left"
+          ? audioCompareLabel(audioCompareSelection[0])
+          : comparison.winner === "right"
+            ? audioCompareLabel(audioCompareSelection[1])
+            : "tie";
+        if (result) {
+          result.dataset.state = "loaded";
+          result.innerHTML = `<strong>${escapeHtml(translate("audio_compare_result", {
+            winner,
+            leftScore: formatAudioCompareDelta(comparison.left_score, 2),
+            rightScore: formatAudioCompareDelta(comparison.right_score, 2),
+            bitrateDelta: formatAudioCompareDelta(deltas.bit_rate_kbps, 0),
+            dynamicRangeDelta: formatAudioCompareDelta(deltas.dynamic_range_db, 1),
+            loudnessDelta: formatAudioCompareDelta(deltas.loudness_lufs, 1),
+          }))}</strong>`;
+        }
+      } catch (error) {
+        if (result) {
+          result.dataset.state = "error";
+          result.textContent = translate("audio_compare_failed", { message: error.message || String(error) });
+        }
+      }
+    }
+
     async function saveRemoteFileWithDialog(downloadUrl, suggestedName) {
       if (!isDesktopMode()) return;
       try {
@@ -5707,6 +5897,17 @@
         node.dataset.bound = "1";
         node.addEventListener("click", async () => {
           await shareJob(node.dataset.jobId || "");
+        });
+      });
+    }
+
+    function bindAudioCompareActionButtons(scope) {
+      const root = scope || document;
+      root.querySelectorAll("[data-action='select-audio-compare']").forEach((node) => {
+        if (node.dataset.bound === "1") return;
+        node.dataset.bound = "1";
+        node.addEventListener("click", () => {
+          selectAudioCompareJob(node.dataset.jobId || "");
         });
       });
     }
@@ -6605,6 +6806,7 @@
             ${isWorkflowJob(job) ? `<a class="item-link" target="_blank" rel="noreferrer" href="${API_BASE}/playlist/workflow/${encodeURIComponent(job.workflowId)}">${translate("workflow_link")}</a>` : ""}
             ${isWorkflowJob(job) ? workflowActionsMarkup(job) : ""}
             ${!isWorkflowJob(job) ? shareActionMarkup(job.id) : ""}
+            ${!isWorkflowJob(job) ? audioCompareActionMarkup(job.id, job.status) : ""}
             ${!isWorkflowJob(job) && job.status === "queued" && job.url ? `<button class="item-link item-action" data-action="pause-job" data-job-id="${job.id}">${translate("queue_pause")}</button>` : ""}
             ${!isWorkflowJob(job) && job.status === "paused" && job.url ? `<button class="item-link item-action" data-action="resume-job" data-job-id="${job.id}">${translate("queue_resume")}</button>` : ""}
             ${!isWorkflowJob(job) && job.status === "failed" && job.url ? `<button class="item-link item-action" data-action="retry-job" data-job-id="${job.id}">${translate("queue_retry")}</button>` : ""}
@@ -6616,6 +6818,7 @@
 
       bindDownloadActionButtons(list);
       bindShareActionButtons(list);
+      bindAudioCompareActionButtons(list);
       list.querySelectorAll("[data-action='retry-job']").forEach((node) => {
         if (node.dataset.bound === "1") return;
         node.dataset.bound = "1";
@@ -6920,11 +7123,13 @@
           ${row.download_url ? downloadActionMarkup(row.download_url, translate("download"), buildSuggestedFileName(row.title || translate("unknown_track"), row.artist || translate("unknown_artist"), row.format || "mp3")) : ""}
           ${row.stream_url ? audioPreviewMarkup(row.stream_url) : ""}
           ${shareActionMarkup(row.id)}
+          ${audioCompareActionMarkup(row.id, row.status)}
         </div>
       `).join("");
 
       bindDownloadActionButtons(list);
       bindShareActionButtons(list);
+      bindAudioCompareActionButtons(list);
     }
 
     async function loadHistory() {
@@ -7406,6 +7611,16 @@
 	        renderHistoryFromCache();
 	      });
 	    }
+	    const runAudioCompareBtn = document.getElementById("runAudioCompareBtn");
+	    if (runAudioCompareBtn) {
+	      runAudioCompareBtn.addEventListener("click", () => {
+	        void runAudioCompare();
+	      });
+	    }
+	    const clearAudioCompareBtn = document.getElementById("clearAudioCompareBtn");
+	    if (clearAudioCompareBtn) {
+	      clearAudioCompareBtn.addEventListener("click", clearAudioCompare);
+	    }
 	    document.getElementById("checkHealthBtn").addEventListener("click", checkHealth);
 	    document.getElementById("copySyncLinkBtn").addEventListener("click", copySyncLink);
 	    const autoDownloadToggle = document.getElementById("autoDownloadOnPasteToggle");
@@ -7550,6 +7765,7 @@
 	      renderQueue();
       bindDownloadActionButtons(document);
       bindShareActionButtons(document);
+      bindAudioCompareActionButtons(document);
     });
 	    window.addEventListener("resize", () => {
       applyDeviceProfile();
