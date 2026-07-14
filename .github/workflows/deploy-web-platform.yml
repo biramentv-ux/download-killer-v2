@@ -1,0 +1,132 @@
+name: Deploy Web Platform
+
+on:
+  pull_request:
+    paths:
+      - worker/**
+      - .github/workflows/deploy-web-platform.yml
+  push:
+    branches:
+      - main
+    paths:
+      - worker/**
+      - .github/workflows/deploy-web-platform.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-platform-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck Worker
+        run: npm run typecheck
+
+      - name: Run Worker tests
+        run: npm test
+
+      - name: Validate platform JavaScript
+        run: node --check public/platform/platform.js
+
+      - name: Validate platform assets
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('public/platform/index.html', 'utf8');
+          const css = fs.readFileSync('public/platform/platform.css', 'utf8');
+          const js = fs.readFileSync('public/platform/platform.js', 'utf8');
+          const required = [
+            'id="downloadForm"',
+            'id="jobFeed"',
+            'id="engineGrid"',
+            'id="signalCanvas"',
+            './platform.css',
+            './platform.js',
+          ];
+          for (const marker of required) {
+            if (!html.includes(marker)) throw new Error(`Missing platform marker: ${marker}`);
+          }
+          if (!css.includes('@media (prefers-reduced-motion: reduce)')) {
+            throw new Error('Reduced-motion accessibility rule is missing');
+          }
+          for (const endpoint of ['/download', '/health', '/runtime-config', '/history']) {
+            if (!js.includes(endpoint)) throw new Error(`Missing API integration: ${endpoint}`);
+          }
+          console.log('Platform portal assets validated.');
+          NODE
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect Cloudflare credentials
+        id: credentials
+        shell: bash
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Cloudflare secrets are missing. Validation passed, but deployment was skipped."
+          fi
+
+      - name: Deploy Worker and static platform
+        id: cloudflare
+        if: steps.credentials.outputs.available == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy --config wrangler.jsonc
+
+      - name: Production smoke test
+        if: steps.cloudflare.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          urls=(
+            "https://dyrakarmy.online/platform/"
+            "https://www.dyrakarmy.online/platform/"
+            "https://sounddrop.biramentv.workers.dev/platform/"
+          )
+          for url in "${urls[@]}"; do
+            echo "Checking $url"
+            if body="$(curl -fsSL --retry 3 --retry-delay 4 --max-time 25 "$url" 2>/dev/null)"; then
+              if grep -q "DyrakArmy Platform" <<<"$body"; then
+                echo "Platform is live at $url"
+                exit 0
+              fi
+            fi
+          done
+          echo "No public endpoint returned the deployed platform portal."
+          exit 1
