@@ -18,7 +18,43 @@ It provides:
 
 The launcher intentionally does not bundle or configure CDM files, Widevine profiles, PlayPlay binaries, decryption keys, cookies, or account credentials. The external engine must be installed and configured separately by the user.
 
-## Run from source
+## Protected inputs demo
+
+`protected_inputs_demo.py` is a separate BG/EN demonstration window showing the expected UI/schema shape for sensitive configuration categories:
+
+- CDM profile path;
+- `.wvd` file marker;
+- Widevine key ID and content-key placeholders;
+- PlayPlay binary path;
+- Spotify cookie placeholder;
+- account password placeholder;
+- account token placeholder.
+
+All displayed values are deliberately fake and contain markers such as `DEMO`, `EXAMPLE`, `PLACEHOLDER`, `NOT_REAL`, or `NOT_USED`. The demo:
+
+- performs no network requests;
+- starts no subprocesses;
+- loads no keys, WVD files, CDM profiles, or PlayPlay binaries;
+- stores no credentials;
+- performs no DRM decryption;
+- exports only a non-functional example JSON file.
+
+Run it from source:
+
+```powershell
+cd desktop_launcher
+python .\external_engines\protected_inputs_demo.py
+```
+
+The matching static example is:
+
+```text
+external_engines/protected-inputs.demo.json
+```
+
+Do not replace the placeholders with real cookies, passwords, tokens, device profiles, or keys.
+
+## Run the external engine GUI from source
 
 ```powershell
 cd desktop_launcher
