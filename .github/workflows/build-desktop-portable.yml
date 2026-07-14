@@ -45,6 +45,7 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --noconsole --name DyrakArmySpotifyOggMp4Engine .\external_engines\spotify_oggmp4_gui.py
 
       - name: Upload Windows artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: SoundDropDesktop-windows
@@ -88,6 +89,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "SoundDropDesktop.app" "SoundDropDesktop-macOS.zip"
 
       - name: Upload macOS artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: SoundDropDesktop-macos
