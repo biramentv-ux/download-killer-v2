@@ -1,9 +1,12 @@
-const CACHE_NAME = 'dyrakarmy-static-v4';
-const MEDIA_CACHE_NAME = 'dyrakarmy-offline-media-v1';
+const CACHE_NAME = 'download-killer-static-v11';
+const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
+  '/platform/platform.css',
+  '/platform/platform.js',
+  '/telegram/',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/apple-touch-icon.png',
@@ -35,9 +38,7 @@ async function warmRecentCache(urls) {
     if (url.origin !== self.location.origin) return;
     const request = new Request(url.toString(), { credentials: 'same-origin' });
     const response = await fetch(request);
-    if (response.ok) {
-      await cache.put(request, response.clone());
-    }
+    if (response.ok) await cache.put(request, response.clone());
   }));
 }
 
@@ -50,14 +51,11 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  if (request.method !== 'GET') {
-    return;
-  }
+  if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
   const isWarmableApi = url.pathname.startsWith('/api/file/') || url.pathname.startsWith('/api/archive/file/');
   if (url.pathname.startsWith('/api/') && !isWarmableApi) {
-    // API traffic should stay real-time and uncached.
     event.respondWith(fetch(request));
     return;
   }

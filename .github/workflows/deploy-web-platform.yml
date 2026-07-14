@@ -46,26 +46,42 @@ jobs:
       - name: Run Worker tests
         run: npm test
 
-      - name: Validate platform JavaScript
-        run: node --check public/platform/platform.js
+      - name: Validate platform JavaScript and service worker
+        run: |
+          node --check public/platform/platform.js
+          node --check public/sw.js
 
-      - name: Validate platform assets
+      - name: Validate Download Killer main assets
         run: |
           node - <<'NODE'
           const fs = require('node:fs');
-          const html = fs.readFileSync('public/platform/index.html', 'utf8');
+          const html = fs.readFileSync('public/index.html', 'utf8');
+          const legacyPlatform = fs.readFileSync('public/platform/index.html', 'utf8');
           const css = fs.readFileSync('public/platform/platform.css', 'utf8');
           const js = fs.readFileSync('public/platform/platform.js', 'utf8');
+          const manifest = JSON.parse(fs.readFileSync('public/manifest.webmanifest', 'utf8'));
+          const sw = fs.readFileSync('public/sw.js', 'utf8');
+
           const required = [
+            '<title>Download Killer Platform</title>',
             'id="downloadForm"',
             'id="jobFeed"',
             'id="engineGrid"',
             'id="signalCanvas"',
-            './platform.css',
-            './platform.js',
+            'id="globalHealth"',
+            'id="historyList"',
+            'https://t.me/download_killerBOT',
+            'https://t.me/download_killerBOT?startapp=home',
+            '/telegram/',
+            '/platform/platform.css',
+            '/platform/platform.js',
           ];
           for (const marker of required) {
-            if (!html.includes(marker)) throw new Error(`Missing platform marker: ${marker}`);
+            if (!html.includes(marker)) throw new Error(`Missing main-page marker: ${marker}`);
+          }
+
+          if (!legacyPlatform.includes("window.location.replace('/')")) {
+            throw new Error('Legacy /platform route does not redirect to the main homepage');
           }
           if (!css.includes('@media (prefers-reduced-motion: reduce)')) {
             throw new Error('Reduced-motion accessibility rule is missing');
@@ -73,7 +89,16 @@ jobs:
           for (const endpoint of ['/download', '/health', '/runtime-config', '/history']) {
             if (!js.includes(endpoint)) throw new Error(`Missing API integration: ${endpoint}`);
           }
-          console.log('Platform portal assets validated.');
+          if (manifest.name !== 'Download Killer Platform v11') {
+            throw new Error('PWA manifest was not rebranded');
+          }
+          if (!sw.includes('download-killer-static-v11')) {
+            throw new Error('Service-worker cache version was not updated');
+          }
+          if (html.includes('<title>DyrakArmy v7</title>')) {
+            throw new Error('Legacy homepage title is still present');
+          }
+          console.log('Download Killer main homepage assets validated.');
           NODE
 
   deploy:
@@ -115,18 +140,18 @@ jobs:
         run: |
           set -euo pipefail
           urls=(
-            "https://dyrakarmy.online/platform/"
-            "https://www.dyrakarmy.online/platform/"
-            "https://sounddrop.biramentv.workers.dev/platform/"
+            "https://dyrakarmy.online/"
+            "https://www.dyrakarmy.online/"
+            "https://sounddrop.biramentv.workers.dev/"
           )
           for url in "${urls[@]}"; do
             echo "Checking $url"
             if body="$(curl -fsSL --retry 3 --retry-delay 4 --max-time 25 "$url" 2>/dev/null)"; then
-              if grep -q "DyrakArmy Platform" <<<"$body"; then
-                echo "Platform is live at $url"
+              if grep -q "Download Killer Platform" <<<"$body" && grep -q "download_killerBOT" <<<"$body"; then
+                echo "Download Killer main homepage is live at $url"
                 exit 0
               fi
             fi
           done
-          echo "No public endpoint returned the deployed platform portal."
+          echo "No public endpoint returned the new Download Killer homepage."
           exit 1
