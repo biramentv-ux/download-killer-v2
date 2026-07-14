@@ -54,13 +54,11 @@ jobs:
       - name: Test ZIP archive
         run: unzip -t worker/public/downloads/DyrakArmy-Extension-Chrome.zip
 
-      - name: Upload Chrome extension artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: DyrakArmy-Extension-Chrome
-          path: worker/public/downloads/DyrakArmy-Extension-Chrome.zip
-          if-no-files-found: error
-          retention-days: 30
+      - name: Publish build summary
+        shell: bash
+        run: |
+          sha256sum worker/public/downloads/DyrakArmy-Extension-Chrome.zip
+          unzip -l worker/public/downloads/DyrakArmy-Extension-Chrome.zip
 
   deploy:
     if: github.event_name != 'pull_request'
