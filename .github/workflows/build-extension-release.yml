@@ -1,0 +1,125 @@
+name: Build Spotify Web Companion
+
+on:
+  pull_request:
+    paths:
+      - extension/spotify-web-companion/**
+      - .github/workflows/build-extension-release.yml
+  push:
+    branches:
+      - main
+    paths:
+      - extension/spotify-web-companion/**
+      - .github/workflows/build-extension-release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spotify-web-companion-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check extension/spotify-web-companion/background.js
+          node --check extension/spotify-web-companion/content.js
+          node --check extension/spotify-web-companion/popup.js
+          node --check extension/spotify-web-companion/utils/api.js
+          node --check extension/spotify-web-companion/utils/metadata.js
+          node --check extension/spotify-web-companion/utils/storage.js
+          node --check extension/spotify-web-companion/utils/validators.js
+
+      - name: Validate safe extension boundaries
+        run: node extension/spotify-web-companion/scripts/validate.mjs
+
+      - name: Run extension tests
+        run: node --test extension/spotify-web-companion/tests/validators.test.mjs
+
+      - name: Build Chrome extension ZIP
+        run: python3 extension/spotify-web-companion/scripts/build_release.py
+
+      - name: Test ZIP archive
+        run: unzip -t worker/public/downloads/DyrakArmy-Extension-Chrome.zip
+
+      - name: Upload Chrome extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DyrakArmy-Extension-Chrome
+          path: worker/public/downloads/DyrakArmy-Extension-Chrome.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install Worker dependencies
+        working-directory: worker
+        run: npm ci
+
+      - name: Rebuild Chrome extension ZIP
+        run: python3 extension/spotify-web-companion/scripts/build_release.py
+
+      - name: Detect Cloudflare credentials
+        id: credentials
+        shell: bash
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Cloudflare secrets are missing. Extension validation passed, but deployment was skipped."
+          fi
+
+      - name: Deploy Worker static assets
+        if: steps.credentials.outputs.available == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy --config wrangler.jsonc
+
+      - name: Smoke test public extension ZIP
+        if: steps.credentials.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://dyrakarmy.online/downloads/DyrakArmy-Extension-Chrome.zip"
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsSL --max-time 30 "$url" -o extension.zip && unzip -t extension.zip; then
+              echo "Extension ZIP is live: $url"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Public extension ZIP smoke test failed"
+          exit 1
