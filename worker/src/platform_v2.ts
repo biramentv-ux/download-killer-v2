@@ -6,9 +6,17 @@ import {
   handleTelegramPlatformWebhook,
   syncTelegramStorageBatch,
 } from './telegram_platform';
+import {
+  createSecondaryTelegramEnv,
+  hasSecondaryTelegramBot,
+  rewriteSecondaryTelegramApiRequest,
+} from './telegram_secondary';
 
 type ExtendedEnv = Env & {
   TELEGRAM_STORAGE_ENABLED?: string;
+  TELEGRAM_SECONDARY_BOT_TOKEN?: string;
+  TELEGRAM_SECONDARY_SECRET_TOKEN?: string;
+  TELEGRAM_SECONDARY_BOT_USERNAME?: string;
 };
 
 export default {
@@ -17,6 +25,29 @@ export default {
 
     if (url.pathname === '/telegram/webhook') {
       return handleTelegramPlatformWebhook(request, env);
+    }
+
+    if (url.pathname === '/telegram/webhook/dyrakarmy') {
+      if (!hasSecondaryTelegramBot(env)) {
+        return Response.json(
+          { error: { code: 'SECONDARY_BOT_NOT_CONFIGURED', message: 'Secondary Telegram bot is not configured', retryable: false } },
+          { status: 503 },
+        );
+      }
+      return handleTelegramPlatformWebhook(request, createSecondaryTelegramEnv(env));
+    }
+
+    if (url.pathname.startsWith('/api/telegram/v10-secondary/')) {
+      if (!hasSecondaryTelegramBot(env)) {
+        return Response.json(
+          { error: { code: 'SECONDARY_BOT_NOT_CONFIGURED', message: 'Secondary Telegram bot is not configured', retryable: false } },
+          { status: 503 },
+        );
+      }
+      return handleTelegramPlatformApi(
+        rewriteSecondaryTelegramApiRequest(request),
+        createSecondaryTelegramEnv(env),
+      ) as Promise<Response>;
     }
 
     const telegramApiResponse = await handleTelegramPlatformApi(request, env);
