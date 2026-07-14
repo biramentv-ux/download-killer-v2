@@ -4,6 +4,7 @@ Portable desktop launcher:
 
 - Windows output: `dist/DyrakArmyDesktop.exe`
 - macOS output (from macOS builder): `dist/DyrakArmyDesktop-macOS.zip`
+- Separate optional Windows external-engine GUI: `dist/DyrakArmySpotifyOggMp4Engine.exe`
 - Built-in desktop bridge for local downloads:
   - Opens native **Save As** dialog.
   - Supports synced preferred download directory from web settings (`download_directory`) as initial dialog location.
@@ -23,6 +24,27 @@ Optional environment variables for Spotify playlist extraction on strict network
 
 - `SPOTIFY_CLIENT_ID`
 - `SPOTIFY_CLIENT_SECRET`
+
+## Separate Spotify OGG/MP4 external engine GUI
+
+The optional `DyrakArmySpotifyOggMp4Engine.exe` provides a BG/EN Tkinter interface for launching a separately installed copy of `spotify-oggmp4-dl`.
+
+Features:
+
+- select the external engine's `main.py`;
+- select an explicit Python interpreter or use `py -3`;
+- enter Spotify URL, URI, or ID;
+- choose supported MP4/OGG quality;
+- select output directory;
+- live logs, debug flag, engine check, and stop control;
+- non-secret settings stored under the user's DyrakArmy Desktop config folder.
+
+The executable does not bundle or configure CDM files, Widevine profiles, PlayPlay binaries, decryption keys, cookies, or account credentials. The external engine must be installed and configured independently.
+
+Source and detailed instructions:
+
+- `external_engines/spotify_oggmp4_gui.py`
+- `external_engines/README.md`
 
 ## Runtime URL
 
@@ -80,6 +102,7 @@ or `dyrakarmy_desktop.json`
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -r requirements.txt
 .\.venv\Scripts\pyinstaller --noconfirm --clean --onefile --noconsole --name DyrakArmyDesktop sounddrop_desktop.py
+.\.venv\Scripts\pyinstaller --noconfirm --clean --onefile --noconsole --name DyrakArmySpotifyOggMp4Engine .\external_engines\spotify_oggmp4_gui.py
 ```
 
 ## Rebuild (macOS)
@@ -96,8 +119,7 @@ ditto -c -k --sequesterRsrc --keepParent "DyrakArmyDesktop.app" "DyrakArmyDeskto
 
 ## CI artifacts
 
-GitHub Actions workflow:
+GitHub Actions workflows:
 
-- `.github/workflows/build-desktop-portable.yml`
-
-It builds both Windows and macOS portable artifacts and uploads them as downloadable run artifacts.
+- `.github/workflows/build-desktop-portable.yml` builds the main desktop app and the separate Windows OGG/MP4 engine GUI.
+- `.github/workflows/release-assets.yml` includes the engine GUI in tagged/manual release assets.
