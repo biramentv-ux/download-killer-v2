@@ -1,0 +1,134 @@
+name: Telegram Platform Checks
+
+on:
+  pull_request:
+    paths:
+      - worker/src/telegram_platform.ts
+      - worker/src/telegram_platform.test.ts
+      - worker/src/platform_v2.ts
+      - worker/public/telegram/**
+      - worker/scripts/setup-telegram-platform.mjs
+      - worker/migrations/0011_telegram_platform_v10.sql
+      - worker/wrangler.jsonc
+      - worker/package.json
+      - worker/public/manifest.webmanifest
+      - TELEGRAM_PLATFORM_V10.md
+      - .github/workflows/telegram-platform-check.yml
+  push:
+    branches:
+      - main
+    paths:
+      - worker/src/telegram_platform.ts
+      - worker/src/telegram_platform.test.ts
+      - worker/src/platform_v2.ts
+      - worker/public/telegram/**
+      - worker/scripts/setup-telegram-platform.mjs
+      - worker/migrations/0011_telegram_platform_v10.sql
+      - worker/wrangler.jsonc
+      - worker/package.json
+      - worker/public/manifest.webmanifest
+      - TELEGRAM_PLATFORM_V10.md
+      - .github/workflows/telegram-platform-check.yml
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck Worker
+        run: npm run typecheck
+
+      - name: Run Worker tests
+        run: npm test
+
+      - name: Validate Mini App JavaScript and setup script
+        run: |
+          node --check public/telegram/telegram.js
+          node --check scripts/setup-telegram-platform.mjs
+
+      - name: Validate Telegram platform boundaries
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('public/telegram/index.html', 'utf8');
+          const css = fs.readFileSync('public/telegram/telegram.css', 'utf8');
+          const js = fs.readFileSync('public/telegram/telegram.js', 'utf8');
+          const backend = fs.readFileSync('src/telegram_platform.ts', 'utf8');
+          const entry = fs.readFileSync('src/platform_v2.ts', 'utf8');
+          const wrangler = fs.readFileSync('wrangler.jsonc', 'utf8');
+          const setup = fs.readFileSync('scripts/setup-telegram-platform.mjs', 'utf8');
+          const migration = fs.readFileSync('migrations/0011_telegram_platform_v10.sql', 'utf8');
+          const manifest = JSON.parse(fs.readFileSync('public/manifest.webmanifest', 'utf8'));
+
+          for (const marker of [
+            'id="downloadForm"', 'id="searchForm"', 'id="queueList"',
+            'id="historyList"', 'id="archiveFiles"',
+            'https://telegram.org/js/telegram-web-app.js',
+          ]) {
+            if (!html.includes(marker)) throw new Error(`Missing Mini App marker: ${marker}`);
+          }
+
+          for (const endpoint of [
+            '/api/telegram/v10/config', '/api/telegram/v10/handoff',
+            '/api/telegram/v10/miniapp/profile', '/api/telegram/v10/miniapp/download',
+            '/api/telegram/v10/miniapp/send-job',
+          ]) {
+            if (!backend.includes(endpoint)) throw new Error(`Missing backend endpoint: ${endpoint}`);
+          }
+
+          for (const command of [
+            "command: 'search'", "command: 'download'", "command: 'queue'",
+            "command: 'history'", "command: 'myfiles'", "command: 'formats'",
+            "command: 'archive'", "command: 'site'", "command: 'language'",
+            "command: 'storage'", "command: 'cancel'", "command: 'settings'",
+          ]) {
+            if (!backend.includes(command)) throw new Error(`Missing command: ${command}`);
+          }
+
+          for (const storageMarker of [
+            'telegram_media_objects', 'telegram_user_links', 'copyMessage',
+            'telegram_file_id', 'channel_message_id', 'file_unique_id',
+          ]) {
+            if (!backend.includes(storageMarker) && !migration.includes(storageMarker)) {
+              throw new Error(`Missing Telegram storage marker: ${storageMarker}`);
+            }
+          }
+
+          if (!backend.includes("const TELEGRAM_URL_UPLOAD_LIMIT = 20 * 1024 * 1024")) {
+            throw new Error('Hosted Bot API URL upload limit is not encoded');
+          }
+          if (!backend.includes("const TELEGRAM_DEFAULT_UPLOAD_LIMIT = 50 * 1024 * 1024")) {
+            throw new Error('Hosted Bot API multipart default is not encoded');
+          }
+          if (!backend.includes('validateTelegramInitData')) throw new Error('Mini App initData validation is missing');
+          if (!backend.includes("secretKeyBytes")) throw new Error('Telegram HMAC validation is incomplete');
+          if (!backend.includes("X-Telegram-Bot-Api-Secret-Token")) throw new Error('Webhook secret validation is missing');
+          if (!entry.includes("handleTelegramPlatformWebhook")) throw new Error('Telegram webhook wrapper is not active');
+          if (!wrangler.includes('"main": "src/platform_v2.ts"')) throw new Error('Wrangler does not use platform_v2 entrypoint');
+          if (!wrangler.includes('"TELEGRAM_BOT_USERNAME": "download_killerBOT"')) throw new Error('Target bot username is not configured');
+          if (!css.includes('@media (prefers-reduced-motion: reduce)')) throw new Error('Reduced-motion support is missing');
+          if (!js.includes('Telegram.WebApp')) throw new Error('Telegram Mini App SDK integration is missing');
+          if (!js.includes('/miniapp/download') || !js.includes('/miniapp/profile')) throw new Error('Mini App API integration is missing');
+          if (!setup.includes("process.env.TELEGRAM_BOT_TOKEN")) throw new Error('Setup script does not read token from environment');
+          if (setup.includes('123456789:') || setup.includes('bot_token=')) throw new Error('A token-like literal was committed');
+          if (!migration.includes('CREATE TABLE IF NOT EXISTS telegram_media_objects')) throw new Error('D1 migration is incomplete');
+
+          const shortcut = (manifest.shortcuts || []).find((item) => item.url === '/telegram/');
+          if (!shortcut) throw new Error('Telegram Mini App PWA shortcut is missing');
+          console.log('Telegram Platform v10 boundaries validated.');
+          NODE

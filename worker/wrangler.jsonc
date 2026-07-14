@@ -1,8 +1,8 @@
-// SoundDrop v7 Cloudflare Worker configuration
+// SoundDrop v10 Cloudflare Worker configuration
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "sounddrop",
-  "main": "src/index.ts",
+  "main": "src/platform_v2.ts",
   "workers_dev": true,
   "routes": [
     {
@@ -88,10 +88,14 @@
     "DOWNLOADER_API_URL": "https://dyrakarmy-downloader-primary.onrender.com",
     "DOWNLOADER_ORIGINS_JSON": "[{\"base_url\":\"https://dyrakarmy-downloader-primary.onrender.com\",\"priority\":0,\"id\":\"render-primary\"},{\"base_url\":\"https://heritage-bra-chocolate-document.trycloudflare.com\",\"priority\":1,\"id\":\"trycloudflare-backup\"}]",
     "DOWNLOADER_BACKUP_API_URL": "https://heritage-bra-chocolate-document.trycloudflare.com",
-    "TELEGRAM_BOT_USERNAME": "dyrakarmy_bot",
+    "TELEGRAM_BOT_USERNAME": "download_killerBOT",
     "TELEGRAM_DOWNLOAD_CHANNEL_ID": "",
     "TELEGRAM_CHANNEL_PUBLISH_ENABLED": "1",
     "TELEGRAM_CHANNEL_SEND_AUDIO": "1",
+    "TELEGRAM_STORAGE_ENABLED": "1",
+    "TELEGRAM_STORAGE_MAX_MB": "50",
+    "TELEGRAM_MINIAPP_PATH": "/telegram/",
+    "TELEGRAM_MINIAPP_AUTH_MAX_AGE_SECONDS": "900",
     "DOWNLOAD_URL_ALLOWLIST": "youtube.com,*.youtube.com,youtu.be,spotify.com,*.spotify.com,spotify.link,soundcloud.com,*.soundcloud.com,deezer.com,*.deezer.com,music.apple.com,*.music.apple.com,podcasts.apple.com,*.podcasts.apple.com,itunes.apple.com,*.itunes.apple.com,rss.com,*.rss.com,anchor.fm,*.anchor.fm,simplecast.com,*.simplecast.com,buzzsprout.com,*.buzzsprout.com,podbean.com,*.podbean.com,libsyn.com,*.libsyn.com,megaphone.fm,*.megaphone.fm,omny.fm,*.omny.fm,transistor.fm,*.transistor.fm",
     "URL_BLOCKLIST": "localhost,*.localhost,*.local,*.onion",
     "CORS_ORIGINS": "https://dyrakarmy.online,https://www.dyrakarmy.online,https://sounddrop.biramentv.workers.dev,http://localhost:8787,http://localhost:3000",
@@ -138,7 +142,7 @@
     "PRIVATE_URL_TTL_SECONDS": "3600",
     "TELEGRAM_WEBHOOK_REQUIRE_JWT": "0",
     "WEBHOOK_HMAC_MAX_SKEW_SECONDS": "300",
-    "KV_CLEANUP_PREFIXES": "url:,result:,private-url:,tg:url:,tg:result:",
+    "KV_CLEANUP_PREFIXES": "url:,result:,private-url:,tg:url:,tg:result:,tg:handoff:",
     "KV_CLEANUP_MAX_KEYS": "500",
     "SYNC_KEY_EMAIL_REQUIRED": "0",
     "SYNC_KEY_TURNSTILE_REQUIRED": "0",
@@ -147,7 +151,7 @@
     "JOB_RETENTION_DAYS": "30",
     "JOB_RETENTION_BATCH_SIZE": "100",
     "API_JSON_COMPRESSION_ENABLED": "0"
-  }
+  },
 
   // secrets (wrangler secret put):
   // TELEGRAM_BOT_TOKEN
@@ -162,7 +166,3 @@
   // OPS_ADMIN_TOKEN
   // RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64
 }
-
-
-
-

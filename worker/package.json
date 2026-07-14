@@ -1,6 +1,6 @@
 {
   "name": "sounddrop-worker",
-  "version": "7.0.0",
+  "version": "10.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "deploy": "wrangler deploy --config wrangler.jsonc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "telegram:setup": "node scripts/setup-telegram-platform.mjs",
     "build:tg-archive-seed": "node scripts/build-telegram-archive-seed.mjs --out telegram_archive_seed.sql",
     "secrets:rotate": "node scripts/rotate-secrets.mjs --generate-missing --apply"
   },
