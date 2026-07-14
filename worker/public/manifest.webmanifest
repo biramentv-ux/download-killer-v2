@@ -1,5 +1,5 @@
 {
-  "name": "Download Killer Platform v11",
+  "name": "Download Killer Platform v12",
   "short_name": "Download Killer",
   "id": "/",
   "start_url": "/",
@@ -9,23 +9,22 @@
   "orientation": "any",
   "background_color": "#050713",
   "theme_color": "#050713",
-  "description": "Download Killer web and Telegram platform with shared queues, history, live progress and Telegram file archive.",
+  "description": "Download Killer web and Telegram platform with a four-language tutorial, shared queues, live progress and Telegram file archive.",
   "categories": ["music", "utilities", "productivity"],
+  "lang": "bg",
+  "dir": "ltr",
   "icons": [
-    {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "shortcuts": [
+    {
+      "name": "Quick Start Tutorial",
+      "short_name": "Tutorial",
+      "description": "Learn how the shared web and Telegram workflow operates.",
+      "url": "/#tutorial",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
     {
       "name": "Web Console",
       "short_name": "Console",
@@ -45,13 +44,6 @@
       "short_name": "Status",
       "description": "Open live service telemetry.",
       "url": "/#status",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Downloads",
-      "short_name": "Apps",
-      "description": "Download desktop and browser applications.",
-      "url": "/downloads/",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
   ],

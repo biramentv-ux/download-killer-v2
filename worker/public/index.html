@@ -4,23 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#050713">
-  <meta name="description" content="Download Killer — web и Telegram платформа за обща опашка, история и медийни задачи.">
+  <meta name="description" content="Download Killer — web и Telegram платформа с обща опашка, история и файлов архив.">
   <title>Download Killer Platform</title>
+  <link rel="canonical" href="https://dyrakarmy.online/">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/platform/platform.css">
   <style>
-    .bot-link { border-color: rgba(92, 200, 255, .46); }
-    .bot-link:hover { border-color: rgba(92, 200, 255, .82); }
-    .hero-actions { flex-wrap: wrap; }
-    .telegram-strip { margin: 0 auto; width: min(1220px, calc(100% - 40px)); display: grid; grid-template-columns: 1.35fr .65fr; gap: 18px; padding: 22px; }
-    .telegram-strip-copy h2 { margin: 8px 0 10px; font-size: clamp(1.6rem, 3vw, 2.7rem); }
-    .telegram-strip-copy p { color: var(--muted); max-width: 720px; }
-    .telegram-actions { display: grid; gap: 12px; align-content: center; }
-    .telegram-actions a { justify-content: space-between; }
-    @media (max-width: 780px) { .telegram-strip { grid-template-columns: 1fr; width: min(100% - 24px, 1220px); } }
+    .hero-actions{flex-wrap:wrap}.bot-link{border-color:rgba(92,200,255,.46)}.bot-link:hover{border-color:rgba(92,200,255,.82)}
+    .language-picker{height:42px;padding:0 34px 0 14px;border:1px solid var(--line);border-radius:999px;background:rgba(8,13,28,.84);color:var(--text);font:700 .78rem var(--mono);cursor:pointer}
+    .tutorial-section,.telegram-strip{width:min(1220px,calc(100% - 40px));margin:0 auto;padding:32px 0}.tutorial-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.tutorial-card{position:relative;min-height:220px;padding:24px;border:1px solid var(--line);border-radius:24px;background:linear-gradient(160deg,rgba(13,20,42,.92),rgba(6,11,25,.82));overflow:hidden}.tutorial-card:before{content:attr(data-step);position:absolute;right:18px;top:10px;font:800 4.8rem/1 var(--display);color:rgba(136,160,255,.09)}.tutorial-card b{display:grid;place-items:center;width:42px;height:42px;border-radius:14px;background:rgba(148,116,255,.15);border:1px solid rgba(161,132,255,.35);font-family:var(--mono)}.tutorial-card h3{margin:26px 0 10px;font-size:1.08rem}.tutorial-card p{margin:0;color:var(--muted);line-height:1.65}
+    .intro-panel{display:grid;grid-template-columns:1.15fr .85fr;gap:22px;align-items:center;margin-bottom:24px}.intro-panel p{color:var(--muted);max-width:760px;line-height:1.75}.domain-switch{display:grid;gap:12px}.domain-switch a{justify-content:space-between}
+    .telegram-strip{display:grid;grid-template-columns:1.25fr .75fr;gap:22px;padding:26px}.telegram-strip-copy h2{margin:8px 0 10px;font-size:clamp(1.7rem,3vw,2.8rem)}.telegram-strip-copy p{color:var(--muted);max-width:720px;line-height:1.7}.telegram-actions{display:grid;gap:12px;align-content:center}.telegram-actions a,.telegram-actions button{justify-content:space-between}.text-button{width:100%;min-height:48px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--text);font:700 .85rem var(--mono);cursor:pointer}
+    .mirror-note{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:.82rem}.mirror-note i{width:8px;height:8px;border-radius:50%;background:#c9ff4b;box-shadow:0 0 14px rgba(201,255,75,.7)}
+    @media(max-width:1020px){.tutorial-grid{grid-template-columns:repeat(2,1fr)}.intro-panel,.telegram-strip{grid-template-columns:1fr}}
+    @media(max-width:680px){.tutorial-section,.telegram-strip{width:min(100% - 24px,1220px)}.tutorial-grid{grid-template-columns:1fr}.top-actions{gap:8px}.language-picker{max-width:82px}.tutorial-card{min-height:190px}}
   </style>
 </head>
 <body>
@@ -30,35 +30,33 @@
   <header class="topbar">
     <a class="brand" href="/" aria-label="Download Killer">
       <span class="brand-mark"><i></i><i></i><i></i></span>
-      <span><strong>Download</strong>Killer</span>
-      <em>PLATFORM</em>
+      <span><strong>Download</strong>Killer</span><em>PLATFORM</em>
     </a>
     <nav class="nav-links" aria-label="Primary">
+      <a href="#tutorial" data-i18n="nav_tutorial">Как работи</a>
       <a href="#console" data-i18n="nav_console">Конзола</a>
       <a href="#telegram">Telegram</a>
-      <a href="#engines" data-i18n="nav_engines">Двигатели</a>
-      <a href="#status">Status</a>
+      <a href="#status" data-i18n="nav_status">Статус</a>
     </nav>
     <div class="top-actions">
       <div class="live-chip" id="globalHealth" data-state="checking"><span></span><b data-i18n="checking">Проверка</b></div>
-      <button class="language" id="languageBtn" type="button" aria-label="Change language">BG</button>
-      <a class="ghost-button bot-link" href="https://t.me/download_killerBOT" target="_blank" rel="noreferrer">@download_killerBOT</a>
+      <select class="language-picker" id="languageSelect" aria-label="Language">
+        <option value="bg">BG</option><option value="en">EN</option><option value="ru">RU</option><option value="de">DE</option>
+      </select>
+      <a class="ghost-button bot-link telegram-link" href="https://web.telegram.org/k/#@download_killerBOT" data-telegram-mode="bot"><span>@download_killerBOT</span></a>
     </div>
   </header>
 
   <main>
     <section class="hero reveal" id="home">
       <div class="hero-copy">
-        <div class="eyebrow"><span></span><span>TELEGRAM · WEB · SHARED QUEUE</span></div>
-        <h1>
-          <span>Търси. Избери качество.</span>
-          <span class="gradient-text">Получи файла в чата.</span>
-        </h1>
-        <p>Една обща система за сайта и <strong>@download_killerBOT</strong>. Опашката, историята и Telegram архивът се синхронизират през общ backend.</p>
+        <div class="eyebrow"><span></span><span data-i18n="hero_eyebrow">WEB · TELEGRAM · ЕДНА ОПАШКА</span></div>
+        <h1><span data-i18n="hero_line_1">Подай линк.</span><span class="gradient-text" data-i18n="hero_line_2">Получи готовия файл.</span></h1>
+        <p data-i18n="hero_text">Download Killer свързва сайта, Telegram бота, Mini App, опашката и файловия архив върху един общ backend.</p>
         <div class="hero-actions">
-          <a class="primary-button magnetic" href="#console"><span>Стартирай web задача</span><b>↗</b></a>
-          <a class="secondary-button" href="https://t.me/download_killerBOT?startapp=home" target="_blank" rel="noreferrer">Отвори Telegram Mini App</a>
-          <a class="secondary-button" href="https://t.me/download_killerBOT" target="_blank" rel="noreferrer">Отвори бота</a>
+          <a class="primary-button magnetic" href="#tutorial"><span data-i18n="see_tutorial">Виж как работи</span><b>↓</b></a>
+          <a class="secondary-button telegram-link" href="https://web.telegram.org/k/#@download_killerBOT" data-telegram-mode="miniapp" data-i18n="open_miniapp">Отвори Telegram Mini App</a>
+          <a class="secondary-button" id="canonicalDomainLink" href="https://dyrakarmy.online/"><span>dyrakarmy.online</span></a>
         </div>
         <div class="trust-row">
           <span><b>Cloudflare</b><small>Worker · D1 · KV · Queues</small></span>
@@ -66,14 +64,32 @@
           <span><b>SSE</b><small data-i18n="live_progress">Live прогрес</small></span>
         </div>
       </div>
-
       <div class="hero-orbit" aria-hidden="true">
         <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="orbit orbit-c"></div>
         <div class="core"><div class="core-ring"></div><span>DK</span><small>ROUTER</small></div>
-        <div class="satellite sat-a"><b>WEB</b><small>EDGE</small></div>
-        <div class="satellite sat-b"><b>BOT</b><small>QUEUE</small></div>
-        <div class="satellite sat-c"><b>FFMPEG</b><small>MEDIA</small></div>
-        <div class="satellite sat-d"><b>TG</b><small>ARCHIVE</small></div>
+        <div class="satellite sat-a"><b>WEB</b><small>EDGE</small></div><div class="satellite sat-b"><b>BOT</b><small>QUEUE</small></div>
+        <div class="satellite sat-c"><b>FFMPEG</b><small>MEDIA</small></div><div class="satellite sat-d"><b>TG</b><small>ARCHIVE</small></div>
+      </div>
+    </section>
+
+    <section class="tutorial-section reveal" id="tutorial">
+      <div class="intro-panel">
+        <div>
+          <span class="kicker" data-i18n="tutorial_kicker">БЪРЗО НАЧАЛО</span>
+          <h2 data-i18n="tutorial_title">Какво е системата и как се използва</h2>
+          <p data-i18n="tutorial_intro">Платформата приема публичен URL, валидира го, добавя задачата в обща опашка и предава обработката към наличния backend. Резултатът се връща в сайта или в Telegram.</p>
+        </div>
+        <div class="domain-switch glass">
+          <a class="primary-button" id="alternateDomainLink" href="https://dyrakarmy.eu/"><span data-i18n="open_other_domain">Отвори резервния домейн</span><b>↗</b></a>
+          <a class="secondary-button" href="https://dyrakarmy.online/"><span data-i18n="open_primary_domain">Отвори основния .online домейн</span></a>
+          <div class="mirror-note"><i></i><span data-i18n="mirror_note">Двата адреса използват една и съща база, опашка и Telegram интеграция.</span></div>
+        </div>
+      </div>
+      <div class="tutorial-grid">
+        <article class="tutorial-card" data-step="01"><b>01</b><h3 data-i18n="step1_title">Постави публичен URL</h3><p data-i18n="step1_text">Копирай линк от поддържан източник или използвай търсенето в Telegram бота.</p></article>
+        <article class="tutorial-card" data-step="02"><b>02</b><h3 data-i18n="step2_title">Избери формат и качество</h3><p data-i18n="step2_text">Избери MP3, M4A, OGG, OPUS, FLAC или WAV и подходящо качество.</p></article>
+        <article class="tutorial-card" data-step="03"><b>03</b><h3 data-i18n="step3_title">Следи общата опашка</h3><p data-i18n="step3_text">Worker-ът валидира заявката, поставя я в queue и показва прогрес чрез SSE.</p></article>
+        <article class="tutorial-card" data-step="04"><b>04</b><h3 data-i18n="step4_title">Получи резултата</h3><p data-i18n="step4_text">Изтегли файла от сайта или го получи в Telegram. Повторните заявки могат да използват архива.</p></article>
       </div>
     </section>
 
@@ -81,22 +97,16 @@
       <article><span class="metric-value" data-count="6">0</span><small data-i18n="metric_formats">формата</small></article>
       <article><span class="metric-value" data-count="7">0</span><small data-i18n="metric_sources">източника</small></article>
       <article><span class="metric-value">SSE</span><small data-i18n="metric_updates">live статус</small></article>
-      <article><span class="metric-value">BG/EN</span><small data-i18n="metric_language">двуезичен UI</small></article>
+      <article><span class="metric-value">4</span><small data-i18n="metric_language">езика</small></article>
       <article><span class="metric-value">24/7</span><small data-i18n="metric_edge">edge достъп</small></article>
     </section>
 
     <section class="console-section reveal" id="console">
-      <div class="section-heading">
-        <div><span class="kicker">LIVE CONTROL</span><h2>Web конзола</h2></div>
-        <p>Подай публичен URL, избери формат и следи задачата в реално време. Готовият файл може да бъде получен през сайта или изпратен към Telegram.</p>
-      </div>
+      <div class="section-heading"><div><span class="kicker">LIVE CONTROL</span><h2 data-i18n="console_title">Web конзола</h2></div><p data-i18n="console_text">Подай публичен URL, избери формат и следи задачата в реално време.</p></div>
       <div class="console-grid">
         <form class="control-panel glass" id="downloadForm">
           <div class="panel-header"><div><span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span></div><code>POST /api/download</code></div>
-          <label class="field wide">
-            <span data-i18n="url_label">Публичен URL</span>
-            <div class="input-shell"><span>↗</span><input id="mediaUrl" name="url" type="url" inputmode="url" autocomplete="url" required placeholder="https://open.spotify.com/track/..."><button id="pasteBtn" type="button" data-i18n="paste">Постави</button></div>
-          </label>
+          <label class="field wide"><span data-i18n="url_label">Публичен URL</span><div class="input-shell"><span>↗</span><input id="mediaUrl" name="url" type="url" inputmode="url" autocomplete="url" required placeholder="https://open.spotify.com/track/..."><button id="pasteBtn" type="button" data-i18n="paste">Постави</button></div></label>
           <div class="field-row">
             <label class="field"><span data-i18n="source_label">Източник</span><select id="sourceSelect" name="source"><option value="all">Auto</option><option value="spotify">Spotify</option><option value="youtube">YouTube</option><option value="soundcloud">SoundCloud</option><option value="deezer">Deezer</option><option value="apple">Apple</option><option value="podcast">Podcast / RSS</option></select></label>
             <label class="field"><span data-i18n="format_label">Формат</span><select id="formatSelect" name="format"><option value="mp3">MP3</option><option value="m4a">M4A</option><option value="ogg">OGG</option><option value="opus">OPUS</option><option value="flac">FLAC</option><option value="wav">WAV</option></select></label>
@@ -105,36 +115,28 @@
           <div class="usage-note"><span>i</span><p data-i18n="usage_note">Използвай платформата само за съдържание, което имаш право да изтеглиш или обработиш.</p></div>
           <button class="launch-button magnetic" id="launchBtn" type="submit"><span data-i18n="launch">Добави в опашката</span><b>→</b></button>
         </form>
-
-        <div class="activity-panel glass">
-          <div class="panel-header"><div class="activity-title"><span class="pulse"></span><span data-i18n="activity_title">Активност</span></div><button id="clearJobsBtn" type="button" data-i18n="clear">Изчисти</button></div>
-          <div class="job-feed" id="jobFeed"><div class="empty-state" id="jobEmpty"><div class="radar"><i></i><i></i><i></i></div><strong data-i18n="empty_jobs">Няма активни задачи</strong><span data-i18n="empty_jobs_text">Първата заявка ще се появи тук с live прогрес.</span></div></div>
-        </div>
+        <div class="activity-panel glass"><div class="panel-header"><div class="activity-title"><span class="pulse"></span><span data-i18n="activity_title">Активност</span></div><button id="clearJobsBtn" type="button" data-i18n="clear">Изчисти</button></div><div class="job-feed" id="jobFeed"></div></div>
       </div>
     </section>
 
     <section class="telegram-strip glass reveal" id="telegram">
-      <div class="telegram-strip-copy">
-        <span class="kicker">DIRECT TELEGRAM LINK</span>
-        <h2>Ботът и сайтът използват една и съща система.</h2>
-        <p>Търси по име, изпращай URL, избирай формат и качество, следи опашката и получавай готовите файлове в Telegram. Повторните заявки могат да използват Telegram file archive без ново качване.</p>
-      </div>
+      <div class="telegram-strip-copy"><span class="kicker">TELEGRAM FALLBACK ACCESS</span><h2 data-i18n="telegram_title">Ботът и сайтът използват една и съща система.</h2><p data-i18n="telegram_text">Бутоните първо отварят инсталираното Telegram приложение. Ако протоколът не е наличен, системата преминава към Telegram Web и не зависи единствено от t.me.</p></div>
       <div class="telegram-actions">
-        <a class="primary-button magnetic" href="https://t.me/download_killerBOT" target="_blank" rel="noreferrer"><span>Отвори @download_killerBOT</span><b>↗</b></a>
-        <a class="secondary-button" href="https://t.me/download_killerBOT?startapp=home" target="_blank" rel="noreferrer">Стартирай Mini App</a>
-        <a class="secondary-button" href="/telegram/">Web изглед на Mini App</a>
+        <a class="primary-button magnetic telegram-link" href="https://web.telegram.org/k/#@download_killerBOT" data-telegram-mode="bot"><span data-i18n="open_bot">Отвори @download_killerBOT</span><b>↗</b></a>
+        <a class="secondary-button telegram-link" href="https://web.telegram.org/k/#@download_killerBOT" data-telegram-mode="miniapp" data-i18n="open_miniapp">Стартирай Mini App</a>
+        <a class="secondary-button" href="https://web.telegram.org/k/#@download_killerBOT" target="_blank" rel="noreferrer" data-i18n="open_telegram_web">Отвори Telegram Web</a>
+        <button class="text-button" id="copyBotHandleBtn" type="button" data-i18n="copy_bot_handle">Копирай @download_killerBOT</button>
+        <a class="secondary-button" href="/telegram/" data-i18n="open_web_miniapp">Web изглед на Mini App</a>
       </div>
     </section>
 
     <section class="engines-section reveal" id="engines">
-      <div class="section-heading"><div><span class="kicker">ENGINE FABRIC</span><h2 data-i18n="engines_title">Модулна система от двигатели</h2></div><p>Публичният web слой и Telegram ботът използват един control plane, докато обработващите двигатели могат да се обновяват независимо.</p></div>
+      <div class="section-heading"><div><span class="kicker">SYSTEM COMPONENTS</span><h2 data-i18n="engines_title">Какво работи зад интерфейса</h2></div><p data-i18n="engines_text">Web и Telegram използват един control plane, а обработващите компоненти се обновяват независимо.</p></div>
       <div class="engine-grid" id="engineGrid">
-        <article class="engine-card featured"><div class="engine-index">01</div><div class="engine-icon">◇</div><h3>Cloudflare Edge</h3><p>REST API, D1, KV, Queues, SSE и tokenized файлове.</p><div class="tag-row"><span>Worker</span><span>D1</span><span>KV</span></div><div class="engine-state"><i></i><span>Публично ядро</span></div></article>
-        <article class="engine-card"><div class="engine-index">02</div><div class="engine-icon">T</div><h3>Telegram Platform</h3><p>Webhook, Mini App, shared queue, file archive и повторно изпращане.</p><div class="tag-row"><span>Bot API</span><span>Mini App</span></div><div class="engine-state"><i></i><span>Свързан интерфейс</span></div></article>
-        <article class="engine-card"><div class="engine-index">03</div><div class="engine-icon">⌁</div><h3>FastAPI Downloader</h3><p>Изолирана обработка с FFmpeg и source fallback.</p><div class="tag-row"><span>Python</span><span>FFmpeg</span></div><div class="engine-state"><i></i><span>Remote origin</span></div></article>
-        <article class="engine-card"><div class="engine-index">04</div><div class="engine-icon">S</div><h3>Metadata Fallback</h3><p>Spotify metadata matching и алтернативни публични източници.</p><div class="tag-row"><span>Metadata</span><span>Fallback</span></div><div class="engine-state planned"><i></i><span>Fallback</span></div></article>
-        <article class="engine-card"><div class="engine-index">05</div><div class="engine-icon">D</div><h3>Desktop</h3><p>Windows и macOS приложения за локален workflow.</p><div class="tag-row"><span>Desktop</span><span>Local</span></div><div class="engine-state planned"><i></i><span>Клиент</span></div></article>
-        <article class="engine-card"><div class="engine-index">06</div><div class="engine-icon">B</div><h3>Browser Extension</h3><p>Добавяне на задачи директно от поддържаните web страници.</p><div class="tag-row"><span>Chrome</span><span>Firefox</span></div><div class="engine-state planned"><i></i><span>Клиент</span></div></article>
+        <article class="engine-card featured"><div class="engine-index">01</div><div class="engine-icon">◇</div><h3>Cloudflare Edge</h3><p data-i18n="engine_edge">REST API, D1, KV, Queues, SSE и защитени файлови връзки.</p><div class="tag-row"><span>Worker</span><span>D1</span><span>KV</span></div><div class="engine-state"><i></i><span data-i18n="public_core">Публично ядро</span></div></article>
+        <article class="engine-card"><div class="engine-index">02</div><div class="engine-icon">T</div><h3>Telegram Platform</h3><p data-i18n="engine_telegram">Webhook, Mini App, обща опашка, файлов архив и повторно изпращане.</p><div class="tag-row"><span>Bot API</span><span>Mini App</span></div><div class="engine-state"><i></i><span data-i18n="connected_surface">Свързан интерфейс</span></div></article>
+        <article class="engine-card"><div class="engine-index">03</div><div class="engine-icon">⌁</div><h3>FastAPI Downloader</h3><p data-i18n="engine_downloader">Изолирана обработка с FFmpeg и source fallback.</p><div class="tag-row"><span>Python</span><span>FFmpeg</span></div><div class="engine-state"><i></i><span>Remote origin</span></div></article>
+        <article class="engine-card"><div class="engine-index">04</div><div class="engine-icon">S</div><h3>Metadata Fallback</h3><p data-i18n="engine_metadata">Metadata matching и алтернативни публични източници.</p><div class="tag-row"><span>Metadata</span><span>Fallback</span></div><div class="engine-state planned"><i></i><span>Fallback</span></div></article>
       </div>
     </section>
 
@@ -146,24 +148,14 @@
         <article class="status-card"><span data-i18n="status_formats">Формати</span><strong id="formatStatus">—</strong><small id="formatDetail">/api/formats</small></article>
         <article class="status-card"><span data-i18n="status_latency">Латентност</span><strong id="latencyStatus">—</strong><small>edge round trip</small></article>
       </div>
-      <div class="history-panel glass"><div class="panel-header"><strong data-i18n="recent_jobs">Последни публични задачи</strong><a href="#console">Нова задача ↗</a></div><div class="history-list" id="historyList"><div class="history-skeleton"></div><div class="history-skeleton"></div><div class="history-skeleton"></div></div></div>
-    </section>
-
-    <section class="access-section reveal" id="access">
-      <div class="access-copy"><span class="kicker">ONE BACKEND · EVERY SURFACE</span><h2>Избери интерфейса. Опашката остава същата.</h2><p>Web за директен достъп, Telegram за мобилен workflow, desktop за локална работа и extension за задачи от браузъра.</p></div>
-      <div class="access-grid">
-        <a href="#console" class="access-card"><span>01</span><b>Web Console</b><small>Пълна конзола</small><i>↗</i></a>
-        <a href="https://t.me/download_killerBOT" target="_blank" rel="noreferrer" class="access-card"><span>02</span><b>Telegram Bot</b><small>@download_killerBOT</small><i>↗</i></a>
-        <a href="https://t.me/download_killerBOT?startapp=home" target="_blank" rel="noreferrer" class="access-card"><span>03</span><b>Mini App</b><small>Telegram интерфейс</small><i>↗</i></a>
-        <a href="/downloads/" class="access-card"><span>04</span><b>Applications</b><small>Desktop и extension</small><i>↓</i></a>
-      </div>
+      <div class="history-panel glass"><div class="panel-header"><strong data-i18n="recent_jobs">Последни публични задачи</strong><a href="#console" data-i18n="new_job">Нова задача ↗</a></div><div class="history-list" id="historyList"><div class="history-skeleton"></div><div class="history-skeleton"></div><div class="history-skeleton"></div></div></div>
     </section>
   </main>
 
   <footer>
-    <div><a class="brand footer-brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span><strong>Download</strong>Killer</span></a><p>Web и Telegram media workflow върху общ edge backend.</p></div>
-    <div class="footer-links"><a href="https://t.me/download_killerBOT" target="_blank" rel="noreferrer">Telegram Bot</a><a href="/telegram/">Mini App</a><a href="/api/health">API Health</a></div>
-    <small>© <span id="year"></span> Download Killer · Platform v11</small>
+    <div><a class="brand footer-brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span><strong>Download</strong>Killer</span></a><p data-i18n="footer_text">Web и Telegram workflow върху общ edge backend.</p></div>
+    <div class="footer-links"><a class="telegram-link" href="https://web.telegram.org/k/#@download_killerBOT" data-telegram-mode="bot">Telegram Bot</a><a href="/telegram/">Mini App</a><a href="https://dyrakarmy.online/">dyrakarmy.online</a><a href="https://dyrakarmy.eu/">dyrakarmy.eu</a><a href="/api/health">API Health</a></div>
+    <small>© <span id="year"></span> Download Killer · Platform v12</small>
   </footer>
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
