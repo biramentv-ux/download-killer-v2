@@ -1,15 +1,15 @@
 {
-  "name": "DyrakArmy v7",
+  "name": "DyrakArmy Platform v9",
   "short_name": "DyrakArmy",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone"],
-  "orientation": "portrait",
-  "background_color": "#020813",
-  "theme_color": "#020813",
-  "description": "DyrakArmy downloader with live queue status and desktop bridge.",
+  "orientation": "any",
+  "background_color": "#050713",
+  "theme_color": "#050713",
+  "description": "DyrakArmy media workflow platform with live queues, history, edge routing and desktop integrations.",
   "categories": ["music", "utilities", "productivity"],
   "icons": [
     {
@@ -26,6 +26,13 @@
     }
   ],
   "shortcuts": [
+    {
+      "name": "Platform Portal",
+      "short_name": "Platform",
+      "description": "Open the animated platform dashboard and live console.",
+      "url": "/platform/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
     {
       "name": "Download",
       "short_name": "Download",
