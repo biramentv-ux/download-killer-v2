@@ -19,6 +19,7 @@
     .intro-panel{display:grid;grid-template-columns:1.15fr .85fr;gap:22px;align-items:center;margin-bottom:24px}.intro-panel p{color:var(--muted);max-width:760px;line-height:1.75}.domain-switch{display:grid;gap:12px}.domain-switch a{justify-content:space-between}
     .telegram-strip{display:grid;grid-template-columns:1.25fr .75fr;gap:22px;padding:26px}.telegram-strip-copy h2{margin:8px 0 10px;font-size:clamp(1.7rem,3vw,2.8rem)}.telegram-strip-copy p{color:var(--muted);max-width:720px;line-height:1.7}.telegram-actions{display:grid;gap:12px;align-content:center}.telegram-actions a,.telegram-actions button{justify-content:space-between}.text-button{width:100%;min-height:48px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--text);font:700 .85rem var(--mono);cursor:pointer}
     .mirror-note{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:.82rem}.mirror-note i{width:8px;height:8px;border-radius:50%;background:#c9ff4b;box-shadow:0 0 14px rgba(201,255,75,.7)}
+    @media(max-width:1120px){.top-actions .secondary-bot-link{display:none}}
     @media(max-width:1020px){.tutorial-grid{grid-template-columns:repeat(2,1fr)}.intro-panel,.telegram-strip{grid-template-columns:1fr}}
     @media(max-width:680px){.tutorial-section,.telegram-strip{width:min(100% - 24px,1220px)}.tutorial-grid{grid-template-columns:1fr}.top-actions{gap:8px}.language-picker{max-width:82px}.tutorial-card{min-height:190px}}
   </style>
@@ -44,6 +45,7 @@
         <option value="bg">BG</option><option value="en">EN</option><option value="ru">RU</option><option value="de">DE</option>
       </select>
       <a class="ghost-button bot-link telegram-link" href="https://web.telegram.org/k/#@download_killerBOT" data-telegram-mode="bot"><span>@download_killerBOT</span></a>
+      <a class="ghost-button bot-link secondary-bot-link" href="https://web.telegram.org/k/#@dyrakarmy_bot" target="_blank" rel="noreferrer"><span>@dyrakarmy_bot</span></a>
     </div>
   </header>
 
@@ -56,18 +58,19 @@
         <div class="hero-actions">
           <a class="primary-button magnetic" href="#tutorial"><span data-i18n="see_tutorial">Виж как работи</span><b>↓</b></a>
           <a class="secondary-button telegram-link" href="https://web.telegram.org/k/#@download_killerBOT" data-telegram-mode="miniapp" data-i18n="open_miniapp">Отвори Telegram Mini App</a>
+          <a class="secondary-button" href="https://web.telegram.org/k/#@dyrakarmy_bot" target="_blank" rel="noreferrer">Алтернативен бот: @dyrakarmy_bot</a>
           <a class="secondary-button" id="canonicalDomainLink" href="https://dyrakarmy.online/"><span>dyrakarmy.online</span></a>
         </div>
         <div class="trust-row">
           <span><b>Cloudflare</b><small>Worker · D1 · KV · Queues</small></span>
-          <span><b>Telegram</b><small>Bot · Mini App · File archive</small></span>
+          <span><b>Telegram</b><small>2 Bots · Shared queue · File archive</small></span>
           <span><b>SSE</b><small data-i18n="live_progress">Live прогрес</small></span>
         </div>
       </div>
       <div class="hero-orbit" aria-hidden="true">
         <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="orbit orbit-c"></div>
         <div class="core"><div class="core-ring"></div><span>DK</span><small>ROUTER</small></div>
-        <div class="satellite sat-a"><b>WEB</b><small>EDGE</small></div><div class="satellite sat-b"><b>BOT</b><small>QUEUE</small></div>
+        <div class="satellite sat-a"><b>WEB</b><small>EDGE</small></div><div class="satellite sat-b"><b>BOTS</b><small>QUEUE</small></div>
         <div class="satellite sat-c"><b>FFMPEG</b><small>MEDIA</small></div><div class="satellite sat-d"><b>TG</b><small>ARCHIVE</small></div>
       </div>
     </section>
@@ -98,7 +101,7 @@
       <article><span class="metric-value" data-count="7">0</span><small data-i18n="metric_sources">източника</small></article>
       <article><span class="metric-value">SSE</span><small data-i18n="metric_updates">live статус</small></article>
       <article><span class="metric-value">4</span><small data-i18n="metric_language">езика</small></article>
-      <article><span class="metric-value">24/7</span><small data-i18n="metric_edge">edge достъп</small></article>
+      <article><span class="metric-value">2</span><small>Telegram bots</small></article>
     </section>
 
     <section class="console-section reveal" id="console">
@@ -120,9 +123,10 @@
     </section>
 
     <section class="telegram-strip glass reveal" id="telegram">
-      <div class="telegram-strip-copy"><span class="kicker">TELEGRAM FALLBACK ACCESS</span><h2 data-i18n="telegram_title">Ботът и сайтът използват една и съща система.</h2><p data-i18n="telegram_text">Бутоните първо отварят инсталираното Telegram приложение. Ако протоколът не е наличен, системата преминава към Telegram Web и не зависи единствено от t.me.</p></div>
+      <div class="telegram-strip-copy"><span class="kicker">DUAL TELEGRAM ACCESS</span><h2 data-i18n="telegram_title">Ботът и сайтът използват една и съща система.</h2><p data-i18n="telegram_text">Бутоните първо отварят инсталираното Telegram приложение. Ако протоколът не е наличен, системата преминава към Telegram Web и не зависи единствено от t.me.</p></div>
       <div class="telegram-actions">
         <a class="primary-button magnetic telegram-link" href="https://web.telegram.org/k/#@download_killerBOT" data-telegram-mode="bot"><span data-i18n="open_bot">Отвори @download_killerBOT</span><b>↗</b></a>
+        <a class="primary-button" href="https://web.telegram.org/k/#@dyrakarmy_bot" target="_blank" rel="noreferrer"><span>Отвори @dyrakarmy_bot</span><b>↗</b></a>
         <a class="secondary-button telegram-link" href="https://web.telegram.org/k/#@download_killerBOT" data-telegram-mode="miniapp" data-i18n="open_miniapp">Стартирай Mini App</a>
         <a class="secondary-button" href="https://web.telegram.org/k/#@download_killerBOT" target="_blank" rel="noreferrer" data-i18n="open_telegram_web">Отвори Telegram Web</a>
         <button class="text-button" id="copyBotHandleBtn" type="button" data-i18n="copy_bot_handle">Копирай @download_killerBOT</button>
@@ -134,7 +138,7 @@
       <div class="section-heading"><div><span class="kicker">SYSTEM COMPONENTS</span><h2 data-i18n="engines_title">Какво работи зад интерфейса</h2></div><p data-i18n="engines_text">Web и Telegram използват един control plane, а обработващите компоненти се обновяват независимо.</p></div>
       <div class="engine-grid" id="engineGrid">
         <article class="engine-card featured"><div class="engine-index">01</div><div class="engine-icon">◇</div><h3>Cloudflare Edge</h3><p data-i18n="engine_edge">REST API, D1, KV, Queues, SSE и защитени файлови връзки.</p><div class="tag-row"><span>Worker</span><span>D1</span><span>KV</span></div><div class="engine-state"><i></i><span data-i18n="public_core">Публично ядро</span></div></article>
-        <article class="engine-card"><div class="engine-index">02</div><div class="engine-icon">T</div><h3>Telegram Platform</h3><p data-i18n="engine_telegram">Webhook, Mini App, обща опашка, файлов архив и повторно изпращане.</p><div class="tag-row"><span>Bot API</span><span>Mini App</span></div><div class="engine-state"><i></i><span data-i18n="connected_surface">Свързан интерфейс</span></div></article>
+        <article class="engine-card"><div class="engine-index">02</div><div class="engine-icon">T</div><h3>Telegram Platform</h3><p data-i18n="engine_telegram">Webhook, Mini App, обща опашка, файлов архив и повторно изпращане.</p><div class="tag-row"><span>2 Bots</span><span>Shared queue</span></div><div class="engine-state"><i></i><span data-i18n="connected_surface">Свързан интерфейс</span></div></article>
         <article class="engine-card"><div class="engine-index">03</div><div class="engine-icon">⌁</div><h3>FastAPI Downloader</h3><p data-i18n="engine_downloader">Изолирана обработка с FFmpeg и source fallback.</p><div class="tag-row"><span>Python</span><span>FFmpeg</span></div><div class="engine-state"><i></i><span>Remote origin</span></div></article>
         <article class="engine-card"><div class="engine-index">04</div><div class="engine-icon">S</div><h3>Metadata Fallback</h3><p data-i18n="engine_metadata">Metadata matching и алтернативни публични източници.</p><div class="tag-row"><span>Metadata</span><span>Fallback</span></div><div class="engine-state planned"><i></i><span>Fallback</span></div></article>
       </div>
@@ -154,8 +158,8 @@
 
   <footer>
     <div><a class="brand footer-brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span><strong>Download</strong>Killer</span></a><p data-i18n="footer_text">Web и Telegram workflow върху общ edge backend.</p></div>
-    <div class="footer-links"><a class="telegram-link" href="https://web.telegram.org/k/#@download_killerBOT" data-telegram-mode="bot">Telegram Bot</a><a href="/telegram/">Mini App</a><a href="https://dyrakarmy.online/">dyrakarmy.online</a><a href="https://dyrakarmy.eu/">dyrakarmy.eu</a><a href="/api/health">API Health</a></div>
-    <small>© <span id="year"></span> Download Killer · Platform v12</small>
+    <div class="footer-links"><a class="telegram-link" href="https://web.telegram.org/k/#@download_killerBOT" data-telegram-mode="bot">@download_killerBOT</a><a href="https://web.telegram.org/k/#@dyrakarmy_bot" target="_blank" rel="noreferrer">@dyrakarmy_bot</a><a href="/telegram/">Mini App</a><a href="https://dyrakarmy.online/">dyrakarmy.online</a><a href="https://dyrakarmy.eu/">dyrakarmy.eu</a><a href="/api/health">API Health</a></div>
+    <small>© <span id="year"></span> Download Killer · Platform v12.1</small>
   </footer>
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>

@@ -1,0 +1,113 @@
+name: Secondary Telegram Bot Checks
+
+on:
+  pull_request:
+    paths:
+      - worker/src/platform_v2.ts
+      - worker/src/telegram_secondary.ts
+      - worker/scripts/setup-telegram-secondary.mjs
+      - worker/public/index.html
+      - worker/package.json
+      - worker/wrangler.jsonc
+      - SECONDARY_TELEGRAM_BOT.md
+      - .github/workflows/secondary-telegram-bot-check.yml
+  push:
+    branches:
+      - main
+    paths:
+      - worker/src/platform_v2.ts
+      - worker/src/telegram_secondary.ts
+      - worker/scripts/setup-telegram-secondary.mjs
+      - worker/public/index.html
+      - worker/package.json
+      - worker/wrangler.jsonc
+      - SECONDARY_TELEGRAM_BOT.md
+      - .github/workflows/secondary-telegram-bot-check.yml
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck Worker
+        run: npm run typecheck
+
+      - name: Run Worker tests
+        run: npm test
+
+      - name: Validate secondary setup script
+        run: node --check scripts/setup-telegram-secondary.mjs
+
+      - name: Validate dual-bot integration boundaries
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const wrapper = fs.readFileSync('src/platform_v2.ts', 'utf8');
+          const adapter = fs.readFileSync('src/telegram_secondary.ts', 'utf8');
+          const setup = fs.readFileSync('scripts/setup-telegram-secondary.mjs', 'utf8');
+          const html = fs.readFileSync('public/index.html', 'utf8');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const wrangler = fs.readFileSync('wrangler.jsonc', 'utf8');
+
+          for (const marker of [
+            '/telegram/webhook/dyrakarmy',
+            '/api/telegram/v10-secondary/',
+            'createSecondaryTelegramEnv',
+            'hasSecondaryTelegramBot',
+          ]) {
+            if (!wrapper.includes(marker)) throw new Error(`Missing wrapper marker: ${marker}`);
+          }
+
+          for (const marker of [
+            'TELEGRAM_SECONDARY_BOT_TOKEN',
+            'TELEGRAM_SECONDARY_SECRET_TOKEN',
+            'dyrakarmy_bot',
+            "TELEGRAM_MINIAPP_PATH: '/'",
+          ]) {
+            if (!adapter.includes(marker)) throw new Error(`Missing adapter marker: ${marker}`);
+          }
+
+          for (const marker of [
+            'setWebhook',
+            '/telegram/webhook/dyrakarmy',
+            'setMyCommands',
+            'setChatMenuButton',
+          ]) {
+            if (!setup.includes(marker)) throw new Error(`Missing setup marker: ${marker}`);
+          }
+
+          if (pkg.scripts['telegram:setup:secondary'] !== 'node scripts/setup-telegram-secondary.mjs') {
+            throw new Error('Secondary setup npm script is missing');
+          }
+
+          for (const marker of [
+            'TELEGRAM_SECONDARY_BOT_USERNAME',
+            'TELEGRAM_SECONDARY_BOT_TOKEN',
+            'TELEGRAM_SECONDARY_SECRET_TOKEN',
+          ]) {
+            if (!wrangler.includes(marker)) throw new Error(`Missing Wrangler marker: ${marker}`);
+          }
+
+          const botLinks = (html.match(/@dyrakarmy_bot/g) || []).length;
+          if (botLinks < 3) throw new Error('Secondary bot is not visible across the public homepage');
+          if (/\d{6,}:[A-Za-z0-9_-]{20,}/.test([wrapper, adapter, setup, html, wrangler].join('\n'))) {
+            throw new Error('A Telegram bot token appears to be committed');
+          }
+
+          console.log('Secondary Telegram bot integration validated.');
+          NODE
