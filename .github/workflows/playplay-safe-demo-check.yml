@@ -1,0 +1,76 @@
+name: PlayPlay Safe Demo Checks
+
+on:
+  pull_request:
+    paths:
+      - desktop_launcher/external_engines/playplay_demo_adapter.py
+      - desktop_launcher/external_engines/test_playplay_demo_adapter.py
+      - worker/public/platform/playplay-demo/**
+      - worker/public/manifest.webmanifest
+      - PLAYPLAY_SAFE_DEMO.md
+      - .github/workflows/playplay-safe-demo-check.yml
+  push:
+    branches:
+      - main
+    paths:
+      - desktop_launcher/external_engines/playplay_demo_adapter.py
+      - desktop_launcher/external_engines/test_playplay_demo_adapter.py
+      - worker/public/platform/playplay-demo/**
+      - worker/public/manifest.webmanifest
+      - PLAYPLAY_SAFE_DEMO.md
+      - .github/workflows/playplay-safe-demo-check.yml
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate Python demo adapter
+        working-directory: desktop_launcher
+        run: |
+          python -m py_compile external_engines/playplay_demo_adapter.py
+          python -m unittest external_engines.test_playplay_demo_adapter
+
+      - name: Validate browser demo JavaScript
+        run: node --check worker/public/platform/playplay-demo/playplay-demo.js
+
+      - name: Validate safe demo boundaries
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('worker/public/platform/playplay-demo/index.html', 'utf8');
+          const css = fs.readFileSync('worker/public/platform/playplay-demo/playplay-demo.css', 'utf8');
+          const js = fs.readFileSync('worker/public/platform/playplay-demo/playplay-demo.js', 'utf8');
+          const manifest = JSON.parse(fs.readFileSync('worker/public/manifest.webmanifest', 'utf8'));
+
+          for (const marker of ['id="playplayDemoForm"', 'id="configPreview"', 'id="commandPreview"', 'id="downloadBtn"']) {
+            if (!html.includes(marker)) throw new Error(`Missing demo UI marker: ${marker}`);
+          }
+          for (const marker of ['DEMO_COOKIES_NOT_REAL', 'DEMO_DEVICE_NOT_REAL', 'playplay-DEMO-ONLY.exe']) {
+            if (!js.includes(marker)) throw new Error(`Missing explicit safe marker: ${marker}`);
+          }
+          for (const capability of ['network_access', 'subprocess_execution', 'cookie_loading', 'wvd_loading', 'key_loading', 'drm_decryption']) {
+            if (!js.includes(`${capability}: false`)) throw new Error(`Capability is not hard-disabled: ${capability}`);
+          }
+          for (const forbidden of ['fetch(', 'XMLHttpRequest', 'WebSocket(', 'EventSource(', 'navigator.credentials']) {
+            if (js.includes(forbidden)) throw new Error(`Network or credential API found in demo: ${forbidden}`);
+          }
+          if (!css.includes('@media (prefers-reduced-motion: reduce)')) {
+            throw new Error('Reduced-motion rule is missing');
+          }
+          const shortcut = (manifest.shortcuts || []).find((item) => item.url === '/platform/playplay-demo/');
+          if (!shortcut) throw new Error('PlayPlay Demo Lab PWA shortcut is missing');
+          console.log('PlayPlay safe demo boundaries validated.');
+          NODE
