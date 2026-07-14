@@ -1,6 +1,6 @@
 {
-  "name": "DyrakArmy Platform v10",
-  "short_name": "DyrakArmy",
+  "name": "Download Killer Platform v11",
+  "short_name": "Download Killer",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -9,7 +9,7 @@
   "orientation": "any",
   "background_color": "#050713",
   "theme_color": "#050713",
-  "description": "DyrakArmy media workflow platform with Telegram Mini App, shared queues, history, edge routing and desktop integrations.",
+  "description": "Download Killer web and Telegram platform with shared queues, history, live progress and Telegram file archive.",
   "categories": ["music", "utilities", "productivity"],
   "icons": [
     {
@@ -27,42 +27,31 @@
   ],
   "shortcuts": [
     {
+      "name": "Web Console",
+      "short_name": "Console",
+      "description": "Open the Download Killer web console.",
+      "url": "/#console",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
       "name": "Telegram Mini App",
       "short_name": "Telegram",
-      "description": "Open the Download Killer shared Telegram queue and archive.",
+      "description": "Open the shared Telegram queue, history and archive.",
       "url": "/telegram/",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Platform Portal",
-      "short_name": "Platform",
-      "description": "Open the animated platform dashboard and live console.",
-      "url": "/platform/",
+      "name": "System Status",
+      "short_name": "Status",
+      "description": "Open live service telemetry.",
+      "url": "/#status",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "PlayPlay Demo Lab",
-      "short_name": "Demo Lab",
-      "description": "Open the non-executable PlayPlay configuration preview.",
-      "url": "/platform/playplay-demo/",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Download",
-      "short_name": "Download",
-      "url": "/?tab=download",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "History",
-      "short_name": "History",
-      "url": "/?tab=history",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Settings",
-      "short_name": "Settings",
-      "url": "/?tab=settings",
+      "name": "Downloads",
+      "short_name": "Apps",
+      "description": "Download desktop and browser applications.",
+      "url": "/downloads/",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
   ],
