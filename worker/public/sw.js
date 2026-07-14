@@ -1,4 +1,4 @@
-const CACHE_NAME = 'download-killer-static-v11';
+const CACHE_NAME = 'download-killer-static-v12';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
 const APP_SHELL = [
   '/',
@@ -13,18 +13,14 @@ const APP_SHELL = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)),
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(
-      keys
-        .filter((key) => key !== CACHE_NAME && key !== MEDIA_CACHE_NAME)
-        .map((key) => caches.delete(key)),
+      keys.filter((key) => key !== CACHE_NAME && key !== MEDIA_CACHE_NAME).map((key) => caches.delete(key)),
     )),
   );
   self.clients.claim();
@@ -44,9 +40,7 @@ async function warmRecentCache(urls) {
 
 self.addEventListener('message', (event) => {
   const data = event.data || {};
-  if (data.type === 'WARM_RECENT_CACHE') {
-    event.waitUntil(warmRecentCache(data.urls));
-  }
+  if (data.type === 'WARM_RECENT_CACHE') event.waitUntil(warmRecentCache(data.urls));
 });
 
 self.addEventListener('fetch', (event) => {
@@ -59,19 +53,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(fetch(request));
     return;
   }
-
   if (isWarmableApi && request.headers.has('range')) {
     event.respondWith(fetch(request));
     return;
   }
-
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request).catch(async () => {
-        const cached = await caches.match('/index.html');
-        return cached || new Response('Offline', { status: 503 });
-      }),
-    );
+    event.respondWith(fetch(request).catch(async () => (await caches.match('/index.html')) || new Response('Offline', { status: 503 })));
     return;
   }
 
@@ -85,7 +72,6 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       }).catch(() => cached);
-
       return cached || networkFetch;
     }),
   );
