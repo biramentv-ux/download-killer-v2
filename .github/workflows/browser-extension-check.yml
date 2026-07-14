@@ -1,0 +1,47 @@
+name: Browser extension checks
+
+on:
+  pull_request:
+    paths:
+      - 'browser_extensions/sounddrop_webext/**'
+      - '.github/workflows/browser-extension-check.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'browser_extensions/sounddrop_webext/**'
+      - '.github/workflows/browser-extension-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check browser_extensions/sounddrop_webext/common/background.js
+          node --check browser_extensions/sounddrop_webext/common/web_player_content.js
+
+      - name: Validate extension manifests
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('browser_extensions/sounddrop_webext/manifests')
+          for path in (root / 'manifest.chrome.json', root / 'manifest.firefox.json'):
+              data = json.loads(path.read_text(encoding='utf-8-sig'))
+              scripts = data.get('content_scripts') or []
+              assert scripts, f'{path}: content_scripts missing'
+              assert any('web_player_content.js' in row.get('js', []) for row in scripts), path
+              assert data.get('version') == '1.1.0', path
+              print(f'validated {path}')
+          PY
