@@ -1,5 +1,6 @@
 import legacyHandler from './index';
 import type { DownloadJob, Env, JobHistoryEvent } from './types';
+import { handleMediaLabApi } from './media_lab';
 import {
   ensureTelegramV10Commands,
   handleTelegramPlatformApi,
@@ -19,9 +20,31 @@ type ExtendedEnv = Env & {
   TELEGRAM_SECONDARY_BOT_USERNAME?: string;
 };
 
+async function injectMediaLabAssets(request: Request, response: Response): Promise<Response> {
+  if (request.method !== 'GET' || !response.ok) return response;
+  const url = new URL(request.url);
+  if (url.pathname !== '/' && url.pathname !== '/index.html') return response;
+  const contentType = response.headers.get('Content-Type') ?? '';
+  if (!contentType.toLowerCase().includes('text/html')) return response;
+
+  const html = await response.text();
+  const stylesheet = '<link rel="stylesheet" href="/media-lab/media-lab.css">';
+  const script = '<script src="/media-lab/media-lab.js" defer></script>';
+  const updated = html
+    .replace('</head>', `  ${stylesheet}\n</head>`)
+    .replace('</body>', `  ${script}\n</body>`);
+  const headers = new Headers(response.headers);
+  headers.delete('Content-Length');
+  headers.set('Cache-Control', 'no-cache');
+  return new Response(updated, { status: response.status, statusText: response.statusText, headers });
+}
+
 export default {
   async fetch(request: Request, env: ExtendedEnv, _context: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    const mediaLabResponse = await handleMediaLabApi(request, env);
+    if (mediaLabResponse) return mediaLabResponse;
 
     if (url.pathname === '/telegram/webhook') {
       return handleTelegramPlatformWebhook(request, env);
@@ -53,7 +76,8 @@ export default {
     const telegramApiResponse = await handleTelegramPlatformApi(request, env);
     if (telegramApiResponse) return telegramApiResponse;
 
-    return legacyHandler.fetch(request, env);
+    const response = await legacyHandler.fetch(request, env);
+    return injectMediaLabAssets(request, response);
   },
 
   async queue(

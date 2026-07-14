@@ -1,4 +1,4 @@
-const CACHE_NAME = 'download-killer-static-v12';
+const CACHE_NAME = 'download-killer-static-v13';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
 const APP_SHELL = [
   '/',
@@ -6,6 +6,8 @@ const APP_SHELL = [
   '/manifest.webmanifest',
   '/platform/platform.css',
   '/platform/platform.js',
+  '/media-lab/media-lab.css',
+  '/media-lab/media-lab.js',
   '/telegram/',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
