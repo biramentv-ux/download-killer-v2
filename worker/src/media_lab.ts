@@ -1,7 +1,7 @@
 import type { Env } from './types';
 import { validateUrlPolicy } from './utils';
 
-type MediaCandidate = {
+export interface MediaCandidate {
   id?: string;
   title?: string;
   artist?: string;
@@ -10,23 +10,23 @@ type MediaCandidate = {
   source?: string;
   url?: string;
   thumbnail?: string | null;
-};
+}
 
-type MediaReference = {
+export interface MediaReference {
   title?: string;
   artist?: string;
   album?: string | null;
   duration?: number | null;
   source?: string;
-};
+}
 
-type RankedCandidate = MediaCandidate & {
+export interface RankedCandidate extends MediaCandidate {
   score: number;
   confidence: 'high' | 'medium' | 'low';
   reasons: string[];
-};
+}
 
-type UrlInspection = {
+interface UrlInspection {
   ok: boolean;
   requested_url: string;
   final_url: string;
@@ -43,7 +43,7 @@ type UrlInspection = {
   last_modified: string | null;
   cache_control: string | null;
   warnings: string[];
-};
+}
 
 const MAX_REDIRECTS = 5;
 const INSPECT_TIMEOUT_MS = 12_000;
@@ -72,7 +72,7 @@ async function readJson<T>(request: Request): Promise<T | null> {
   const length = Number(request.headers.get('Content-Length') ?? 0);
   if (Number.isFinite(length) && length > 128 * 1024) return null;
   try {
-    return await request.json<T>();
+    return await request.json() as T;
   } catch {
     return null;
   }
@@ -136,9 +136,8 @@ function durationSimilarity(reference: number | null | undefined, candidate: num
   const ref = Number(reference ?? 0);
   const value = Number(candidate ?? 0);
   if (!Number.isFinite(ref) || !Number.isFinite(value) || ref <= 0 || value <= 0) return 0.55;
-  const delta = Math.abs(ref - value);
   const tolerance = Math.max(8, ref * 0.1);
-  return Math.max(0, 1 - (delta / tolerance));
+  return Math.max(0, 1 - (Math.abs(ref - value) / tolerance));
 }
 
 function clampScore(value: number): number {
@@ -151,22 +150,22 @@ export function rankMediaCandidates(reference: MediaReference, candidates: Media
   const refAlbum = String(reference.album ?? '');
   const refSource = normalizeText(reference.source ?? '');
 
-  return candidates.slice(0, MAX_CANDIDATES).map((candidate) => {
+  const ranked: RankedCandidate[] = candidates.slice(0, MAX_CANDIDATES).map((candidate): RankedCandidate => {
     const titleScore = textSimilarity(refTitle, String(candidate.title ?? ''));
     const artistScore = textSimilarity(refArtist, String(candidate.artist ?? ''));
-    const albumScore = refAlbum && candidate.album
-      ? textSimilarity(refAlbum, String(candidate.album))
-      : 0.55;
+    const albumScore = refAlbum && candidate.album ? textSimilarity(refAlbum, String(candidate.album)) : 0.55;
     const timeScore = durationSimilarity(reference.duration, candidate.duration);
-    const sourceScore = refSource && normalizeText(candidate.source ?? '') === refSource ? 0.55 : 1;
+    const candidateSource = normalizeText(candidate.source ?? '');
+    const sourceMultiplier = refSource && candidateSource === refSource ? 0.55 : 1;
     const exactTitle = normalizeText(refTitle) !== '' && normalizeText(refTitle) === normalizeText(candidate.title ?? '');
     const exactArtist = normalizeText(refArtist) !== '' && normalizeText(refArtist) === normalizeText(candidate.artist ?? '');
 
     let weighted = (titleScore * 0.5) + (artistScore * 0.27) + (timeScore * 0.16) + (albumScore * 0.07);
-    weighted *= sourceScore;
+    weighted *= sourceMultiplier;
     if (exactTitle) weighted += 0.04;
     if (exactArtist) weighted += 0.03;
     const score = clampScore(weighted);
+    const confidence: RankedCandidate['confidence'] = score >= 82 ? 'high' : score >= 62 ? 'medium' : 'low';
     const reasons: string[] = [];
     if (exactTitle) reasons.push('exact-title');
     else if (titleScore >= 0.8) reasons.push('strong-title');
@@ -174,15 +173,12 @@ export function rankMediaCandidates(reference: MediaReference, candidates: Media
     else if (artistScore >= 0.78) reasons.push('strong-artist');
     if (timeScore >= 0.85) reasons.push('duration-close');
     if (albumScore >= 0.82 && refAlbum) reasons.push('album-close');
-    if (refSource && normalizeText(candidate.source ?? '') !== refSource) reasons.push('alternate-source');
+    if (refSource && candidateSource !== refSource) reasons.push('alternate-source');
 
-    return {
-      ...candidate,
-      score,
-      confidence: score >= 82 ? 'high' : score >= 62 ? 'medium' : 'low',
-      reasons,
-    };
-  }).sort((left, right) => right.score - left.score);
+    return { ...candidate, score, confidence, reasons };
+  });
+
+  return ranked.sort((left, right) => right.score - left.score);
 }
 
 export function parseContentDispositionFilename(header: string | null, fallbackUrl: string): string {
@@ -241,13 +237,17 @@ function contentLengthFrom(response: Response): number | null {
   const range = response.headers.get('Content-Range');
   const total = range?.match(/\/(\d+)$/)?.[1];
   const raw = total ?? response.headers.get('Content-Length');
-  const value = Number(raw ?? NaN);
+  const value = Number(raw ?? Number.NaN);
   return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function cancelBody(response: Response | null): void {
+  if (response?.body) void response.body.cancel();
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = INSPECT_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort('media-lab-timeout'), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } finally {
@@ -270,10 +270,7 @@ async function inspectPublicUrl(rawUrl: string, env: Env): Promise<UrlInspection
       response = await fetchWithTimeout(currentUrl, {
         method: 'HEAD',
         redirect: 'manual',
-        headers: {
-          Accept: '*/*',
-          'User-Agent': 'Download-Killer-Media-Lab/1.0',
-        },
+        headers: { Accept: '*/*', 'User-Agent': 'Download-Killer-Media-Lab/1.0' },
       });
       method = 'HEAD';
     } catch {
@@ -281,22 +278,18 @@ async function inspectPublicUrl(rawUrl: string, env: Env): Promise<UrlInspection
     }
 
     if (!response || [400, 403, 405, 429, 500, 501].includes(response.status)) {
-      response?.body?.cancel().catch(() => undefined);
+      cancelBody(response);
       response = await fetchWithTimeout(currentUrl, {
         method: 'GET',
         redirect: 'manual',
-        headers: {
-          Accept: '*/*',
-          Range: 'bytes=0-0',
-          'User-Agent': 'Download-Killer-Media-Lab/1.0',
-        },
+        headers: { Accept: '*/*', Range: 'bytes=0-0', 'User-Agent': 'Download-Killer-Media-Lab/1.0' },
       });
       method = 'GET_RANGE';
     }
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('Location');
-      response.body?.cancel().catch(() => undefined);
+      cancelBody(response);
       if (!location) throw new Error('Redirect response did not include a Location header');
       if (index === MAX_REDIRECTS) throw new Error('Too many redirects');
       currentUrl = new URL(location, currentUrl).toString();
@@ -311,12 +304,10 @@ async function inspectPublicUrl(rawUrl: string, env: Env): Promise<UrlInspection
   const contentLength = contentLengthFrom(response);
   const supportsRanges = response.status === 206 || /\bbytes\b/i.test(response.headers.get('Accept-Ranges') ?? '');
   const filename = parseContentDispositionFilename(response.headers.get('Content-Disposition'), currentUrl);
-  if (method === 'GET_RANGE' && response.status === 200 && contentLength == null) {
-    warnings.push('origin-ignored-range-request');
-  }
+  if (method === 'GET_RANGE' && response.status === 200 && contentLength == null) warnings.push('origin-ignored-range-request');
   if (!contentType) warnings.push('content-type-missing');
   if (contentLength == null) warnings.push('content-length-unknown');
-  response.body?.cancel().catch(() => undefined);
+  cancelBody(response);
 
   return {
     ok: response.ok || response.status === 206,
@@ -341,7 +332,6 @@ async function inspectPublicUrl(rawUrl: string, env: Env): Promise<UrlInspection
 export async function handleMediaLabApi(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api/media-lab/')) return null;
-
   if (request.method === 'OPTIONS') return jsonResponse(request, { ok: true }, 204);
 
   if (url.pathname === '/api/media-lab/inspect' && request.method === 'POST') {
@@ -365,11 +355,7 @@ export async function handleMediaLabApi(request: Request, env: Env): Promise<Res
       return errorResponse(request, 'REFERENCE_REQUIRED', 'reference.title is required', 400);
     }
     if (!candidates.length) return errorResponse(request, 'CANDIDATES_REQUIRED', 'candidates are required', 400);
-    return jsonResponse(request, {
-      ok: true,
-      reference,
-      results: rankMediaCandidates(reference, candidates),
-    });
+    return jsonResponse(request, { ok: true, reference, results: rankMediaCandidates(reference, candidates) });
   }
 
   if (url.pathname === '/api/media-lab/about' && request.method === 'GET') {
