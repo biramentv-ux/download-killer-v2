@@ -1,0 +1,21 @@
+{
+  "demo_only": true,
+  "purpose": "UI schema preview; no authentication or decryption",
+  "fields": {
+    "cdm_profile_path": "./demo/DEVICE_PROFILE_EXAMPLE.wvd",
+    "wvd_file_marker": "DEMO_WVD_FILE_NOT_A_REAL_DEVICE",
+    "widevine_key_id": "DEMO_KEY_ID_NOT_SET",
+    "widevine_content_key": "DEMO_CONTENT_KEY_NOT_SET",
+    "playplay_binary_path": "./demo/PLAYPLAY_PLACEHOLDER.bin",
+    "spotify_cookie": "sp_dc=DEMO_COOKIE_NOT_REAL",
+    "account_password": "DEMO_PASSWORD_NOT_USED",
+    "account_token": "DEMO_ACCOUNT_TOKEN_NOT_REAL"
+  },
+  "capabilities": {
+    "network_access": false,
+    "subprocess_execution": false,
+    "credential_storage": false,
+    "key_loading": false,
+    "drm_decryption": false
+  }
+}
