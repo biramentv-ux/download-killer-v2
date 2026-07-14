@@ -12,7 +12,7 @@ type ExtendedEnv = Env & {
 };
 
 export default {
-  async fetch(request: Request, env: ExtendedEnv, context: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: ExtendedEnv, _context: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === '/telegram/webhook') {
@@ -22,7 +22,7 @@ export default {
     const telegramApiResponse = await handleTelegramPlatformApi(request, env);
     if (telegramApiResponse) return telegramApiResponse;
 
-    return legacyHandler.fetch(request, env, context);
+    return legacyHandler.fetch(request, env);
   },
 
   async queue(
@@ -34,7 +34,7 @@ export default {
       TELEGRAM_CHANNEL_PUBLISH_ENABLED: '0',
     }) as ExtendedEnv;
 
-    await legacyHandler.queue(batch, legacyEnv, context);
+    await legacyHandler.queue(batch, legacyEnv);
     context.waitUntil(syncTelegramStorageBatch(batch, env));
   },
 
@@ -43,7 +43,7 @@ export default {
     env: ExtendedEnv,
     context: ExecutionContext,
   ): Promise<void> {
-    await legacyHandler.scheduled(controller, env, context);
+    await legacyHandler.scheduled(controller, env);
     context.waitUntil(ensureTelegramV10Commands(env));
   },
 } satisfies ExportedHandler<ExtendedEnv, DownloadJob | JobHistoryEvent>;
