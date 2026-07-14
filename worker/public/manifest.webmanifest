@@ -34,6 +34,13 @@
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
+      "name": "PlayPlay Demo Lab",
+      "short_name": "Demo Lab",
+      "description": "Open the non-executable PlayPlay configuration preview.",
+      "url": "/platform/playplay-demo/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
       "name": "Download",
       "short_name": "Download",
       "url": "/?tab=download",
