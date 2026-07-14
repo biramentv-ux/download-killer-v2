@@ -51,7 +51,7 @@ jobs:
           node --check public/platform/platform.js
           node --check public/sw.js
 
-      - name: Validate Download Killer main assets
+      - name: Validate Download Killer main assets and mirror config
         run: |
           node - <<'NODE'
           const fs = require('node:fs');
@@ -61,6 +61,7 @@ jobs:
           const js = fs.readFileSync('public/platform/platform.js', 'utf8');
           const manifest = JSON.parse(fs.readFileSync('public/manifest.webmanifest', 'utf8'));
           const sw = fs.readFileSync('public/sw.js', 'utf8');
+          const wrangler = fs.readFileSync('wrangler.jsonc', 'utf8');
 
           const required = [
             '<title>Download Killer Platform</title>',
@@ -78,6 +79,16 @@ jobs:
           ];
           for (const marker of required) {
             if (!html.includes(marker)) throw new Error(`Missing main-page marker: ${marker}`);
+          }
+
+          for (const mirrorMarker of [
+            '"pattern": "dyrakarmy.eu"',
+            '"pattern": "www.dyrakarmy.eu"',
+            '"zone_name": "dyrakarmy.eu"',
+            'https://dyrakarmy.eu',
+            'https://www.dyrakarmy.eu',
+          ]) {
+            if (!wrangler.includes(mirrorMarker)) throw new Error(`Missing EU mirror config: ${mirrorMarker}`);
           }
 
           if (!legacyPlatform.includes("window.location.replace('/')")) {
@@ -98,7 +109,7 @@ jobs:
           if (html.includes('<title>DyrakArmy v7</title>')) {
             throw new Error('Legacy homepage title is still present');
           }
-          console.log('Download Killer main homepage assets validated.');
+          console.log('Download Killer homepage and EU mirror configuration validated.');
           NODE
 
   deploy:
@@ -142,16 +153,27 @@ jobs:
           urls=(
             "https://dyrakarmy.online/"
             "https://www.dyrakarmy.online/"
+            "https://dyrakarmy.eu/"
+            "https://www.dyrakarmy.eu/"
             "https://sounddrop.biramentv.workers.dev/"
           )
+          failed=0
           for url in "${urls[@]}"; do
             echo "Checking $url"
-            if body="$(curl -fsSL --retry 3 --retry-delay 4 --max-time 25 "$url" 2>/dev/null)"; then
-              if grep -q "Download Killer Platform" <<<"$body" && grep -q "download_killerBOT" <<<"$body"; then
-                echo "Download Killer main homepage is live at $url"
-                exit 0
+            ok=0
+            for attempt in 1 2 3 4 5 6; do
+              if body="$(curl -fsSL --retry 2 --retry-delay 3 --max-time 25 "$url" 2>/dev/null)"; then
+                if grep -q "Download Killer Platform" <<<"$body" && grep -q "download_killerBOT" <<<"$body"; then
+                  echo "Live: $url"
+                  ok=1
+                  break
+                fi
               fi
+              sleep 10
+            done
+            if [ "$ok" -ne 1 ]; then
+              echo "::error::Mirror endpoint is not serving Download Killer: $url"
+              failed=1
             fi
           done
-          echo "No public endpoint returned the new Download Killer homepage."
-          exit 1
+          exit "$failed"
