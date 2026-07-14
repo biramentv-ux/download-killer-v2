@@ -30,15 +30,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Build Windows EXE
+      - name: Validate external engine GUI
+        run: |
+          python -m py_compile .\external_engines\spotify_oggmp4_gui.py
+          python -m unittest external_engines.test_spotify_oggmp4_gui
+
+      - name: Build Windows EXEs
         run: |
           pyinstaller --noconfirm --clean --onefile --noconsole --name SoundDropDesktop sounddrop_desktop.py
+          pyinstaller --noconfirm --clean --onefile --noconsole --name DyrakArmySpotifyOggMp4Engine .\external_engines\spotify_oggmp4_gui.py
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: SoundDropDesktop-windows
-          path: desktop_launcher/dist/SoundDropDesktop.exe
+          path: |
+            desktop_launcher/dist/SoundDropDesktop.exe
+            desktop_launcher/dist/DyrakArmySpotifyOggMp4Engine.exe
 
   build-macos:
     runs-on: macos-latest
@@ -60,6 +68,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyobjc-framework-Cocoa
+
+      - name: Validate external engine GUI
+        run: |
+          python -m py_compile ./external_engines/spotify_oggmp4_gui.py
+          python -m unittest external_engines.test_spotify_oggmp4_gui
 
       - name: Build macOS app bundle
         run: |
