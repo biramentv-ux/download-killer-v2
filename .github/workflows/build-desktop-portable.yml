@@ -8,6 +8,10 @@ on:
     paths:
       - desktop_launcher/**
       - .github/workflows/build-desktop-portable.yml
+  pull_request:
+    paths:
+      - desktop_launcher/**
+      - .github/workflows/build-desktop-portable.yml
 
 jobs:
   build-windows:
