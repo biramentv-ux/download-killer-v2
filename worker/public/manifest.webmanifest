@@ -1,5 +1,5 @@
 {
-  "name": "DyrakArmy Platform v9",
+  "name": "DyrakArmy Platform v10",
   "short_name": "DyrakArmy",
   "id": "/",
   "start_url": "/",
@@ -9,7 +9,7 @@
   "orientation": "any",
   "background_color": "#050713",
   "theme_color": "#050713",
-  "description": "DyrakArmy media workflow platform with live queues, history, edge routing and desktop integrations.",
+  "description": "DyrakArmy media workflow platform with Telegram Mini App, shared queues, history, edge routing and desktop integrations.",
   "categories": ["music", "utilities", "productivity"],
   "icons": [
     {
@@ -26,6 +26,13 @@
     }
   ],
   "shortcuts": [
+    {
+      "name": "Telegram Mini App",
+      "short_name": "Telegram",
+      "description": "Open the Download Killer shared Telegram queue and archive.",
+      "url": "/telegram/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
     {
       "name": "Platform Portal",
       "short_name": "Platform",
