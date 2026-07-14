@@ -71,6 +71,6 @@ jobs:
             throw new Error('Reduced-motion rule is missing');
           }
           const shortcut = (manifest.shortcuts || []).find((item) => item.url === '/platform/playplay-demo/');
-          if (!shortcut) throw new Error('PlayPlay Demo Lab PWA shortcut is missing');
-          console.log('PlayPlay safe demo boundaries validated.');
+          if (shortcut) throw new Error('Safe demo must remain hidden from the public PWA shortcuts');
+          console.log('PlayPlay safe demo boundaries validated; demo remains hidden from the main navigation.');
           NODE
