@@ -18,4 +18,4 @@ ENV DOWNLOADER_PUBLIC_BASE_URL=http://localhost:8081
 RUN mkdir -p /data/files
 
 EXPOSE 8081
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8081"]
+CMD ["uvicorn", "app.safe_main:app", "--host", "0.0.0.0", "--port", "8081"]
