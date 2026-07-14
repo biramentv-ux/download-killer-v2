@@ -1,0 +1,44 @@
+name: Test downloader
+
+on:
+  pull_request:
+    paths:
+      - "downloader/**"
+      - ".github/workflows/test-downloader.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "downloader/**"
+      - ".github/workflows/test-downloader.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: downloader/requirements.txt
+
+      - name: Install dependencies
+        working-directory: downloader
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Compile Python sources
+        working-directory: downloader
+        run: python -m compileall -q app tests
+
+      - name: Run tests
+        working-directory: downloader
+        run: pytest -q
