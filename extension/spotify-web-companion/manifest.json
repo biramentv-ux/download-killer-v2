@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Download Killer Companion for Spotify Web",
-  "version": "1.1.0",
-  "description": "Изпраща публични Spotify линкове към Download Killer, следи опашката и изтегля готовия разрешен резултат.",
+  "version": "1.2.0",
+  "description": "Изпраща публични Spotify линкове към Download Killer, следи опашката с адаптивен polling и изтегля готовия разрешен резултат.",
   "minimum_chrome_version": "120",
   "permissions": [
     "activeTab",
@@ -12,10 +12,10 @@
   ],
   "host_permissions": [
     "https://open.spotify.com/*",
-    "https://dyrakarmy.online/*",
-    "https://www.dyrakarmy.online/*",
     "https://dyrakarmy.eu/*",
     "https://www.dyrakarmy.eu/*",
+    "https://dyrakarmy.online/*",
+    "https://www.dyrakarmy.online/*",
     "https://sounddrop.biramentv.workers.dev/*"
   ],
   "background": {
