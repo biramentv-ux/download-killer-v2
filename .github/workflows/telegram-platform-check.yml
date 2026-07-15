@@ -73,6 +73,7 @@ jobs:
           const css = fs.readFileSync('public/telegram/telegram.css', 'utf8');
           const js = fs.readFileSync('public/telegram/telegram.js', 'utf8');
           const backend = fs.readFileSync('src/telegram_platform.ts', 'utf8');
+          const backendTest = fs.readFileSync('src/telegram_platform.test.ts', 'utf8');
           const master = fs.readFileSync('src/telegram_master_menu.ts', 'utf8');
           const masterTest = fs.readFileSync('src/telegram_master_menu.test.ts', 'utf8');
           const entry = fs.readFileSync('src/platform_v2.ts', 'utf8');
@@ -84,7 +85,7 @@ jobs:
           for (const marker of [
             'id="downloadForm"', 'id="searchForm"', 'id="queueList"',
             'id="historyList"', 'id="archiveFiles"',
-            'https://telegram.org/js/telegram-web-app.js',
+            'https://telegram.org/js/telegram-web-app.js', '@dyrakarmy_bot',
           ]) {
             if (!html.includes(marker)) throw new Error(`Missing Mini App marker: ${marker}`);
           }
@@ -114,9 +115,7 @@ jobs:
           ]) {
             if (!master.includes(menuMarker)) throw new Error(`Missing master menu marker: ${menuMarker}`);
           }
-          if (!masterTest.includes("parseShareMediaId('share:42')")) {
-            throw new Error('Master menu share parser test is missing');
-          }
+          if (!masterTest.includes("parseShareMediaId('share:42')")) throw new Error('Master menu share parser test is missing');
 
           for (const storageMarker of [
             'telegram_media_objects', 'telegram_user_links', 'copyMessage',
@@ -127,29 +126,30 @@ jobs:
             }
           }
 
-          if (!backend.includes("const TELEGRAM_URL_UPLOAD_LIMIT = 20 * 1024 * 1024")) {
-            throw new Error('Hosted Bot API URL upload limit is not encoded');
-          }
-          if (!backend.includes("const TELEGRAM_DEFAULT_UPLOAD_LIMIT = 50 * 1024 * 1024")) {
-            throw new Error('Hosted Bot API multipart default is not encoded');
-          }
+          if (!backend.includes("const TELEGRAM_URL_UPLOAD_LIMIT = 20 * 1024 * 1024")) throw new Error('Hosted Bot API URL upload limit is not encoded');
+          if (!backend.includes("const TELEGRAM_DEFAULT_UPLOAD_LIMIT = 50 * 1024 * 1024")) throw new Error('Hosted Bot API multipart default is not encoded');
           if (!backend.includes('validateTelegramInitData')) throw new Error('Mini App initData validation is missing');
-          if (!backend.includes("secretKeyBytes")) throw new Error('Telegram HMAC validation is incomplete');
-          if (!master.includes("X-Telegram-Bot-Api-Secret-Token")) throw new Error('Master webhook secret validation is missing');
+          if (!backend.includes('secretKeyBytes')) throw new Error('Telegram HMAC validation is incomplete');
+          if (!backend.includes('tg://resolve?domain=${cleanUsername}')) throw new Error('Native Telegram handoff links are missing');
+          if (!backendTest.includes("tg://resolve?domain=dyrakarmy_bot")) throw new Error('Native handoff tests are missing');
+          if (!master.includes('X-Telegram-Bot-Api-Secret-Token')) throw new Error('Master webhook secret validation is missing');
           if (!entry.includes('handleTelegramMasterWebhook')) throw new Error('Telegram master webhook wrapper is not active');
           if (!entry.includes('ensureTelegramMasterCommands')) throw new Error('Master command synchronization is not active');
           if (!wrangler.includes('"main": "src/platform_v2.ts"')) throw new Error('Wrangler does not use platform_v2 entrypoint');
-          if (!wrangler.includes('"TELEGRAM_BOT_USERNAME": "download_killerBOT"')) throw new Error('Target bot username is not configured');
+          if (!wrangler.includes('"TELEGRAM_BOT_USERNAME": "dyrakarmy_bot"')) throw new Error('Sole target bot username is not configured');
           if (!css.includes('@media (prefers-reduced-motion: reduce)')) throw new Error('Reduced-motion support is missing');
           if (!js.includes('Telegram.WebApp')) throw new Error('Telegram Mini App SDK integration is missing');
           if (!js.includes('/miniapp/download') || !js.includes('/miniapp/profile')) throw new Error('Mini App API integration is missing');
-          if (!setup.includes("process.env.TELEGRAM_BOT_TOKEN")) throw new Error('Setup script does not read token from environment');
+          if (!setup.includes('process.env.TELEGRAM_BOT_TOKEN')) throw new Error('Setup script does not read token from environment');
           if (!setup.includes("'inline_query'")) throw new Error('Webhook setup does not subscribe to inline queries');
           if (!setup.includes('/setinline')) throw new Error('Inline mode activation guidance is missing');
           if (setup.includes('123456789:') || setup.includes('bot_token=')) throw new Error('A token-like literal was committed');
           if (!migration.includes('CREATE TABLE IF NOT EXISTS telegram_media_objects')) throw new Error('D1 migration is incomplete');
+          if (backend.includes('download_killerBOT') || master.includes('download_killerBOT') || html.includes('download_killerBOT') || js.includes('download_killerBOT')) {
+            throw new Error('Retired bot username is still present');
+          }
 
           const shortcut = (manifest.shortcuts || []).find((item) => item.url === '/telegram/');
           if (!shortcut) throw new Error('Telegram Mini App PWA shortcut is missing');
-          console.log('Telegram master menu, storage and inline sharing boundaries validated.');
+          console.log('Single Telegram bot, native handoff, storage and inline sharing boundaries validated.');
           NODE
