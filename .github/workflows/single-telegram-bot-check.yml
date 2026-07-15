@@ -1,0 +1,60 @@
+name: Single Telegram Bot Checks
+
+on:
+  pull_request:
+    paths:
+      - worker/**
+      - mobile_expo/**
+      - desktop_launcher/**
+      - extension/**
+      - .github/workflows/**
+  push:
+    branches:
+      - main
+    paths:
+      - worker/**
+      - mobile_expo/**
+      - desktop_launcher/**
+      - extension/**
+      - .github/workflows/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate sole native Telegram bot
+        run: npm run validate:single-bot
+
+      - name: Typecheck Worker
+        run: npm run typecheck
+
+      - name: Run Worker tests
+        run: npm test
+
+      - name: Validate native client links
+        run: |
+          node --check public/platform/platform.js
+          node --check public/platform/site-defaults.js
+          grep -q 'tg://resolve?domain=dyrakarmy_bot' public/index.html
+          grep -q '"TELEGRAM_BOT_USERNAME": "dyrakarmy_bot"' wrangler.jsonc
+          ! grep -R -n -E 'download_killerBOT|TELEGRAM_SECONDARY_|v10-secondary|telegram/webhook/dyrakarmy|web\.telegram\.org' src public scripts wrangler.jsonc package.json
