@@ -12,21 +12,76 @@ import {
   handleTelegramMasterWebhook,
 } from './telegram_master_menu';
 import {
-  createSecondaryTelegramEnv,
-  hasSecondaryTelegramBot,
-  rewriteSecondaryTelegramApiRequest,
-} from './telegram_secondary';
-import {
   handleTelegramMiniAppHealth,
   TELEGRAM_MINIAPP_VERSION,
 } from './telegram_miniapp_health';
 
 type ExtendedEnv = Env & {
   TELEGRAM_STORAGE_ENABLED?: string;
-  TELEGRAM_SECONDARY_BOT_TOKEN?: string;
-  TELEGRAM_SECONDARY_SECRET_TOKEN?: string;
-  TELEGRAM_SECONDARY_BOT_USERNAME?: string;
 };
+
+function nativeTelegramLinks(env: ExtendedEnv): {
+  username: string;
+  deepLink: string;
+  downloadLink: string;
+  miniAppLink: string;
+} {
+  const username = String(env.TELEGRAM_BOT_USERNAME || 'dyrakarmy_bot').replace(/^@+/, '');
+  return {
+    username,
+    deepLink: `tg://resolve?domain=${username}`,
+    downloadLink: `tg://resolve?domain=${username}&start=download`,
+    miniAppLink: `tg://resolve?domain=${username}&startapp=home`,
+  };
+}
+
+function jsonWithExistingHeaders(response: Response, payload: unknown): Response {
+  const headers = new Headers(response.headers);
+  headers.delete('Content-Length');
+  headers.set('Cache-Control', 'no-store');
+  headers.set('Content-Type', 'application/json; charset=utf-8');
+  return new Response(JSON.stringify(payload), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+async function enforceNativeTelegramApi(
+  request: Request,
+  response: Response,
+  env: ExtendedEnv,
+): Promise<Response> {
+  if (request.method !== 'GET' || !response.ok) return response;
+  const path = new URL(request.url).pathname;
+  const links = nativeTelegramLinks(env);
+
+  if (path === '/api/telegram/info') {
+    return jsonWithExistingHeaders(response, {
+      ok: true,
+      available: true,
+      username: links.username,
+      deepLink: links.deepLink,
+      downloadLink: links.downloadLink,
+      miniAppLink: links.miniAppLink,
+      native_only: true,
+    });
+  }
+
+  if (path !== '/api/runtime-config') return response;
+  const payload = await response.json() as Record<string, unknown>;
+  return jsonWithExistingHeaders(response, {
+    ...payload,
+    telegram: {
+      available: true,
+      username: links.username,
+      deep_link: links.deepLink,
+      download_link: links.downloadLink,
+      miniapp_link: links.miniAppLink,
+      native_only: true,
+    },
+  });
+}
 
 async function injectPlatformAssets(request: Request, response: Response): Promise<Response> {
   if (request.method !== 'GET' || !response.ok) return response;
@@ -94,34 +149,12 @@ export default {
       return handleTelegramMasterWebhook(request, env);
     }
 
-    if (url.pathname === '/telegram/webhook/dyrakarmy') {
-      if (!hasSecondaryTelegramBot(env)) {
-        return Response.json(
-          { error: { code: 'SECONDARY_BOT_NOT_CONFIGURED', message: 'Secondary Telegram bot is not configured', retryable: false } },
-          { status: 503 },
-        );
-      }
-      return handleTelegramMasterWebhook(request, createSecondaryTelegramEnv(env));
-    }
-
-    if (url.pathname.startsWith('/api/telegram/v10-secondary/')) {
-      if (!hasSecondaryTelegramBot(env)) {
-        return Response.json(
-          { error: { code: 'SECONDARY_BOT_NOT_CONFIGURED', message: 'Secondary Telegram bot is not configured', retryable: false } },
-          { status: 503 },
-        );
-      }
-      return handleTelegramPlatformApi(
-        rewriteSecondaryTelegramApiRequest(request),
-        createSecondaryTelegramEnv(env),
-      ) as Promise<Response>;
-    }
-
     const telegramApiResponse = await handleTelegramPlatformApi(request, env);
     if (telegramApiResponse) return telegramApiResponse;
 
-    const response = await legacyHandler.fetch(request, env);
-    return injectPlatformAssets(request, response);
+    const legacyResponse = await legacyHandler.fetch(request, env);
+    const nativeResponse = await enforceNativeTelegramApi(request, legacyResponse, env);
+    return injectPlatformAssets(request, nativeResponse);
   },
 
   async queue(
@@ -146,9 +179,6 @@ export default {
     context.waitUntil((async () => {
       await ensureTelegramV10Commands(env);
       await ensureTelegramMasterCommands(env);
-      if (hasSecondaryTelegramBot(env)) {
-        await ensureTelegramMasterCommands(createSecondaryTelegramEnv(env));
-      }
     })());
   },
 } satisfies ExportedHandler<ExtendedEnv, DownloadJob | JobHistoryEvent>;
