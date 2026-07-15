@@ -1,4 +1,4 @@
-const CACHE_NAME = 'download-killer-static-v13';
+const CACHE_NAME = 'download-killer-static-v15';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
 const APP_SHELL = [
   '/',
@@ -11,7 +11,6 @@ const APP_SHELL = [
   '/platform/platform.js',
   '/media-lab/media-lab.css',
   '/media-lab/media-lab.js',
-  '/telegram/',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/apple-touch-icon.png',
@@ -43,9 +42,33 @@ async function warmRecentCache(urls) {
   }));
 }
 
+async function networkFirstTelegram(request) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const response = await fetch(request, { cache: 'no-store' });
+    if (response.ok) await cache.put(request, response.clone());
+    return response;
+  } catch {
+    const cached = await cache.match(request, { ignoreSearch: false });
+    if (cached) return cached;
+    return new Response('Telegram Mini App is temporarily offline. Reopen it from the bot.', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  }
+}
+
 self.addEventListener('message', (event) => {
   const data = event.data || {};
   if (data.type === 'WARM_RECENT_CACHE') event.waitUntil(warmRecentCache(data.urls));
+  if (data.type === 'CLEAR_TELEGRAM_CACHE') {
+    event.waitUntil(caches.open(CACHE_NAME).then(async (cache) => {
+      const keys = await cache.keys();
+      await Promise.all(keys
+        .filter((request) => new URL(request.url).pathname.startsWith('/telegram/'))
+        .map((request) => cache.delete(request)));
+    }));
+  }
 });
 
 self.addEventListener('fetch', (event) => {
@@ -56,6 +79,10 @@ self.addEventListener('fetch', (event) => {
   const isWarmableApi = url.pathname.startsWith('/api/file/') || url.pathname.startsWith('/api/archive/file/');
   if (url.pathname.startsWith('/api/') && !isWarmableApi) {
     event.respondWith(fetch(request));
+    return;
+  }
+  if (url.pathname.startsWith('/telegram/')) {
+    event.respondWith(networkFirstTelegram(request));
     return;
   }
   if (isWarmableApi && request.headers.has('range')) {
