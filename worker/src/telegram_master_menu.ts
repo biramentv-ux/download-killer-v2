@@ -842,7 +842,7 @@ function publicBaseUrl(env: ExtendedEnv): string {
 }
 
 function botUsername(env: ExtendedEnv): string {
-  return String(env.TELEGRAM_BOT_USERNAME ?? 'download_killerBOT').replace(/^@+/, '');
+  return String(env.TELEGRAM_BOT_USERNAME ?? 'dyrakarmy_bot').replace(/^@+/, '');
 }
 
 function constantTimeEqual(left: string, right: string): boolean {
