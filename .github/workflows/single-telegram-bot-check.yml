@@ -33,23 +33,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Scan retired bot references first
-        id: retirement_scan
-        continue-on-error: true
         run: node scripts/validate-single-telegram-bot.mjs
-
-      - name: Upload retirement report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: single-bot-report
-          path: worker/single-bot-report.txt
-          if-no-files-found: error
-
-      - name: Fail on retired references
-        if: steps.retirement_scan.outcome != 'success'
-        run: |
-          cat single-bot-report.txt
-          exit 1
 
       - name: Setup Node
         uses: actions/setup-node@v4
