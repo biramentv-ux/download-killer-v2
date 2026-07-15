@@ -1,6 +1,6 @@
 # Download Killer Telegram Platform v10
 
-Telegram Platform v10 connects the public website, Cloudflare Worker, download queue, `@download_killerBOT`, Telegram Mini App, and a private Telegram storage channel.
+Telegram Platform v10 connects the public website, Cloudflare Worker, shared download queue, `@download_killerBOT`, the secondary bot, Telegram Mini App, and a private Telegram storage channel.
 
 ## User flow
 
@@ -17,29 +17,100 @@ Telegram storage channel
           ↓
 D1 file_id / channel message index
           ↓
-copyMessage or file_id reuse for later users
+copyMessage, file_id reuse or inline sharing
 ```
 
-The website and bot use the same `download_jobs` table and processing queue. Telegram users are linked to a private synchronization key in `telegram_user_links`.
+The website and bots use the same `download_jobs` table and processing queue. Telegram users are linked to a private synchronization key in `telegram_user_links`.
 
-## Bulgarian bot commands
+## Bulgarian master menu
+
+Bulgarian is the default language. English can be selected from `🌍 Език` or `/language`.
+
+The bot sends:
+
+1. a persistent reply keyboard for quick actions;
+2. an inline master menu with categorized actions;
+3. localized Queue, History, My Songs, Formats, Settings, Sharing, Language and Help screens.
+
+Main actions:
+
+- `🔎 Търсене`;
+- `⬇️ Свали URL`;
+- `🎧 Моите песни`;
+- `📤 Споделяне`;
+- `📥 Опашка`;
+- `🕘 История`;
+- `🎚 Формати`;
+- `⚙️ Настройки`;
+- `🌐 Mini App`;
+- `🌍 Език`;
+- `🆘 Помощ`;
+- `🏠 Меню`.
+
+## Bot commands
 
 - `/start` – start and main menu;
+- `/menu` – reopen the master menu;
 - `/search` – search by track or artist name;
 - `/download` – submit a public URL;
+- `/myfiles` – completed songs associated with the user;
+- `/share` – share a completed song through Telegram inline mode;
 - `/queue` – active jobs;
 - `/history` – recent jobs;
-- `/myfiles` – files associated with the user in the Telegram archive;
-- `/formats` – formats and quality information;
-- `/archive` – search the existing archive;
-- `/site` – open the Telegram Mini App;
+- `/formats` – detailed format and quality guide;
+- `/settings` – format, quality, source, downloads, captions and templates;
 - `/language` – Bulgarian or English;
-- `/storage` – archive statistics;
-- `/cancel` – cancel the latest queued or paused job;
-- `/settings` – advanced existing bot settings;
+- `/site` – open the Telegram Mini App;
 - `/help` – help.
 
-The main reply keyboard also exposes search, URL download, queue, history, archive, formats, settings, storage statistics, and the Mini App.
+Legacy archive, storage and cancellation commands remain available through the existing handlers.
+
+## Formats and quality guide
+
+The menu describes the actual supported formats:
+
+- FLAC – lossless, metadata-friendly and smaller than WAV;
+- WAV – lossless and uncompressed, with very large files;
+- MP3 320 – broad compatibility and strong quality/size balance;
+- MP3 128 – smaller files for mobile use;
+- OGG and OPUS – efficient streaming-oriented compression;
+- M4A – compact files and strong mobile compatibility.
+
+The system does not claim to create true 192 kHz or 24-bit audio when the source does not contain it. Real sample rate and bit depth depend on the source material.
+
+## Sharing completed songs
+
+The `📤 Споделяне` screen uses `switch_inline_query_chosen_chat`.
+
+A user can choose:
+
+- a private chat with another user;
+- a private chat with another bot;
+- a group or supergroup;
+- a channel.
+
+Ownership is checked server-side. The inline query only returns media linked to the requesting Telegram user.
+
+For the primary bot:
+
+- cached MP3/M4A entries can be returned as cached audio results;
+- cached FLAC/WAV/OGG/OPUS entries can be returned as cached document results;
+- link-only records use a new time-limited Download Killer URL.
+
+The secondary bot uses link-based inline results because Telegram `file_id` values are bot-specific.
+
+A receiving third-party bot may receive the user-sent audio or document message, but whether it processes the message depends entirely on that bot's own commands, permissions and implementation.
+
+### Enable inline mode
+
+Inline mode cannot be enabled through the Bot API. It must be enabled in `@BotFather` for each bot:
+
+1. open `@BotFather`;
+2. send `/setinline`;
+3. select the bot;
+4. enter a placeholder, for example `Сподели песен`.
+
+After enabling inline mode, rerun the corresponding setup script so the webhook subscribes to `inline_query` updates.
 
 ## Telegram Mini App
 
@@ -52,6 +123,7 @@ Public asset path:
 Expected production addresses:
 
 ```text
+https://dyrakarmy.eu/telegram/
 https://dyrakarmy.online/telegram/
 https://sounddrop.biramentv.workers.dev/telegram/
 ```
@@ -120,14 +192,13 @@ With the hosted Bot API:
 
 - sending a non-photo file by URL is limited to 20 MB;
 - multipart upload through most media/file methods is limited to 50 MB;
-- `sendAudio` accepts MP3 or M4A audio and currently documents a 50 MB limit;
-- Bot API `getFile` downloads are limited to 20 MB;
-- a reusable `file_id` is specific to the bot that received it;
-- Telegram file identifiers should be treated as opaque strings.
+- `sendAudio` accepts MP3 or M4A audio;
+- a reusable `file_id` belongs to the bot that received it;
+- Telegram file identifiers must be treated as opaque strings.
 
-The code defaults `TELEGRAM_STORAGE_MAX_MB` to `50` so it remains compatible with the hosted Bot API.
+The code defaults `TELEGRAM_STORAGE_MAX_MB` to `50` for hosted Bot API compatibility.
 
-A self-hosted local Bot API server can allow uploads up to 2000 MB and unrestricted downloads, but that is a separate server deployment and not part of the free Cloudflare Worker setup.
+A self-hosted local Bot API server can support larger files, but it is a separate server deployment and is not part of the Cloudflare Worker setup.
 
 ## Required secrets
 
@@ -136,6 +207,8 @@ Never commit these values:
 ```text
 TELEGRAM_BOT_TOKEN
 TELEGRAM_SECRET_TOKEN
+TELEGRAM_SECONDARY_BOT_TOKEN
+TELEGRAM_SECONDARY_SECRET_TOKEN
 DOWNLOADER_API_KEY
 DOWNLOAD_TOKEN_SECRET
 ```
@@ -169,7 +242,7 @@ cd worker
 $env:TELEGRAM_BOT_TOKEN="<temporary local value>"
 $env:TELEGRAM_SECRET_TOKEN="<webhook secret>"
 $env:TELEGRAM_BOT_USERNAME="download_killerBOT"
-$env:PUBLIC_BASE_URL="https://dyrakarmy.online"
+$env:PUBLIC_BASE_URL="https://dyrakarmy.eu"
 npm run telegram:setup
 ```
 
@@ -177,10 +250,11 @@ The script:
 
 - verifies the token with `getMe`;
 - warns if the token belongs to a different username;
+- reports whether inline mode is enabled;
 - configures Bulgarian and default command lists;
 - sets the Mini App menu button;
 - sets bot descriptions;
-- registers the webhook with `secret_token`;
+- registers the webhook with `message`, `callback_query`, `inline_query`, `channel_post` and `my_chat_member` updates;
 - prints current webhook status.
 
 ## D1 migration
@@ -189,7 +263,7 @@ The Worker lazily creates the tables, but production deployment should also appl
 
 ```powershell
 cd worker
-npx wrangler d1 execute sounddrop-db --file=migrations/0011_telegram_platform_v10.sql
+npx wrangler d1 execute sounddrop-db --file=migrations/0011_telegram_platform_v10.sql --remote
 ```
 
 ## Configuration variables
@@ -203,8 +277,6 @@ TELEGRAM_MINIAPP_PATH=/telegram/
 TELEGRAM_MINIAPP_AUTH_MAX_AGE_SECONDS=900
 ```
 
-For a different bot username, update `TELEGRAM_BOT_USERNAME` before running the setup script.
-
 ## Security
 
 - Webhook requests must contain the configured Telegram secret header.
@@ -212,6 +284,7 @@ For a different bot username, update `TELEGRAM_BOT_USERNAME` before running the 
 - `auth_date` is limited to a short validity window.
 - Bot tokens never appear in frontend assets or API responses.
 - Website-to-bot handoff tokens are random, short-lived, and single-use.
+- Inline sharing checks media ownership against the requesting Telegram user.
 - User URLs pass through the existing allowlist, blocklist, SSRF checks, and rate limits.
 - Telegram file IDs are stored server-side only.
 

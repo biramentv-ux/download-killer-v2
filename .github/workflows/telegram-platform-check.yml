@@ -5,6 +5,8 @@ on:
     paths:
       - worker/src/telegram_platform.ts
       - worker/src/telegram_platform.test.ts
+      - worker/src/telegram_master_menu.ts
+      - worker/src/telegram_master_menu.test.ts
       - worker/src/platform_v2.ts
       - worker/public/telegram/**
       - worker/scripts/setup-telegram-platform.mjs
@@ -20,6 +22,8 @@ on:
     paths:
       - worker/src/telegram_platform.ts
       - worker/src/telegram_platform.test.ts
+      - worker/src/telegram_master_menu.ts
+      - worker/src/telegram_master_menu.test.ts
       - worker/src/platform_v2.ts
       - worker/public/telegram/**
       - worker/scripts/setup-telegram-platform.mjs
@@ -69,6 +73,8 @@ jobs:
           const css = fs.readFileSync('public/telegram/telegram.css', 'utf8');
           const js = fs.readFileSync('public/telegram/telegram.js', 'utf8');
           const backend = fs.readFileSync('src/telegram_platform.ts', 'utf8');
+          const master = fs.readFileSync('src/telegram_master_menu.ts', 'utf8');
+          const masterTest = fs.readFileSync('src/telegram_master_menu.test.ts', 'utf8');
           const entry = fs.readFileSync('src/platform_v2.ts', 'utf8');
           const wrangler = fs.readFileSync('wrangler.jsonc', 'utf8');
           const setup = fs.readFileSync('scripts/setup-telegram-platform.mjs', 'utf8');
@@ -92,19 +98,31 @@ jobs:
           }
 
           for (const command of [
-            "command: 'search'", "command: 'download'", "command: 'queue'",
-            "command: 'history'", "command: 'myfiles'", "command: 'formats'",
-            "command: 'archive'", "command: 'site'", "command: 'language'",
-            "command: 'storage'", "command: 'cancel'", "command: 'settings'",
+            "command: 'menu'", "command: 'search'", "command: 'download'",
+            "command: 'myfiles'", "command: 'share'", "command: 'queue'",
+            "command: 'history'", "command: 'formats'", "command: 'settings'",
+            "command: 'language'", "command: 'site'", "command: 'help'",
           ]) {
-            if (!backend.includes(command)) throw new Error(`Missing command: ${command}`);
+            if (!master.includes(command)) throw new Error(`Missing master command: ${command}`);
+          }
+
+          for (const menuMarker of [
+            'Главно меню', 'Формати и качество', 'Споделяне на моите песни',
+            'switch_inline_query_chosen_chat', 'allow_bot_chats',
+            "telegramRequest('answerInlineQuery'", 'tg:v10:lang:',
+            's:downloads', 's:captions', 'parseShareMediaId',
+          ]) {
+            if (!master.includes(menuMarker)) throw new Error(`Missing master menu marker: ${menuMarker}`);
+          }
+          if (!masterTest.includes("parseShareMediaId('share:42')")) {
+            throw new Error('Master menu share parser test is missing');
           }
 
           for (const storageMarker of [
             'telegram_media_objects', 'telegram_user_links', 'copyMessage',
             'telegram_file_id', 'channel_message_id', 'file_unique_id',
           ]) {
-            if (!backend.includes(storageMarker) && !migration.includes(storageMarker)) {
+            if (!backend.includes(storageMarker) && !migration.includes(storageMarker) && !master.includes(storageMarker)) {
               throw new Error(`Missing Telegram storage marker: ${storageMarker}`);
             }
           }
@@ -117,18 +135,21 @@ jobs:
           }
           if (!backend.includes('validateTelegramInitData')) throw new Error('Mini App initData validation is missing');
           if (!backend.includes("secretKeyBytes")) throw new Error('Telegram HMAC validation is incomplete');
-          if (!backend.includes("X-Telegram-Bot-Api-Secret-Token")) throw new Error('Webhook secret validation is missing');
-          if (!entry.includes("handleTelegramPlatformWebhook")) throw new Error('Telegram webhook wrapper is not active');
+          if (!master.includes("X-Telegram-Bot-Api-Secret-Token")) throw new Error('Master webhook secret validation is missing');
+          if (!entry.includes('handleTelegramMasterWebhook')) throw new Error('Telegram master webhook wrapper is not active');
+          if (!entry.includes('ensureTelegramMasterCommands')) throw new Error('Master command synchronization is not active');
           if (!wrangler.includes('"main": "src/platform_v2.ts"')) throw new Error('Wrangler does not use platform_v2 entrypoint');
           if (!wrangler.includes('"TELEGRAM_BOT_USERNAME": "download_killerBOT"')) throw new Error('Target bot username is not configured');
           if (!css.includes('@media (prefers-reduced-motion: reduce)')) throw new Error('Reduced-motion support is missing');
           if (!js.includes('Telegram.WebApp')) throw new Error('Telegram Mini App SDK integration is missing');
           if (!js.includes('/miniapp/download') || !js.includes('/miniapp/profile')) throw new Error('Mini App API integration is missing');
           if (!setup.includes("process.env.TELEGRAM_BOT_TOKEN")) throw new Error('Setup script does not read token from environment');
+          if (!setup.includes("'inline_query'")) throw new Error('Webhook setup does not subscribe to inline queries');
+          if (!setup.includes('/setinline')) throw new Error('Inline mode activation guidance is missing');
           if (setup.includes('123456789:') || setup.includes('bot_token=')) throw new Error('A token-like literal was committed');
           if (!migration.includes('CREATE TABLE IF NOT EXISTS telegram_media_objects')) throw new Error('D1 migration is incomplete');
 
           const shortcut = (manifest.shortcuts || []).find((item) => item.url === '/telegram/');
           if (!shortcut) throw new Error('Telegram Mini App PWA shortcut is missing');
-          console.log('Telegram Platform v10 boundaries validated.');
+          console.log('Telegram master menu, storage and inline sharing boundaries validated.');
           NODE

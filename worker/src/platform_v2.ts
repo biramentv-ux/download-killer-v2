@@ -5,9 +5,12 @@ import { handleJobStatusBridge } from './job_status_bridge';
 import {
   ensureTelegramV10Commands,
   handleTelegramPlatformApi,
-  handleTelegramPlatformWebhook,
   syncTelegramStorageBatch,
 } from './telegram_platform';
+import {
+  ensureTelegramMasterCommands,
+  handleTelegramMasterWebhook,
+} from './telegram_master_menu';
 import {
   createSecondaryTelegramEnv,
   hasSecondaryTelegramBot,
@@ -72,7 +75,7 @@ export default {
     if (mediaLabResponse) return mediaLabResponse;
 
     if (url.pathname === '/telegram/webhook') {
-      return handleTelegramPlatformWebhook(request, env);
+      return handleTelegramMasterWebhook(request, env);
     }
 
     if (url.pathname === '/telegram/webhook/dyrakarmy') {
@@ -82,7 +85,7 @@ export default {
           { status: 503 },
         );
       }
-      return handleTelegramPlatformWebhook(request, createSecondaryTelegramEnv(env));
+      return handleTelegramMasterWebhook(request, createSecondaryTelegramEnv(env));
     }
 
     if (url.pathname.startsWith('/api/telegram/v10-secondary/')) {
@@ -124,6 +127,12 @@ export default {
     context: ExecutionContext,
   ): Promise<void> {
     await legacyHandler.scheduled(controller, env);
-    context.waitUntil(ensureTelegramV10Commands(env));
+    context.waitUntil((async () => {
+      await ensureTelegramV10Commands(env);
+      await ensureTelegramMasterCommands(env);
+      if (hasSecondaryTelegramBot(env)) {
+        await ensureTelegramMasterCommands(createSecondaryTelegramEnv(env));
+      }
+    })());
   },
 } satisfies ExportedHandler<ExtendedEnv, DownloadJob | JobHistoryEvent>;

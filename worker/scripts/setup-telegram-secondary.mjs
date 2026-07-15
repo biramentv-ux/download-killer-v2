@@ -32,15 +32,17 @@ async function call(method, payload = {}) {
 
 const commands = [
   { command: 'start', description: 'Старт и главно меню' },
+  { command: 'menu', description: 'Главно меню' },
   { command: 'search', description: 'Търсене по име' },
   { command: 'download', description: 'Свали от публичен URL' },
+  { command: 'myfiles', description: 'Моите готови песни' },
+  { command: 'share', description: 'Сподели готова песен' },
   { command: 'queue', description: 'Активна опашка' },
   { command: 'history', description: 'Последни задачи' },
-  { command: 'myfiles', description: 'Моите файлове в Telegram' },
   { command: 'formats', description: 'Формати и качество' },
   { command: 'archive', description: 'Търсене в архива' },
   { command: 'site', description: 'Отвори web платформата' },
-  { command: 'language', description: 'Език BG/EN' },
+  { command: 'language', description: 'Смяна на езика' },
   { command: 'storage', description: 'Статистика за архива' },
   { command: 'cancel', description: 'Откажи чакаща задача' },
   { command: 'settings', description: 'Настройки' },
@@ -54,6 +56,9 @@ try {
   if (actualUsername.toLowerCase() !== expectedUsername.toLowerCase()) {
     throw new Error(`Token belongs to @${actualUsername}, expected @${expectedUsername}.`);
   }
+  if (!me.supports_inline_queries) {
+    console.warn('Inline sharing is disabled. In @BotFather run /setinline for this bot and set a placeholder such as "Сподели песен".');
+  }
 
   await call('setMyCommands', { commands, language_code: 'bg' });
   await call('setMyCommands', { commands });
@@ -65,11 +70,11 @@ try {
     },
   });
   await call('setMyDescription', {
-    description: 'Алтернативен вход към Download Killer: обща опашка, история, формати и Telegram файлов архив.',
+    description: 'Алтернативен вход към Download Killer: българско меню, обща опашка, формати, архив и споделяне.',
     language_code: 'bg',
   });
   await call('setMyShortDescription', {
-    short_description: 'Алтернативен Download Killer бот към общата платформа.',
+    short_description: 'Алтернативен BG бот с архив и споделяне.',
     language_code: 'bg',
   });
 
@@ -77,7 +82,7 @@ try {
   await call('setWebhook', {
     url: webhookUrl,
     secret_token: secret,
-    allowed_updates: ['message', 'callback_query', 'channel_post', 'my_chat_member'],
+    allowed_updates: ['message', 'callback_query', 'inline_query', 'channel_post', 'my_chat_member'],
     drop_pending_updates: dropPending,
     max_connections: 40,
   });
@@ -85,6 +90,7 @@ try {
   const webhook = await call('getWebhookInfo');
   console.log(`Webhook: ${webhook.url || '(not set)'}`);
   console.log(`Pending updates: ${webhook.pending_update_count || 0}`);
+  console.log(`Inline sharing: ${me.supports_inline_queries ? 'enabled' : 'requires /setinline in @BotFather'}`);
   if (webhook.last_error_message) console.warn(`Last webhook error: ${webhook.last_error_message}`);
   console.log(`Public platform: ${publicBase}/`);
   console.log('The secondary bot now shares the same Worker, D1 queue, history and Telegram archive.');
