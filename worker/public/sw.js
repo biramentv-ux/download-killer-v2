@@ -1,4 +1,5 @@
 const CACHE_NAME = 'download-killer-static-v15';
+const LEGACY_CACHE_NAME = 'download-killer-static-v13';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
 const APP_SHELL = [
   '/',
@@ -108,3 +109,5 @@ self.addEventListener('fetch', (event) => {
     }),
   );
 });
+
+void LEGACY_CACHE_NAME;
