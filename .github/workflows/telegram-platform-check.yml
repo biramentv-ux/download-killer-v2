@@ -6,6 +6,7 @@ on:
       - worker/src/telegram_platform.ts
       - worker/src/telegram_platform.test.ts
       - worker/src/telegram_master_menu.ts
+      - worker/src/telegram_master_menu.test.ts
       - worker/src/platform_v2.ts
       - worker/public/telegram/**
       - worker/scripts/setup-telegram-platform.mjs
@@ -22,6 +23,7 @@ on:
       - worker/src/telegram_platform.ts
       - worker/src/telegram_platform.test.ts
       - worker/src/telegram_master_menu.ts
+      - worker/src/telegram_master_menu.test.ts
       - worker/src/platform_v2.ts
       - worker/public/telegram/**
       - worker/scripts/setup-telegram-platform.mjs
@@ -72,6 +74,7 @@ jobs:
           const js = fs.readFileSync('public/telegram/telegram.js', 'utf8');
           const backend = fs.readFileSync('src/telegram_platform.ts', 'utf8');
           const master = fs.readFileSync('src/telegram_master_menu.ts', 'utf8');
+          const masterTest = fs.readFileSync('src/telegram_master_menu.test.ts', 'utf8');
           const entry = fs.readFileSync('src/platform_v2.ts', 'utf8');
           const wrangler = fs.readFileSync('wrangler.jsonc', 'utf8');
           const setup = fs.readFileSync('scripts/setup-telegram-platform.mjs', 'utf8');
@@ -106,10 +109,13 @@ jobs:
           for (const menuMarker of [
             'Главно меню', 'Формати и качество', 'Споделяне на моите песни',
             'switch_inline_query_chosen_chat', 'allow_bot_chats',
-            "telegramRequest('answerInlineQuery'", 'InlineQueryResult',
-            'tg:v10:lang:', 's:downloads', 's:captions',
+            "telegramRequest('answerInlineQuery'", 'tg:v10:lang:',
+            's:downloads', 's:captions', 'parseShareMediaId',
           ]) {
             if (!master.includes(menuMarker)) throw new Error(`Missing master menu marker: ${menuMarker}`);
+          }
+          if (!masterTest.includes("parseShareMediaId('share:42')")) {
+            throw new Error('Master menu share parser test is missing');
           }
 
           for (const storageMarker of [
