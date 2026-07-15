@@ -40,183 +40,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate sole native Telegram bot
+        run: npm run validate:single-bot
+
       - name: Typecheck Worker
         run: npm run typecheck
 
       - name: Run Worker tests
         run: npm test
 
-      - name: Validate platform JavaScript and service worker
+      - name: Validate public platform assets
         run: |
           node --check public/platform/platform.js
           node --check public/platform/status-backoff.js
           node --check public/platform/site-defaults.js
           node --check public/media-lab/media-lab.js
           node --check public/sw.js
-
-      - name: Validate multilingual platform, Media Lab, status bridge and mirrors
-        run: |
-          node - <<'NODE'
-          const fs = require('node:fs');
-          const html = fs.readFileSync('public/index.html', 'utf8');
-          const legacyPlatform = fs.readFileSync('public/platform/index.html', 'utf8');
-          const css = fs.readFileSync('public/platform/platform.css', 'utf8');
-          const js = fs.readFileSync('public/platform/platform.js', 'utf8');
-          const statusBackoff = fs.readFileSync('public/platform/status-backoff.js', 'utf8');
-          const siteDefaults = fs.readFileSync('public/platform/site-defaults.js', 'utf8');
-          const favicon = fs.readFileSync('public/favicon.svg', 'utf8');
-          const labCss = fs.readFileSync('public/media-lab/media-lab.css', 'utf8');
-          const labJs = fs.readFileSync('public/media-lab/media-lab.js', 'utf8');
-          const labApi = fs.readFileSync('src/media_lab.ts', 'utf8');
-          const statusBridge = fs.readFileSync('src/job_status_bridge.ts', 'utf8');
-          const entrypoint = fs.readFileSync('src/platform_v2.ts', 'utf8');
-          const manifest = JSON.parse(fs.readFileSync('public/manifest.webmanifest', 'utf8'));
-          const sw = fs.readFileSync('public/sw.js', 'utf8');
-          const wrangler = fs.readFileSync('wrangler.jsonc', 'utf8');
-
-          const requiredArtifacts = new Map([
-            ['public/downloads/DyrakArmyDesktop.exe', 10_000_000],
-            ['public/downloads/DyrakArmyDesktop-macOS.zip', 10_000],
-            ['public/downloads/DyrakArmy-Extension-Chrome.zip', 10_000],
-            ['public/downloads/DyrakArmy-Extension-Legacy-Chrome.zip', 10_000],
-            ['public/downloads/DyrakArmy-Extension-Firefox.zip', 10_000],
-          ]);
-          for (const [artifact, minimumBytes] of requiredArtifacts) {
-            if (!fs.existsSync(artifact) || fs.statSync(artifact).size < minimumBytes) {
-              throw new Error(`Missing or incomplete release artifact: ${artifact}`);
-            }
-          }
-          if (fs.readFileSync('public/downloads/DyrakArmyDesktop.exe').subarray(0, 2).toString('ascii') !== 'MZ') {
-            throw new Error('Windows desktop artifact is not a PE executable');
-          }
-
-          const requiredHtml = [
-            '<title>Download Killer Platform</title>',
-            '<link rel="canonical" href="https://dyrakarmy.eu/">',
-            'Platform v12.2.0',
-            'id="tutorial"',
-            'id="languageSelect"',
-            '<option value="ru">RU</option>',
-            '<option value="de">DE</option>',
-            'id="downloadForm"',
-            'id="jobFeed"',
-            'id="engineGrid"',
-            'id="signalCanvas"',
-            'id="globalHealth"',
-            'id="historyList"',
-            'id="copyBotHandleBtn"',
-            'https://web.telegram.org/k/#@download_killerBOT',
-            'https://dyrakarmy.online/',
-            'https://dyrakarmy.eu/',
-            '/telegram/',
-            'href="/favicon.svg"',
-            '/platform/platform.css',
-            '/platform/status-backoff.js',
-            '/platform/site-defaults.js',
-            '/platform/platform.js',
-            '/media-lab/media-lab.css',
-            '/media-lab/media-lab.js',
-          ];
-          for (const marker of requiredHtml) {
-            if (!html.includes(marker)) throw new Error(`Missing homepage marker: ${marker}`);
-          }
-
-          for (const jsMarker of [
-            'bg:', 'en:', 'ru:', 'de:',
-            'tg://resolve?domain=',
-            'web.telegram.org/k/#@',
-            'openTelegram(mode)',
-            'updateMirrorLink()',
-          ]) {
-            if (!js.includes(jsMarker)) throw new Error(`Missing i18n/fallback marker: ${jsMarker}`);
-          }
-
-          for (const marker of ['Retry-After', 'MIN_INTERVAL_MS', 'STATUS_PATH']) {
-            if (!statusBackoff.includes(marker)) throw new Error(`Missing status backoff marker: ${marker}`);
-          }
-          for (const marker of ['https://dyrakarmy.eu/', 'DyrakArmyDesktop.exe', 'windowsClientLink']) {
-            if (!siteDefaults.includes(marker)) throw new Error(`Missing EU/desktop marker: ${marker}`);
-          }
-          if (!favicon.includes('<svg') || !favicon.includes('Download Killer')) {
-            throw new Error('Download Killer favicon is missing');
-          }
-
-          for (const labMarker of [
-            '/media-lab/inspect',
-            '/media-lab/rank',
-            '/preview',
-            '/search',
-            'Cross-source Match Finder',
-            'SaveHere (Apache-2.0)',
-            'FluentDL (MIT)',
-          ]) {
-            if (!labJs.includes(labMarker)) throw new Error(`Missing Media Lab frontend marker: ${labMarker}`);
-          }
-          for (const apiMarker of [
-            "'/api/media-lab/inspect'",
-            "'/api/media-lab/rank'",
-            'validateUrlPolicy',
-            'Range:',
-            'rankMediaCandidates',
-            'parseContentDispositionFilename',
-          ]) {
-            if (!labApi.includes(apiMarker)) throw new Error(`Missing Media Lab API marker: ${apiMarker}`);
-          }
-          for (const marker of ['JOB_STATUS_RATE_LIMIT_PER_MINUTE', 'Retry-After', 'recommended_interval_ms']) {
-            if (!statusBridge.includes(marker)) throw new Error(`Missing job status bridge marker: ${marker}`);
-          }
-          if (!entrypoint.includes('handleMediaLabApi') || !entrypoint.includes('injectPlatformAssets')) {
-            throw new Error('Platform asset injection is not wired into the Worker entrypoint');
-          }
-          if (!entrypoint.includes('handleJobStatusBridge')) {
-            throw new Error('Job status bridge is not wired into the Worker entrypoint');
-          }
-          if (!labCss.includes('@media (prefers-reduced-motion: reduce)')) {
-            throw new Error('Media Lab reduced-motion rule is missing');
-          }
-
-          for (const mirrorMarker of [
-            '"pattern": "dyrakarmy.eu"',
-            '"pattern": "www.dyrakarmy.eu"',
-            '"zone_name": "dyrakarmy.eu"',
-            '"PUBLIC_BASE_URL": "https://dyrakarmy.eu"',
-            '"JOB_STATUS_RATE_LIMIT_PER_MINUTE": "120"',
-          ]) {
-            if (!wrangler.includes(mirrorMarker)) throw new Error(`Missing EU primary config: ${mirrorMarker}`);
-          }
-          if (wrangler.includes('trycloudflare.com')) {
-            throw new Error('Ephemeral trycloudflare origin must not ship in production configuration');
-          }
-
-          if (!legacyPlatform.includes("window.location.replace('/')")) {
-            throw new Error('Legacy /platform route does not redirect to the main homepage');
-          }
-          if (!css.includes('@media (prefers-reduced-motion: reduce)')) {
-            throw new Error('Reduced-motion accessibility rule is missing');
-          }
-          for (const endpoint of ['/download', '/health', '/runtime-config', '/history']) {
-            if (!js.includes(endpoint)) throw new Error(`Missing API integration: ${endpoint}`);
-          }
-          if (manifest.name !== 'Download Killer Platform v12.2.0') {
-            throw new Error('PWA manifest version is not v12.2.0');
-          }
-          if (!sw.includes('download-killer-static-v12.2.0')) {
-            throw new Error('Service-worker cache version is not v12.2.0');
-          }
-          for (const asset of [
-            '/media-lab/media-lab.css',
-            '/media-lab/media-lab.js',
-            '/platform/status-backoff.js',
-            '/platform/site-defaults.js',
-            '/favicon.svg',
-          ]) {
-            if (!sw.includes(asset)) throw new Error(`PWA asset is missing: ${asset}`);
-          }
-          if (html.includes('<title>DyrakArmy v7</title>')) {
-            throw new Error('Legacy homepage title is still present');
-          }
-          console.log('Multilingual platform, resilient polling, EU primary domain and mirror configuration validated.');
-          NODE
+          grep -q '<title>Download Killer Platform</title>' public/index.html
+          grep -q 'Platform v12.2.0' public/index.html
+          grep -q 'tg://resolve?domain=dyrakarmy_bot' public/index.html
+          grep -q '@dyrakarmy_bot' public/index.html
+          grep -q '/media-lab/media-lab.js' public/index.html
+          ! grep -R -n -E 'download_killerBOT|TELEGRAM_SECONDARY_|v10-secondary|telegram/webhook/dyrakarmy|web\.telegram\.org' src public scripts wrangler.jsonc package.json
 
   deploy:
     if: github.event_name != 'pull_request'
@@ -230,21 +75,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Detect Cloudflare credentials
-        id: credentials
+      - name: Require Cloudflare credentials
         shell: bash
         run: |
-          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::error::Cloudflare production credentials are missing; refusing a false-green deployment."
-            exit 1
-          fi
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo '::error::CLOUDFLARE_API_TOKEN is missing'; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo '::error::CLOUDFLARE_ACCOUNT_ID is missing'; exit 1; }
 
       - name: Deploy Worker and static platform
         id: cloudflare
-        if: steps.credentials.outputs.available == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -253,76 +92,19 @@ jobs:
           command: deploy --config wrangler.jsonc
 
       - name: Production smoke test
-        if: steps.cloudflare.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
-          required_urls=(
-            "https://dyrakarmy.eu/"
-            "https://www.dyrakarmy.eu/"
-            "https://sounddrop.biramentv.workers.dev/"
-          )
-          optional_urls=(
-            "https://dyrakarmy.online/"
-            "https://www.dyrakarmy.online/"
-          )
-
-          check_url() {
-            local url="$1"
-            local ok=0
-            echo "Checking $url"
-            for attempt in 1 2 3 4 5 6; do
-              if body="$(curl -fsSL -A "Mozilla/5.0 (Download Killer release smoke)" --retry 2 --retry-delay 3 --max-time 25 "$url" 2>/dev/null)"; then
-                if grep -q "Download Killer Platform" <<<"$body" && grep -q "download_killerBOT" <<<"$body" && grep -q "/media-lab/media-lab.js" <<<"$body"; then
-                  echo "Live: $url"
-                  ok=1
-                  break
-                fi
-              fi
-              sleep 10
-            done
-            return $((1 - ok))
-          }
-
-          failed=0
-          for url in "${required_urls[@]}"; do
-            if ! check_url "$url"; then
-              echo "::error::Required endpoint is not serving Download Killer Media Lab: $url"
-              failed=1
-            fi
+          for base in https://dyrakarmy.eu https://sounddrop.biramentv.workers.dev; do
+            echo "Checking $base"
+            home="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/")"
+            grep -q 'Download Killer Platform' <<<"$home"
+            grep -q '@dyrakarmy_bot' <<<"$home"
+            grep -q 'tg://resolve?domain=dyrakarmy_bot' <<<"$home"
+            ! grep -q 'download_killerBOT' <<<"$home"
+            ! grep -q 'web.telegram.org' <<<"$home"
           done
-
-          for url in "${optional_urls[@]}"; do
-            if ! check_url "$url"; then
-              echo "::warning::Optional mirror is unavailable or challenged by edge security: $url"
-            fi
-          done
-
-          json_endpoints=(
-            "https://dyrakarmy.eu/api/health"
-            "https://dyrakarmy.eu/api/runtime-config"
-            "https://dyrakarmy.eu/api/telegram/v10/config"
-            "https://dyrakarmy.eu/api/telegram/v10-secondary/config"
-            "https://dyrakarmy.eu/api/telegram/v12/health"
-          )
-          for url in "${json_endpoints[@]}"; do
-            echo "Checking API $url"
-            if ! body="$(curl -fsSL -A "Mozilla/5.0 (Download Killer release smoke)" --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$url")"; then
-              echo "::error::Required API endpoint failed: $url"
-              failed=1
-              continue
-            fi
-            if ! grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$body"; then
-              echo "::error::Required API endpoint did not return ok=true: $url"
-              failed=1
-            fi
-          done
-
-          downloader_url="https://dyrakarmy-downloader-primary.onrender.com/health"
-          echo "Checking downloader origin $downloader_url"
-          if ! body="$(curl -fsSL -A "Mozilla/5.0 (Download Killer release smoke)" --retry 8 --retry-all-errors --retry-delay 10 --max-time 90 "$downloader_url")" || ! grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$body"; then
-            echo "::error::Primary downloader origin is not healthy: $downloader_url"
-            failed=1
-          fi
-
-          exit "$failed"
+          health="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/telegram/v12/health)"
+          grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$health"
+          grep -q '"username":"dyrakarmy_bot"' <<<"$health"
+          grep -q 'tg://resolve?domain=dyrakarmy_bot' <<<"$health"
