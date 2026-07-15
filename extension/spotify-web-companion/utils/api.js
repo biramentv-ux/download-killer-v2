@@ -1,5 +1,25 @@
 import { normalizeBackendJob, normalizeBackendUrl } from "./validators.js";
 
+export class BackendApiError extends Error {
+  constructor(message, options = {}) {
+    super(message);
+    this.name = "BackendApiError";
+    this.status = Number(options.status || 0);
+    this.code = String(options.code || "BACKEND_ERROR");
+    this.retryable = options.retryable !== false;
+    this.retryAfterMs = Number(options.retryAfterMs || 0);
+  }
+}
+
+function retryAfterMs(response) {
+  const raw = response.headers.get("Retry-After") || "";
+  const seconds = Number.parseInt(raw, 10);
+  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
+  const date = Date.parse(raw);
+  if (Number.isFinite(date)) return Math.max(0, date - Date.now());
+  return response.status === 429 ? 15000 : 0;
+}
+
 async function apiJson(backendUrl, path, init = {}, timeoutMs = 25000) {
   const base = normalizeBackendUrl(backendUrl);
   const controller = new AbortController();
@@ -18,9 +38,28 @@ async function apiJson(backendUrl, path, init = {}, timeoutMs = 25000) {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       const message = payload?.error?.message || payload?.detail || `HTTP ${response.status}`;
-      throw new Error(message);
+      throw new BackendApiError(message, {
+        status: response.status,
+        code: payload?.error?.code || `HTTP_${response.status}`,
+        retryable: payload?.error?.retryable ?? response.status >= 429,
+        retryAfterMs: retryAfterMs(response)
+      });
     }
     return payload;
+  } catch (error) {
+    if (error instanceof BackendApiError) throw error;
+    if (error?.name === "AbortError") {
+      throw new BackendApiError("Backend request timed out", {
+        code: "TIMEOUT",
+        retryable: true,
+        retryAfterMs: 10000
+      });
+    }
+    throw new BackendApiError(error?.message || String(error), {
+      code: "NETWORK_ERROR",
+      retryable: true,
+      retryAfterMs: 10000
+    });
   } finally {
     clearTimeout(timer);
   }
@@ -34,13 +73,13 @@ export async function submitDownload(backendUrl, task) {
       source: "spotify",
       format: task.format,
       quality: task.quality,
-      client_id: "spotify-web-companion-v1",
+      client_id: "spotify-web-companion-v1.2",
       added_by: "chrome-extension"
     })
   });
 
   const job = normalizeBackendJob(payload, task);
-  if (!job.id) throw new Error("Backend response did not include a job id");
+  if (!job.id) throw new BackendApiError("Backend response did not include a job id", { retryable: false });
   return job;
 }
 

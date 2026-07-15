@@ -2,7 +2,7 @@
 
 const token = String(process.env.TELEGRAM_BOT_TOKEN || '').trim();
 const secret = String(process.env.TELEGRAM_SECRET_TOKEN || '').trim();
-const publicBase = String(process.env.PUBLIC_BASE_URL || 'https://dyrakarmy.online').replace(/\/+$/, '');
+const publicBase = String(process.env.PUBLIC_BASE_URL || 'https://dyrakarmy.eu').replace(/\/+$/, '');
 const expectedUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'download_killerBOT').replace(/^@+/, '');
 const dropPending = String(process.env.TELEGRAM_DROP_PENDING_UPDATES || '0') === '1';
 

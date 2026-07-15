@@ -142,6 +142,7 @@ export interface Env {
   DOWNLOAD_TOKEN_TTL_SECONDS?: string;
   SEARCH_CACHE_TTL_SECONDS?: string;
   DOWNLOAD_DEDUPE_TTL_SECONDS?: string;
+  JOB_STATUS_RATE_LIMIT_PER_MINUTE?: string;
   PUBLIC_BASE_URL?: string;
   INVIDIOUS_BASE_URL?: string;
 }

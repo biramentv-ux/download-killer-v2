@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  DEFAULT_BACKEND,
   isSpotifyTrackUrl,
   normalizeSettings,
   safeFilename,
@@ -15,6 +16,11 @@ test("normalizes Spotify URL and URI", () => {
     "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC"
   );
   assert.equal(isSpotifyTrackUrl("https://example.com/track/abc"), false);
+});
+
+test("uses dyrakarmy.eu as the default backend", () => {
+  assert.equal(DEFAULT_BACKEND, "https://dyrakarmy.eu");
+  assert.equal(normalizeSettings({}).backendUrl, "https://dyrakarmy.eu");
 });
 
 test("sanitizes filenames", () => {

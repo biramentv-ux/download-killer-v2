@@ -1,17 +1,18 @@
 export const ALLOWED_BACKENDS = Object.freeze([
-  "https://dyrakarmy.online",
-  "https://www.dyrakarmy.online",
   "https://dyrakarmy.eu",
   "https://www.dyrakarmy.eu",
+  "https://dyrakarmy.online",
+  "https://www.dyrakarmy.online",
   "https://sounddrop.biramentv.workers.dev"
 ]);
 
+export const DEFAULT_BACKEND = ALLOWED_BACKENDS[0];
 export const SUPPORTED_FORMATS = Object.freeze(["mp3", "m4a", "ogg", "opus", "flac", "wav"]);
 export const SUPPORTED_QUALITIES = Object.freeze(["best", "320", "256", "192", "128", "96", "lossless"]);
 
 export function normalizeBackendUrl(value) {
   const candidate = String(value || "").trim().replace(/\/+$/, "");
-  return ALLOWED_BACKENDS.includes(candidate) ? candidate : ALLOWED_BACKENDS[0];
+  return ALLOWED_BACKENDS.includes(candidate) ? candidate : DEFAULT_BACKEND;
 }
 
 export function spotifyTrackId(value) {

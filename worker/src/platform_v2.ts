@@ -1,6 +1,7 @@
 import legacyHandler from './index';
 import type { DownloadJob, Env, JobHistoryEvent } from './types';
 import { handleMediaLabApi } from './media_lab';
+import { handleJobStatusBridge } from './job_status_bridge';
 import {
   ensureTelegramV10Commands,
   handleTelegramPlatformApi,
@@ -20,28 +21,52 @@ type ExtendedEnv = Env & {
   TELEGRAM_SECONDARY_BOT_USERNAME?: string;
 };
 
-async function injectMediaLabAssets(request: Request, response: Response): Promise<Response> {
+async function injectPlatformAssets(request: Request, response: Response): Promise<Response> {
   if (request.method !== 'GET' || !response.ok) return response;
   const url = new URL(request.url);
-  if (url.pathname !== '/' && url.pathname !== '/index.html') return response;
+  const isRoot = url.pathname === '/' || url.pathname === '/index.html';
+  const isTelegram = url.pathname === '/telegram/' || url.pathname === '/telegram/index.html';
+  if (!isRoot && !isTelegram) return response;
+
   const contentType = response.headers.get('Content-Type') ?? '';
   if (!contentType.toLowerCase().includes('text/html')) return response;
 
-  const html = await response.text();
-  const stylesheet = '<link rel="stylesheet" href="/media-lab/media-lab.css">';
-  const script = '<script src="/media-lab/media-lab.js" defer></script>';
-  const updated = html
-    .replace('</head>', `  ${stylesheet}\n</head>`)
-    .replace('</body>', `  ${script}\n</body>`);
+  let html = await response.text();
+  const favicon = '<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">';
+  html = html.replace('</head>', `  ${favicon}\n</head>`);
+
+  if (isRoot) {
+    html = html
+      .replace(
+        '<link rel="canonical" href="https://dyrakarmy.online/">',
+        '<link rel="canonical" href="https://dyrakarmy.eu/">',
+      )
+      .replace('<script src="/platform/platform.js" defer></script>', [
+        '<script src="/platform/status-backoff.js"></script>',
+        '<script src="/platform/site-defaults.js" defer></script>',
+        '<script src="/platform/platform.js" defer></script>',
+      ].join('\n  '))
+      .replace('</head>', '  <link rel="stylesheet" href="/media-lab/media-lab.css">\n</head>')
+      .replace('</body>', '  <script src="/media-lab/media-lab.js" defer></script>\n</body>');
+  } else {
+    html = html.replace(
+      '<script src="./telegram.js" defer></script>',
+      '<script src="/platform/status-backoff.js"></script>\n  <script src="./telegram.js" defer></script>',
+    );
+  }
+
   const headers = new Headers(response.headers);
   headers.delete('Content-Length');
   headers.set('Cache-Control', 'no-cache');
-  return new Response(updated, { status: response.status, statusText: response.statusText, headers });
+  return new Response(html, { status: response.status, statusText: response.statusText, headers });
 }
 
 export default {
   async fetch(request: Request, env: ExtendedEnv, _context: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    const jobStatusResponse = await handleJobStatusBridge(request, env);
+    if (jobStatusResponse) return jobStatusResponse;
 
     const mediaLabResponse = await handleMediaLabApi(request, env);
     if (mediaLabResponse) return mediaLabResponse;
@@ -77,7 +102,7 @@ export default {
     if (telegramApiResponse) return telegramApiResponse;
 
     const response = await legacyHandler.fetch(request, env);
-    return injectMediaLabAssets(request, response);
+    return injectPlatformAssets(request, response);
   },
 
   async queue(
