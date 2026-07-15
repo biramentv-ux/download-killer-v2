@@ -5,6 +5,8 @@ const secret = String(process.env.TELEGRAM_SECRET_TOKEN || '').trim();
 const publicBase = String(process.env.PUBLIC_BASE_URL || 'https://dyrakarmy.eu').replace(/\/+$/, '');
 const expectedUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'download_killerBOT').replace(/^@+/, '');
 const dropPending = String(process.env.TELEGRAM_DROP_PENDING_UPDATES || '0') === '1';
+const miniAppVersion = String(process.env.TELEGRAM_MINIAPP_VERSION || '12.2.0').trim();
+const miniAppUrl = `${publicBase}/telegram/?v=${encodeURIComponent(miniAppVersion)}`;
 
 if (!token) {
   console.error('TELEGRAM_BOT_TOKEN is required. Set it as an environment variable; do not commit it.');
@@ -54,7 +56,7 @@ try {
   const actualUsername = String(me.username || '');
   console.log(`Connected bot: @${actualUsername} (${me.id})`);
   if (actualUsername.toLowerCase() !== expectedUsername.toLowerCase()) {
-    console.warn(`Warning: configured username is @${expectedUsername}, but token belongs to @${actualUsername}.`);
+    throw new Error(`Token belongs to @${actualUsername}, expected @${expectedUsername}. Refusing to bind the wrong Mini App session key.`);
   }
   if (!me.supports_inline_queries) {
     console.warn('Inline sharing is disabled. In @BotFather run /setinline for this bot and set a placeholder such as "Сподели песен".');
@@ -66,15 +68,15 @@ try {
     menu_button: {
       type: 'web_app',
       text: 'Download Killer',
-      web_app: { url: `${publicBase}/telegram/` },
+      web_app: { url: miniAppUrl },
     },
   });
   await call('setMyDescription', {
-    description: 'Download Killer: българско меню, търсене, обща опашка, формати, Telegram архив и споделяне.',
+    description: 'Download Killer: Mini App v12, българско меню, обща опашка, формати, Telegram архив и споделяне.',
     language_code: 'bg',
   });
   await call('setMyShortDescription', {
-    short_description: 'BG меню, музикални формати, архив и споделяне.',
+    short_description: 'Mini App v12, BG меню, архив и споделяне.',
     language_code: 'bg',
   });
 
@@ -92,9 +94,10 @@ try {
   console.log(`Pending updates: ${webhook.pending_update_count || 0}`);
   console.log(`Inline sharing: ${me.supports_inline_queries ? 'enabled' : 'requires /setinline in @BotFather'}`);
   if (webhook.last_error_message) console.warn(`Last webhook error: ${webhook.last_error_message}`);
-  console.log(`Mini App: ${publicBase}/telegram/`);
-  console.log('Next: add the bot as an administrator to a private storage channel with permission to post messages.');
-  console.log('Set TELEGRAM_DOWNLOAD_CHANNEL_ID to the numeric channel id, or publish one channel post after adding the bot so the Worker can capture it.');
+  console.log(`Mini App v${miniAppVersion}: ${miniAppUrl}`);
+  console.log(`Health: ${publicBase}/api/telegram/v12/health`);
+  console.log('Next: close the existing Telegram WebView completely and open the Menu button again.');
+  console.log('Add the bot as an administrator to a private storage channel with permission to post messages.');
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
