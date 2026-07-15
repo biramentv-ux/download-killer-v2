@@ -1,11 +1,12 @@
-import { normalizeSettings } from "./validators.js";
+import { DEFAULT_BACKEND, normalizeSettings } from "./validators.js";
 
 const STATE_KEY = "downloadKillerCompanionState";
 const MAX_HISTORY = 100;
+const SCHEMA_VERSION = 2;
 
 const DEFAULT_STATE = Object.freeze({
-  schemaVersion: 1,
-  settings: normalizeSettings({}),
+  schemaVersion: SCHEMA_VERSION,
+  settings: normalizeSettings({ backendUrl: DEFAULT_BACKEND }),
   queue: [],
   history: [],
   updatedAt: 0
@@ -23,11 +24,27 @@ function cloneDefaultState() {
   };
 }
 
+function migratedSettings(source) {
+  const rawSettings = source.settings && typeof source.settings === "object" ? source.settings : {};
+  const previousVersion = Number(source.schemaVersion || 1);
+  const previousBackend = String(rawSettings.backendUrl || "").replace(/\/+$/, "");
+  const shouldMigratePrimary = previousVersion < SCHEMA_VERSION && [
+    "",
+    "https://dyrakarmy.online",
+    "https://www.dyrakarmy.online"
+  ].includes(previousBackend);
+
+  return normalizeSettings({
+    ...rawSettings,
+    backendUrl: shouldMigratePrimary ? DEFAULT_BACKEND : rawSettings.backendUrl
+  });
+}
+
 function normalizeState(raw) {
   const source = raw && typeof raw === "object" ? raw : {};
   return {
-    schemaVersion: 1,
-    settings: normalizeSettings(source.settings || {}),
+    schemaVersion: SCHEMA_VERSION,
+    settings: migratedSettings(source),
     queue: Array.isArray(source.queue) ? source.queue.slice(0, 250) : [],
     history: Array.isArray(source.history) ? source.history.slice(0, MAX_HISTORY) : [],
     updatedAt: Number(source.updatedAt || Date.now())
