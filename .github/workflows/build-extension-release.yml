@@ -111,7 +111,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          url="https://dyrakarmy.online/downloads/DyrakArmy-Extension-Chrome.zip"
+          url="https://dyrakarmy.eu/downloads/DyrakArmy-Extension-Chrome.zip"
           for attempt in 1 2 3 4 5 6; do
             if curl -fsSL --max-time 30 "$url" -o extension.zip && unzip -t extension.zip; then
               echo "Extension ZIP is live: $url"
