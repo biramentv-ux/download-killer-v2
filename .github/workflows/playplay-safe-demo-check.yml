@@ -5,6 +5,8 @@ on:
     paths:
       - desktop_launcher/external_engines/playplay_demo_adapter.py
       - desktop_launcher/external_engines/test_playplay_demo_adapter.py
+      - desktop_launcher/external_engines/unplayplay_research_profile.py
+      - desktop_launcher/external_engines/test_unplayplay_research_profile.py
       - worker/public/platform/playplay-demo/**
       - worker/public/manifest.webmanifest
       - PLAYPLAY_SAFE_DEMO.md
@@ -15,6 +17,8 @@ on:
     paths:
       - desktop_launcher/external_engines/playplay_demo_adapter.py
       - desktop_launcher/external_engines/test_playplay_demo_adapter.py
+      - desktop_launcher/external_engines/unplayplay_research_profile.py
+      - desktop_launcher/external_engines/test_unplayplay_research_profile.py
       - worker/public/platform/playplay-demo/**
       - worker/public/manifest.webmanifest
       - PLAYPLAY_SAFE_DEMO.md
@@ -41,7 +45,8 @@ jobs:
         working-directory: desktop_launcher
         run: |
           python -m py_compile external_engines/playplay_demo_adapter.py
-          python -m unittest external_engines.test_playplay_demo_adapter
+          python -m py_compile external_engines/unplayplay_research_profile.py
+          python -m unittest external_engines.test_playplay_demo_adapter external_engines.test_unplayplay_research_profile
 
       - name: Validate browser demo JavaScript
         run: node --check worker/public/platform/playplay-demo/playplay-demo.js
@@ -53,9 +58,10 @@ jobs:
           const html = fs.readFileSync('worker/public/platform/playplay-demo/index.html', 'utf8');
           const css = fs.readFileSync('worker/public/platform/playplay-demo/playplay-demo.css', 'utf8');
           const js = fs.readFileSync('worker/public/platform/playplay-demo/playplay-demo.js', 'utf8');
+          const profile = JSON.parse(fs.readFileSync('worker/public/platform/playplay-demo/unplayplay-profile.json', 'utf8'));
           const manifest = JSON.parse(fs.readFileSync('worker/public/manifest.webmanifest', 'utf8'));
 
-          for (const marker of ['id="playplayDemoForm"', 'id="configPreview"', 'id="commandPreview"', 'id="downloadBtn"']) {
+          for (const marker of ['id="playplayDemoForm"', 'id="configPreview"', 'id="commandPreview"', 'id="downloadBtn"', 'href="./unplayplay-profile.json"']) {
             if (!html.includes(marker)) throw new Error(`Missing demo UI marker: ${marker}`);
           }
           for (const marker of ['DEMO_COOKIES_NOT_REAL', 'DEMO_DEVICE_NOT_REAL', 'playplay-DEMO-ONLY.exe']) {
@@ -66,6 +72,24 @@ jobs:
           }
           for (const forbidden of ['fetch(', 'XMLHttpRequest', 'WebSocket(', 'EventSource(', 'navigator.credentials']) {
             if (js.includes(forbidden)) throw new Error(`Network or credential API found in demo: ${forbidden}`);
+          }
+          if (profile.mode !== 'metadata-only' || profile.source_code_bundled !== false || profile.package_scripts_executed !== false) {
+            throw new Error('unplayplay profile escaped metadata-only mode');
+          }
+          if (!Array.isArray(profile.runtime_imported_files) || profile.runtime_imported_files.length !== 0) {
+            throw new Error('unplayplay runtime imports must remain empty');
+          }
+          if (Object.values(profile.runtime_capabilities || {}).some((value) => value !== false)) {
+            throw new Error('unplayplay runtime capabilities must remain disabled');
+          }
+          const expectedFiles = ['.gitignore', 'binding.gyp', 'LICENSE', 'package.json', 'pnpm-lock.yaml', 'README.md', 'tsconfig.json'];
+          if (JSON.stringify(profile.provided_files.map((entry) => entry.path)) !== JSON.stringify(expectedFiles)) {
+            throw new Error('Unexpected unplayplay metadata file inventory');
+          }
+          for (const entry of profile.provided_files) {
+            if (!/^[0-9a-f]{64}$/.test(entry.sha256) || !Number.isInteger(entry.bytes) || entry.bytes < 0) {
+              throw new Error(`Invalid metadata fingerprint for ${entry.path}`);
+            }
           }
           if (!css.includes('@media (prefers-reduced-motion: reduce)')) {
             throw new Error('Reduced-motion rule is missing');

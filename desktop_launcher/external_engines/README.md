@@ -73,3 +73,15 @@ pyinstaller --noconfirm --clean --onefile --noconsole `
 ```
 
 The main desktop build workflow also produces this executable as a separate artifact file.
+
+## unplayplay metadata-only research profile
+
+`unplayplay_research_profile.py` validates the seven supplied root metadata/build descriptor files by byte size and SHA-256 only. It never imports the upstream package, invokes `node-gyp`/CMake, loads a native addon, or calls a key routine.
+
+```powershell
+cd desktop_launcher
+python -m external_engines.unplayplay_research_profile `
+  --source "C:\Users\USER\Desktop\unplayplay"
+```
+
+The matching web profile is served from `/platform/playplay-demo/unplayplay-profile.json`. All runtime capabilities in the profile are fixed to `false`.

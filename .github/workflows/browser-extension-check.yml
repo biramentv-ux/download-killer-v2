@@ -37,11 +37,28 @@ jobs:
           from pathlib import Path
 
           root = Path('browser_extensions/sounddrop_webext/manifests')
+          required_hosts = {
+              'https://dyrakarmy.eu/*',
+              'https://www.dyrakarmy.eu/*',
+              'https://dyrakarmy.online/*',
+              'https://www.dyrakarmy.online/*',
+          }
           for path in (root / 'manifest.chrome.json', root / 'manifest.firefox.json'):
               data = json.loads(path.read_text(encoding='utf-8-sig'))
               scripts = data.get('content_scripts') or []
               assert scripts, f'{path}: content_scripts missing'
               assert any('web_player_content.js' in row.get('js', []) for row in scripts), path
-              assert data.get('version') == '1.1.0', path
+              assert data.get('version') == '1.2.0', path
+              assert required_hosts.issubset(set(data.get('host_permissions') or [])), path
               print(f'validated {path}')
+
+          background = Path('browser_extensions/sounddrop_webext/common/background.js').read_text(encoding='utf-8-sig')
+          popup = Path('browser_extensions/sounddrop_webext/common/popup.html').read_text(encoding='utf-8-sig')
+          build = Path('browser_extensions/sounddrop_webext/build.ps1').read_text(encoding='utf-8-sig')
+          assert "DEFAULT_API_BASE = 'https://dyrakarmy.eu'" in background
+          assert "MIRROR_API_BASE = 'https://dyrakarmy.online'" in background
+          assert 'JOB_POLL_INTERVAL_MS = 8000' in background
+          assert 'placeholder="https://dyrakarmy.eu"' in popup
+          assert 'DyrakArmy-Extension-Legacy-Chrome.zip' in build
+          assert '-ZipName "DyrakArmy-Extension-Chrome.zip"' not in build
           PY

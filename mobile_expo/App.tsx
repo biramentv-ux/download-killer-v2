@@ -95,7 +95,8 @@ interface SettingsState {
   };
 }
 
-const DEFAULT_API_BASE = 'https://dyrakarmy.online';
+const DEFAULT_API_BASE = 'https://dyrakarmy.eu';
+const MIRROR_API_BASE = 'https://dyrakarmy.online';
 const APP_VERSION = '1.0.1';
 const STORAGE_KEY = 'dyrakarmy_mobile_settings_v3';
 const RUNTIME_CACHE_KEY = 'dyrakarmy_mobile_runtime_v2';
@@ -496,15 +497,18 @@ export default function App() {
       // ignore cache
     }
 
-    try {
-      const response = await fetch(`${base}/api/runtime-config`);
-      const payload = await response.json() as RuntimeConfig;
-      if (response.ok) {
+    const candidates = Array.from(new Set([base, DEFAULT_API_BASE, MIRROR_API_BASE]));
+    for (const candidate of candidates) {
+      try {
+        const response = await fetch(`${candidate}/api/runtime-config`);
+        const payload = await response.json() as RuntimeConfig;
+        if (!response.ok) continue;
         await AsyncStorage.setItem(RUNTIME_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), payload }));
-        applyRuntime(payload, base);
+        applyRuntime(payload, candidate);
+        return;
+      } catch {
+        // Try the canonical endpoint, then the .online mirror.
       }
-    } catch {
-      // runtime config falls back to defaults
     }
   }
 

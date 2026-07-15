@@ -17,6 +17,14 @@ if ([string]::IsNullOrWhiteSpace($OutputDir)) {
 New-Item -ItemType Directory -Force -Path $distDir | Out-Null
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
+# The maintained Chrome companion owns the canonical Chrome artifact name.
+# Remove only the obsolete legacy copy from this package's private dist folder;
+# never remove the canonical package from the shared Worker downloads folder.
+$obsoleteLegacyChrome = Join-Path $distDir "DyrakArmy-Extension-Chrome.zip"
+if (Test-Path $obsoleteLegacyChrome) {
+  Remove-Item -Force $obsoleteLegacyChrome
+}
+
 function Build-Package {
   param(
     [Parameter(Mandatory = $true)][string]$Target,
@@ -44,7 +52,7 @@ function Build-Package {
   Write-Host "Built $Target package -> $zipPath"
 }
 
-Build-Package -Target "chrome" -ManifestPath (Join-Path $manifestDir "manifest.chrome.json") -ZipName "DyrakArmy-Extension-Chrome.zip"
+Build-Package -Target "chrome" -ManifestPath (Join-Path $manifestDir "manifest.chrome.json") -ZipName "DyrakArmy-Extension-Legacy-Chrome.zip"
 Build-Package -Target "firefox" -ManifestPath (Join-Path $manifestDir "manifest.firefox.json") -ZipName "DyrakArmy-Extension-Firefox.zip"
 
 Write-Host "Copied packages to $OutputDir"

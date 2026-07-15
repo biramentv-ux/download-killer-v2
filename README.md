@@ -48,7 +48,7 @@ Cloudflare Worker backend + external downloader service (FastAPI + yt-dlp + ffmp
 8. Browser extensions (Chrome + Firefox):
    - Added packaged browser extensions with popup + context-menu download flow.
    - Extensions connect to existing Worker API (`/api/download`, `/api/job/:id`) and support sync key + language sync.
-   - Download packages are served from web settings: `SoundDrop-Extension-Chrome.zip` and `SoundDrop-Extension-Firefox.zip`.
+   - The maintained Chrome package is `DyrakArmy-Extension-Chrome.zip`; Firefox is `DyrakArmy-Extension-Firefox.zip`, while the older Chrome implementation is isolated as `DyrakArmy-Extension-Legacy-Chrome.zip`.
 
 9. Retro Wave redesign + shell sync:
    - Web UI updated with a full retro neon visual pass (new palette, transitions, CTA hierarchy).
@@ -202,10 +202,14 @@ powershell -ExecutionPolicy Bypass -File ./build.ps1
 
 Generated and copied files:
 
-- `browser_extensions/sounddrop_webext/dist/SoundDrop-Extension-Chrome.zip`
-- `browser_extensions/sounddrop_webext/dist/SoundDrop-Extension-Firefox.zip`
-- `worker/public/downloads/SoundDrop-Extension-Chrome.zip`
-- `worker/public/downloads/SoundDrop-Extension-Firefox.zip`
+- `browser_extensions/sounddrop_webext/dist/DyrakArmy-Extension-Legacy-Chrome.zip`
+- `browser_extensions/sounddrop_webext/dist/DyrakArmy-Extension-Firefox.zip`
+- `worker/public/downloads/DyrakArmy-Extension-Legacy-Chrome.zip`
+- `worker/public/downloads/DyrakArmy-Extension-Firefox.zip`
+
+The canonical Chrome companion is built separately from
+`extension/spotify-web-companion` as
+`worker/public/downloads/DyrakArmy-Extension-Chrome.zip`.
 
 ### 5) Secrets and vars
 
@@ -247,7 +251,7 @@ UI is served from Worker assets (`worker/public/index.html`).
 
 ## Desktop EXE (portable)
 
-- Ready build: `desktop_launcher/dist/SoundDropDesktop.exe`
+- Ready build: `desktop_launcher/dist/DyrakArmyDesktop.exe`
 - No install needed. Double click to run.
 - Uses production endpoint health-check (`/api/health`) and auto-fallback URLs.
 - In desktop mode, download action opens native Save dialog and saves selected format/quality locally.
@@ -257,7 +261,7 @@ UI is served from Worker assets (`worker/public/index.html`).
   - `SPOTIFY_CLIENT_ID`
   - `SPOTIFY_CLIENT_SECRET`
 - Build instructions: `desktop_launcher/README.md`
-- macOS portable bundle available at `/downloads/SoundDropDesktop-macOS.zip` (bootstrap launcher).
+- macOS portable bundle available at `/downloads/DyrakArmyDesktop-macOS.zip` (bootstrap launcher).
 - CI workflow for native Windows + macOS artifacts: `.github/workflows/build-desktop-portable.yml`
 
 ## Tests
@@ -287,10 +291,11 @@ pytest -q
   - push tag `v*`
   - manual `workflow_dispatch` (optional custom tag + prerelease flag)
 - Publishes GitHub Release assets automatically:
-  - `SoundDropDesktop.exe`
-  - `SoundDropDesktop-macOS.zip`
-  - `SoundDrop-Extension-Chrome.zip`
-  - `SoundDrop-Extension-Firefox.zip`
+  - `DyrakArmyDesktop.exe`
+  - `DyrakArmyDesktop-macOS.zip`
+  - `DyrakArmy-Extension-Chrome.zip`
+  - `DyrakArmy-Extension-Legacy-Chrome.zip`
+  - `DyrakArmy-Extension-Firefox.zip`
   - `SoundDrop-Expo-Web.zip`
   - `SoundDrop-Expo-Native-Update.zip`
 

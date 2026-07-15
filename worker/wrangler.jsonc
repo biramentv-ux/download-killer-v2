@@ -96,8 +96,8 @@
 
   "vars": {
     "DOWNLOADER_API_URL": "https://dyrakarmy-downloader-primary.onrender.com",
-    "DOWNLOADER_ORIGINS_JSON": "[{\"base_url\":\"https://dyrakarmy-downloader-primary.onrender.com\",\"priority\":0,\"id\":\"render-primary\"},{\"base_url\":\"https://heritage-bra-chocolate-document.trycloudflare.com\",\"priority\":1,\"id\":\"trycloudflare-backup\"}]",
-    "DOWNLOADER_BACKUP_API_URL": "https://heritage-bra-chocolate-document.trycloudflare.com",
+    "DOWNLOADER_ORIGINS_JSON": "[{\"base_url\":\"https://dyrakarmy-downloader-primary.onrender.com\",\"priority\":0,\"id\":\"render-primary\"}]",
+    "DOWNLOADER_BACKUP_API_URL": "",
     "TELEGRAM_BOT_USERNAME": "download_killerBOT",
     "TELEGRAM_SECONDARY_BOT_USERNAME": "dyrakarmy_bot",
     "TELEGRAM_DOWNLOAD_CHANNEL_ID": "",
@@ -141,8 +141,8 @@
     "MIN_CLIENT_DESKTOP_MACOS": "7.2.0",
     "MIN_CLIENT_MOBILE_EXPO": "1.0.0",
     "MIN_CLIENT_EXTENSION": "1.0.0",
-    "LATEST_DESKTOP_WINDOWS_VERSION": "7.2.0",
-    "LATEST_DESKTOP_MACOS_VERSION": "7.2.0",
+    "LATEST_DESKTOP_WINDOWS_VERSION": "7.2.1",
+    "LATEST_DESKTOP_MACOS_VERSION": "7.2.1",
     "LATEST_MOBILE_EXPO_VERSION": "1.0.1",
     "LATEST_EXTENSION_VERSION": "1.2.0",
     "RELEASE_CHANNEL": "stable",

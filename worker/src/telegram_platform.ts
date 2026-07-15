@@ -1,5 +1,6 @@
 import { downloadRouter } from './api';
 import { handleTelegramUpdate } from './telegram';
+import { initializeTelegramStorageSchema } from './telegram_schema';
 import type { AudioFormat, AudioQuality, DownloadJob, Env, JobHistoryEvent } from './types';
 import {
   createDownloadToken,
@@ -1047,44 +1048,7 @@ async function getTelegramStorageStats(env: ExtendedEnv): Promise<{
 
 async function ensureTelegramStorageSchema(env: ExtendedEnv): Promise<void> {
   if (!telegramStorageSchemaReady) {
-    telegramStorageSchemaReady = env.DB.exec(`
-      CREATE TABLE IF NOT EXISTS telegram_media_objects (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        storage_key TEXT NOT NULL UNIQUE,
-        job_id TEXT NOT NULL,
-        source_url TEXT NOT NULL,
-        source TEXT NOT NULL DEFAULT 'unknown',
-        format TEXT NOT NULL,
-        quality TEXT NOT NULL,
-        title TEXT,
-        artist TEXT,
-        duration INTEGER,
-        file_size INTEGER,
-        content_hash TEXT,
-        media_kind TEXT NOT NULL DEFAULT 'link',
-        telegram_file_id TEXT,
-        telegram_file_unique_id TEXT,
-        channel_id TEXT,
-        channel_message_id INTEGER,
-        fallback_url TEXT,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_tg_media_job ON telegram_media_objects(job_id);
-      CREATE INDEX IF NOT EXISTS idx_tg_media_hash ON telegram_media_objects(content_hash);
-      CREATE INDEX IF NOT EXISTS idx_tg_media_created ON telegram_media_objects(created_at DESC);
-      CREATE TABLE IF NOT EXISTS telegram_user_links (
-        telegram_user_id INTEGER PRIMARY KEY,
-        chat_id INTEGER NOT NULL,
-        sync_key TEXT NOT NULL UNIQUE,
-        username TEXT,
-        first_name TEXT,
-        language_code TEXT,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_tg_user_links_sync ON telegram_user_links(sync_key);
-    `).then(() => undefined).catch((error) => {
+    telegramStorageSchemaReady = initializeTelegramStorageSchema(env.DB).catch((error) => {
       telegramStorageSchemaReady = null;
       throw error;
     });
