@@ -3,7 +3,7 @@
 const token = String(process.env.TELEGRAM_BOT_TOKEN || '').trim();
 const secret = String(process.env.TELEGRAM_SECRET_TOKEN || '').trim();
 const publicBase = String(process.env.PUBLIC_BASE_URL || 'https://dyrakarmy.eu').replace(/\/+$/, '');
-const expectedUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'download_killerBOT').replace(/^@+/, '');
+const expectedUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'dyrakarmy_bot').replace(/^@+/, '');
 const dropPending = String(process.env.TELEGRAM_DROP_PENDING_UPDATES || '0') === '1';
 const miniAppVersion = String(process.env.TELEGRAM_MINIAPP_VERSION || '12.2.0').trim();
 const miniAppUrl = `${publicBase}/telegram/?v=${encodeURIComponent(miniAppVersion)}`;
@@ -94,6 +94,7 @@ try {
   console.log(`Pending updates: ${webhook.pending_update_count || 0}`);
   console.log(`Inline sharing: ${me.supports_inline_queries ? 'enabled' : 'requires /setinline in @BotFather'}`);
   if (webhook.last_error_message) console.warn(`Last webhook error: ${webhook.last_error_message}`);
+  console.log(`Native link: tg://resolve?domain=${expectedUsername}`);
   console.log(`Mini App v${miniAppVersion}: ${miniAppUrl}`);
   console.log(`Health: ${publicBase}/api/telegram/v12/health`);
   console.log('Next: close the existing Telegram WebView completely and open the Menu button again.');
