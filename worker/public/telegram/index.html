@@ -3,24 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#070a13">
-  <meta name="description" content="Download Killer BG Telegram Mini App with shared queue, history and Telegram archive.">
-  <title>Download Killer BG</title>
+  <meta name="theme-color" content="#050713">
+  <meta name="description" content="Download Killer Telegram Mini App v12 with shared queue, diagnostics, history and Telegram archive.">
+  <meta name="dk-build" content="12.2.0">
+  <title>Download Killer Mini App v12</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./telegram.css">
+  <link rel="stylesheet" href="./telegram.css?v=12.2.0">
+  <link rel="stylesheet" href="./telegram-v12.css?v=12.2.0">
   <script src="https://telegram.org/js/telegram-web-app.js?59"></script>
+  <script src="./telegram-runtime-v12.js?v=12.2.0"></script>
 </head>
 <body>
   <canvas id="pulseCanvas" aria-hidden="true"></canvas>
   <div class="noise" aria-hidden="true"></div>
 
   <header class="app-header">
-    <a class="brand" href="/telegram/">
+    <a class="brand" href="/telegram/?v=12.2.0">
       <span class="brand-mark"><i></i><i></i><i></i></span>
       <span><strong>Download</strong> Killer</span>
-      <em>BG</em>
+      <em data-miniapp-version>v12.2.0</em>
     </a>
     <div class="header-actions">
       <span class="connection" id="connectionState" data-state="checking"><i></i><b data-i18n="checking">Проверка</b></span>
@@ -31,9 +34,14 @@
   <main>
     <section class="hero reveal">
       <div class="hero-copy">
-        <span class="eyebrow">TELEGRAM · WEB · SHARED QUEUE</span>
+        <span class="eyebrow">MINI APP 12 · TELEGRAM · SHARED QUEUE</span>
         <h1><span data-i18n="hero_a">Търси.</span><span data-i18n="hero_b">Избери качество.</span><strong data-i18n="hero_c">Получи файла в чата.</strong></h1>
         <p data-i18n="hero_text">Една обща система за сайта и @download_killerBOT. Готовите файлове се индексират в Telegram канал и при повторна заявка се използват без ново качване.</p>
+        <div class="build-line">
+          <span class="build-chip">BUILD <strong data-miniapp-version>v12.2.0</strong></span>
+          <span class="build-chip">DOMAIN <strong id="runtimeEndpoint">dyrakarmy.eu</strong></span>
+          <span class="build-chip">MODE <strong>TELEGRAM WEBAPP</strong></span>
+        </div>
         <div class="profile-chip" id="profileChip">
           <div class="avatar" id="profileAvatar">DK</div>
           <div><b id="profileName" data-i18n="guest">Гост</b><small id="profileMeta">Telegram Mini App</small></div>
@@ -41,11 +49,34 @@
       </div>
       <div class="storage-orbit" aria-hidden="true">
         <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div>
-        <div class="storage-core"><span>TG</span><small>FILE INDEX</small></div>
+        <div class="storage-core"><span>DK</span><small>MINI APP 12</small></div>
         <div class="satellite sat-a"><b>WEB</b><small>QUEUE</small></div>
         <div class="satellite sat-b"><b>BOT</b><small>CHAT</small></div>
         <div class="satellite sat-c"><b>D1</b><small>INDEX</small></div>
         <div class="satellite sat-d"><b>FILE_ID</b><small>REUSE</small></div>
+      </div>
+    </section>
+
+    <section class="runtime-diagnostic" id="runtimeDiagnostic" data-state="online" hidden>
+      <div class="diagnostic-icon">!</div>
+      <div><b id="runtimeDiagnosticTitle">Проверка на връзката</b><span id="runtimeDiagnosticDetail">Свързване с Cloudflare Worker…</span></div>
+      <div class="diagnostic-actions">
+        <button id="runtimeRetryBtn" type="button">Обнови без кеш</button>
+        <button id="runtimeHealthBtn" type="button">Провери API</button>
+      </div>
+    </section>
+
+    <section class="command-center reveal">
+      <div class="command-center-head">
+        <div><h2>Команден център</h2><p>Бърз достъп до основните функции на Mini App.</p></div>
+        <span class="build-chip">PRIMARY <strong>BG</strong></span>
+      </div>
+      <div class="command-grid">
+        <button class="command-card" type="button" data-open-tab="download"><i>↓</i><b>Свали URL</b><small>Формат, качество и обща опашка</small></button>
+        <button class="command-card" type="button" data-open-tab="search"><i>⌕</i><b>Търсене</b><small>Песен, изпълнител или албум</small></button>
+        <button class="command-card" type="button" data-open-tab="queue"><i>≋</i><b>Опашка</b><small>Активни задачи и прогрес</small></button>
+        <button class="command-card" type="button" data-open-tab="history"><i>◴</i><b>История</b><small>Готови и предишни задачи</small></button>
+        <button class="command-card" type="button" data-open-tab="archive"><i>☁</i><b>Архив</b><small>Telegram file_id и повторна употреба</small></button>
       </div>
     </section>
 
@@ -78,7 +109,7 @@
           <div class="field-row">
             <label class="field"><span data-i18n="source">Източник</span><select id="sourceSelect"><option value="all">Auto</option><option value="spotify">Spotify</option><option value="youtube">YouTube</option><option value="soundcloud">SoundCloud</option><option value="deezer">Deezer</option><option value="apple">Apple Music</option><option value="podcast">Podcast / RSS</option></select></label>
             <label class="field"><span data-i18n="format">Формат</span><select id="formatSelect"><option value="mp3">MP3</option><option value="m4a">M4A</option><option value="ogg">OGG</option><option value="opus">OPUS</option><option value="flac">FLAC</option><option value="wav">WAV</option></select></label>
-            <label class="field"><span data-i18n="quality">Качество</span><select id="qualitySelect"><option value="320">320 kbps</option><option value="256">256 kbps</option><option value="192">192 kbps</option><option value="128">128 kbps</option><option value="96">96 kbps</option><option value="best">Best</option></select></label>
+            <label class="field"><span data-i18n="quality">Качество</span><select id="qualitySelect"><option value="320">320 kbps</option><option value="256">256 kbps</option><option value="192">192 kbps</option><option value="128">128 kbps</option><option value="96">96 kbps</option><option value="best">Best</option><option value="lossless">Lossless</option></select></label>
           </div>
           <div class="legal-note"><i>i</i><span data-i18n="legal">Използвай само съдържание, което имаш право да изтеглиш или обработиш.</span></div>
           <button class="primary-button" id="queueBtn" type="submit"><span data-i18n="queue_action">Добави в опашката</span><b>→</b></button>
@@ -122,7 +153,7 @@
 
   <aside class="outside-banner hidden" id="outsideBanner"><div><b data-i18n="outside_title">Отвори в Telegram</b><span data-i18n="outside_text">За персонална опашка и директно изпращане на файлове стартирай Mini App през бота.</span></div><a id="openBotLink" href="https://t.me/download_killerBOT?startapp=home" data-i18n="open_bot">Отвори @download_killerBOT</a></aside>
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
-  <footer><a href="/platform/">DyrakArmy Platform</a><span>·</span><a id="botFooterLink" href="https://t.me/download_killerBOT">@download_killerBOT</a><small>Telegram Mini App v10</small></footer>
-  <script src="./telegram.js" defer></script>
+  <footer><a href="/">Download Killer Platform</a><span>·</span><a id="botFooterLink" href="https://t.me/download_killerBOT">@download_killerBOT</a><small data-miniapp-version>v12.2.0</small></footer>
+  <script src="./telegram.js?v=12.2.0" defer></script>
 </body>
 </html>
