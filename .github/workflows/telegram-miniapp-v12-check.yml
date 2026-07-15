@@ -1,0 +1,113 @@
+name: Telegram Mini App v12 Checks
+
+on:
+  pull_request:
+    paths:
+      - worker/public/telegram/**
+      - worker/public/sw.js
+      - worker/src/telegram_miniapp_health.ts
+      - worker/src/platform_v2.ts
+      - worker/scripts/setup-telegram-platform.mjs
+      - worker/package.json
+      - .github/workflows/telegram-miniapp-v12-check.yml
+  push:
+    branches:
+      - main
+    paths:
+      - worker/public/telegram/**
+      - worker/public/sw.js
+      - worker/src/telegram_miniapp_health.ts
+      - worker/src/platform_v2.ts
+      - worker/scripts/setup-telegram-platform.mjs
+      - worker/package.json
+      - .github/workflows/telegram-miniapp-v12-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck Worker
+        run: npm run typecheck
+
+      - name: Run Worker tests
+        run: npm test
+
+      - name: Validate Mini App scripts
+        run: |
+          node --check public/telegram/telegram.js
+          node --check public/telegram/telegram-runtime-v12.js
+          node --check public/sw.js
+          node --check scripts/setup-telegram-platform.mjs
+
+      - name: Validate Mini App v12 boundaries
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('public/telegram/index.html', 'utf8');
+          const runtime = fs.readFileSync('public/telegram/telegram-runtime-v12.js', 'utf8');
+          const css = fs.readFileSync('public/telegram/telegram-v12.css', 'utf8');
+          const health = fs.readFileSync('src/telegram_miniapp_health.ts', 'utf8');
+          const entry = fs.readFileSync('src/platform_v2.ts', 'utf8');
+          const setup = fs.readFileSync('scripts/setup-telegram-platform.mjs', 'utf8');
+          const sw = fs.readFileSync('public/sw.js', 'utf8');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+
+          for (const marker of [
+            'Download Killer Mini App v12',
+            'content="12.2.0"',
+            'telegram-v12.css?v=12.2.0',
+            'telegram-runtime-v12.js?v=12.2.0',
+            'id="runtimeDiagnostic"',
+            'Команден център',
+            'data-open-tab="download"',
+            'data-miniapp-version',
+          ]) {
+            if (!html.includes(marker)) throw new Error(`Missing Mini App v12 marker: ${marker}`);
+          }
+
+          for (const marker of [
+            '/api/telegram/v12/health',
+            'TELEGRAM_AUTH_FAILED',
+            'Обнови без кеш',
+            'serviceWorker.getRegistrations',
+            'download-killer-static-',
+          ]) {
+            if (!runtime.includes(marker)) throw new Error(`Missing runtime diagnostic marker: ${marker}`);
+          }
+
+          for (const marker of ['command-grid', 'runtime-diagnostic', 'connection[data-state="auth"]']) {
+            if (!css.includes(marker)) throw new Error(`Missing v12 design marker: ${marker}`);
+          }
+
+          for (const marker of ['TELEGRAM_MINIAPP_VERSION', '/api/telegram/v12/health', 'no-store']) {
+            if (!health.includes(marker)) throw new Error(`Missing health endpoint marker: ${marker}`);
+          }
+          if (!entry.includes('handleTelegramMiniAppHealth')) throw new Error('Mini App health endpoint is not wired');
+          if (!entry.includes('no-store, max-age=0, must-revalidate')) throw new Error('Telegram HTML is not delivered with no-store');
+          if (!setup.includes('/telegram/?v=')) throw new Error('Bot menu URL is not cache-busted');
+          if (!setup.includes('Refusing to bind the wrong Mini App session key')) throw new Error('Setup does not reject a wrong bot token');
+          if (!sw.includes("download-killer-static-v15")) throw new Error('Service Worker cache is not v15');
+          if (!sw.includes("url.pathname.startsWith('/telegram/')")) throw new Error('Telegram assets are not network-first');
+          if (pkg.version !== '12.2.0') throw new Error('Worker package version is not 12.2.0');
+          console.log('Telegram Mini App v12.2 design, diagnostics, cache recovery and health API validated.');
+          NODE
