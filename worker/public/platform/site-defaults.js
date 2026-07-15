@@ -6,10 +6,10 @@
   const WINDOWS_CLIENT_URL = "/downloads/DyrakArmyDesktop.exe";
 
   const labels = {
-    bg: { primary: "Основен домейн: dyrakarmy.eu", mirror: "Резервен домейн: dyrakarmy.online", windows: "Свали Windows клиента", title: "Първо се опитва Telegram Desktop, после Telegram Web." },
-    en: { primary: "Primary domain: dyrakarmy.eu", mirror: "Backup domain: dyrakarmy.online", windows: "Download Windows client", title: "Tries Telegram Desktop first, then Telegram Web." },
-    ru: { primary: "Основной домен: dyrakarmy.eu", mirror: "Резервный домен: dyrakarmy.online", windows: "Скачать клиент Windows", title: "Сначала открывается Telegram Desktop, затем Telegram Web." },
-    de: { primary: "Primäre Domain: dyrakarmy.eu", mirror: "Backup-Domain: dyrakarmy.online", windows: "Windows-Client laden", title: "Versucht zuerst Telegram Desktop, danach Telegram Web." },
+    bg: { primary: "Основен домейн: dyrakarmy.eu", mirror: "Резервен домейн: dyrakarmy.online", windows: "Свали Windows клиента", title: "Отваря инсталирания Telegram клиент. Няма автоматичен Web fallback." },
+    en: { primary: "Primary domain: dyrakarmy.eu", mirror: "Backup domain: dyrakarmy.online", windows: "Download Windows client", title: "Opens the installed Telegram client. No automatic Web fallback." },
+    ru: { primary: "Основной домен: dyrakarmy.eu", mirror: "Резервный домен: dyrakarmy.online", windows: "Скачать клиент Windows", title: "Открывает установленный клиент Telegram без автоматического Web fallback." },
+    de: { primary: "Primäre Domain: dyrakarmy.eu", mirror: "Backup-Domain: dyrakarmy.online", windows: "Windows-Client laden", title: "Öffnet den installierten Telegram-Client ohne automatischen Web-Fallback." },
   };
 
   function language() {
@@ -32,9 +32,7 @@
     const domainSwitch = document.querySelector(".domain-switch");
     if (domainSwitch) {
       const links = domainSwitch.querySelectorAll("a");
-      if (links[0]) {
-        links[0].href = location.hostname.endsWith("dyrakarmy.eu") ? MIRROR_URL : PRIMARY_URL;
-      }
+      if (links[0]) links[0].href = location.hostname.endsWith("dyrakarmy.eu") ? MIRROR_URL : PRIMARY_URL;
       if (links[1]) {
         links[1].href = location.hostname.endsWith("dyrakarmy.eu") ? MIRROR_URL : PRIMARY_URL;
         const text = links[1].querySelector("span") || links[1];
@@ -44,6 +42,7 @@
 
     document.querySelectorAll(".telegram-link").forEach((link) => {
       link.title = copy.title;
+      link.setAttribute("rel", "external");
     });
 
     const actions = document.querySelector(".telegram-actions");
