@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
 const repoRoot = path.resolve(process.cwd(), '..');
+const reportPath = path.join(process.cwd(), 'single-bot-report.txt');
 const validatorPath = 'worker/scripts/validate-single-telegram-bot.mjs';
 const targets = [
   'worker/src',
@@ -66,11 +67,13 @@ for (const [relative, marker] of required) {
   if (!text.includes(marker)) violations.push(`${relative}: missing required marker (${marker})`);
 }
 
+const report = violations.length
+  ? `Single Telegram bot validation failed:\n${violations.map((item) => `- ${item}`).join('\n')}\n`
+  : `Single Telegram bot validation passed across ${files.length} runtime source files.\nCanonical bot: @dyrakarmy_bot\nLaunch mode: tg:// native client only; no browser fallback.\n`;
+await writeFile(reportPath, report, 'utf8');
+
 if (violations.length) {
-  console.error('Single Telegram bot validation failed:\n' + violations.map((item) => `- ${item}`).join('\n'));
+  console.error(report);
   process.exit(1);
 }
-
-console.log(`Single Telegram bot validation passed across ${files.length} runtime source files.`);
-console.log('Canonical bot: @dyrakarmy_bot');
-console.log('Launch mode: tg:// native client only; no browser fallback.');
+console.log(report);
