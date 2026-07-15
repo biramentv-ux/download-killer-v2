@@ -16,6 +16,10 @@ import {
   hasSecondaryTelegramBot,
   rewriteSecondaryTelegramApiRequest,
 } from './telegram_secondary';
+import {
+  handleTelegramMiniAppHealth,
+  TELEGRAM_MINIAPP_VERSION,
+} from './telegram_miniapp_health';
 
 type ExtendedEnv = Env & {
   TELEGRAM_STORAGE_ENABLED?: string;
@@ -53,20 +57,25 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
       .replace('</body>', '  <script src="/media-lab/media-lab.js" defer></script>\n</body>');
   } else {
     html = html.replace(
-      '<script src="./telegram.js" defer></script>',
-      '<script src="/platform/status-backoff.js"></script>\n  <script src="./telegram.js" defer></script>',
+      /<script src="\.\/telegram\.js(?:\?[^\"]*)?" defer><\/script>/,
+      `<script src="/platform/status-backoff.js?v=${TELEGRAM_MINIAPP_VERSION}"></script>\n  <script src="./telegram.js?v=${TELEGRAM_MINIAPP_VERSION}" defer></script>`,
     );
   }
 
   const headers = new Headers(response.headers);
   headers.delete('Content-Length');
-  headers.set('Cache-Control', 'no-cache');
+  headers.set('Cache-Control', isTelegram ? 'no-store, max-age=0, must-revalidate' : 'no-cache');
+  headers.set('Pragma', isTelegram ? 'no-cache' : headers.get('Pragma') ?? '');
+  headers.set('X-Download-Killer-Version', isTelegram ? TELEGRAM_MINIAPP_VERSION : 'platform');
   return new Response(html, { status: response.status, statusText: response.statusText, headers });
 }
 
 export default {
   async fetch(request: Request, env: ExtendedEnv, _context: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    const telegramHealthResponse = handleTelegramMiniAppHealth(request, env);
+    if (telegramHealthResponse) return telegramHealthResponse;
 
     const jobStatusResponse = await handleJobStatusBridge(request, env);
     if (jobStatusResponse) return jobStatusResponse;
