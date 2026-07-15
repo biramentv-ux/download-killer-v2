@@ -37,7 +37,10 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
 
   if (isRoot) {
     html = html
-      .replace('href="https://dyrakarmy.online/" rel="canonical"', 'href="https://dyrakarmy.eu/" rel="canonical"')
+      .replace(
+        '<link rel="canonical" href="https://dyrakarmy.online/">',
+        '<link rel="canonical" href="https://dyrakarmy.eu/">',
+      )
       .replace('<script src="/platform/platform.js" defer></script>', [
         '<script src="/platform/status-backoff.js"></script>',
         '<script src="/platform/site-defaults.js" defer></script>',
