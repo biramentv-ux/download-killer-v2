@@ -47,7 +47,7 @@ async function buildInitData(
 
 describe('Telegram platform v10', () => {
   it('parses commands with bot username and arguments', () => {
-    expect(parseBotCommand('/start@download_killerBOT job_abc123')).toEqual({
+    expect(parseBotCommand('/start@dyrakarmy_bot job_abc123')).toEqual({
       command: '/start',
       args: 'job_abc123',
     });
@@ -62,9 +62,9 @@ describe('Telegram platform v10', () => {
   });
 
   it('builds safe bot and Mini App handoff links', () => {
-    expect(buildTelegramDeepLinks('@download_killerBOT', 'abc-123')).toEqual({
-      botUrl: 'https://t.me/download_killerBOT?start=job_abc-123',
-      miniAppUrl: 'https://t.me/download_killerBOT?startapp=job_abc-123',
+    expect(buildTelegramDeepLinks('@dyrakarmy_bot', 'abc-123')).toEqual({
+      botUrl: 'tg://resolve?domain=dyrakarmy_bot&start=job_abc-123',
+      miniAppUrl: 'tg://resolve?domain=dyrakarmy_bot&startapp=job_abc-123',
     });
   });
 

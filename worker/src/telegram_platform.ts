@@ -228,12 +228,12 @@ export function buildTelegramDeepLinks(
   username: string,
   token: string,
 ): { botUrl: string; miniAppUrl: string } {
-  const cleanUsername = String(username || 'download_killerBOT').replace(/^@+/, '');
+  const cleanUsername = String(username || 'dyrakarmy_bot').replace(/^@+/, '');
   const cleanToken = String(token || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 54);
   const payload = `job_${cleanToken}`;
   return {
-    botUrl: `https://t.me/${cleanUsername}?start=${payload}`,
-    miniAppUrl: `https://t.me/${cleanUsername}?startapp=${payload}`,
+    botUrl: `tg://resolve?domain=${cleanUsername}&start=${payload}`,
+    miniAppUrl: `tg://resolve?domain=${cleanUsername}&startapp=${payload}`,
   };
 }
 
@@ -1131,7 +1131,7 @@ function buildStorageCaption(job: JobRow, link: string, env: ExtendedEnv): strin
 }
 
 function botUsername(env: ExtendedEnv): string {
-  return String(env.TELEGRAM_BOT_USERNAME ?? 'download_killerBOT').replace(/^@+/, '');
+  return String(env.TELEGRAM_BOT_USERNAME ?? 'dyrakarmy_bot').replace(/^@+/, '');
 }
 
 function publicBaseUrl(env: ExtendedEnv): string {
