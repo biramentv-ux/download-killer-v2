@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - worker/src/platform_v2.ts
+      - worker/src/telegram_master_menu.ts
       - worker/src/telegram_secondary.ts
       - worker/scripts/setup-telegram-secondary.mjs
       - worker/public/index.html
@@ -16,6 +17,7 @@ on:
       - main
     paths:
       - worker/src/platform_v2.ts
+      - worker/src/telegram_master_menu.ts
       - worker/src/telegram_secondary.ts
       - worker/scripts/setup-telegram-secondary.mjs
       - worker/public/index.html
@@ -58,6 +60,7 @@ jobs:
           node - <<'NODE'
           const fs = require('node:fs');
           const wrapper = fs.readFileSync('src/platform_v2.ts', 'utf8');
+          const master = fs.readFileSync('src/telegram_master_menu.ts', 'utf8');
           const adapter = fs.readFileSync('src/telegram_secondary.ts', 'utf8');
           const setup = fs.readFileSync('scripts/setup-telegram-secondary.mjs', 'utf8');
           const html = fs.readFileSync('public/index.html', 'utf8');
@@ -69,6 +72,8 @@ jobs:
             '/api/telegram/v10-secondary/',
             'createSecondaryTelegramEnv',
             'hasSecondaryTelegramBot',
+            'handleTelegramMasterWebhook',
+            'ensureTelegramMasterCommands',
           ]) {
             if (!wrapper.includes(marker)) throw new Error(`Missing wrapper marker: ${marker}`);
           }
@@ -87,8 +92,21 @@ jobs:
             '/telegram/webhook/dyrakarmy',
             'setMyCommands',
             'setChatMenuButton',
+            "'inline_query'",
+            '/setinline',
+            "command: 'share'",
+            "command: 'menu'",
           ]) {
             if (!setup.includes(marker)) throw new Error(`Missing setup marker: ${marker}`);
+          }
+
+          for (const marker of [
+            'switch_inline_query_chosen_chat',
+            'allow_bot_chats',
+            'isPrimary',
+            "type: 'article'",
+          ]) {
+            if (!master.includes(marker)) throw new Error(`Missing shared master menu marker: ${marker}`);
           }
 
           if (pkg.scripts['telegram:setup:secondary'] !== 'node scripts/setup-telegram-secondary.mjs') {
@@ -105,9 +123,9 @@ jobs:
 
           const botLinks = (html.match(/@dyrakarmy_bot/g) || []).length;
           if (botLinks < 3) throw new Error('Secondary bot is not visible across the public homepage');
-          if (/\d{6,}:[A-Za-z0-9_-]{20,}/.test([wrapper, adapter, setup, html, wrangler].join('\n'))) {
+          if (/\d{6,}:[A-Za-z0-9_-]{20,}/.test([wrapper, master, adapter, setup, html, wrangler].join('\n'))) {
             throw new Error('A Telegram bot token appears to be committed');
           }
 
-          console.log('Secondary Telegram bot integration validated.');
+          console.log('Secondary Telegram bot master menu and sharing integration validated.');
           NODE
