@@ -68,6 +68,18 @@ interface ShareableMediaRow {
   file_size: number | null;
 }
 
+interface JobMenuRow {
+  id: string;
+  url: string;
+  source: string;
+  format: string;
+  quality: string;
+  status: string;
+  title: string | null;
+  artist: string | null;
+  created_at: string;
+}
+
 const MASTER_COMMAND_VERSION = 'v1';
 const PRIMARY_USERNAME = 'download_killerbot';
 
@@ -137,13 +149,15 @@ const COPY = {
       '',
       'Другият бот може да получи файла, но дали ще го обработи зависи от неговите команди и настройки.',
     ].join('\n'),
-    shareEmpty: '📤 Няма готови песни за споделяне. Първо отвори „Моите песни“ или завърши нова задача.',
+    shareEmpty: '📤 Няма готови песни за споделяне. Първо завърши нова задача.',
+    filesEmpty: '🎧 Все още няма готови песни в твоя Telegram архив.',
+    queueEmpty: '📥 Нямаш активни задачи.',
+    historyEmpty: '🕘 Няма запазена история.',
     inlineDisabled: [
       '⚠️ Inline споделянето още не е активирано за този бот.',
       'В @BotFather изпълни /setinline, избери бота и въведи placeholder, например: „Сподели песен“.',
       'Дотогава можеш да използваш стандартния Telegram бутон Forward върху готовия файл.',
     ].join('\n'),
-    inlineNotFound: 'Песента не е намерена или не принадлежи на този Telegram профил.',
     settingsTitle: '⚙️ Настройки\n\nИзбери категория:',
   },
   en: {
@@ -205,12 +219,14 @@ const COPY = {
       'The receiving bot may get the file, but whether it processes it depends on that bot.',
     ].join('\n'),
     shareEmpty: '📤 There are no completed songs to share yet.',
+    filesEmpty: '🎧 There are no completed songs in your Telegram archive yet.',
+    queueEmpty: '📥 You have no active jobs.',
+    historyEmpty: '🕘 No history is available.',
     inlineDisabled: [
       '⚠️ Inline sharing is not enabled for this bot yet.',
       'Use /setinline in @BotFather, choose the bot and set a placeholder such as “Share a song”.',
       'Until then, use Telegram Forward on the completed file.',
     ].join('\n'),
-    inlineNotFound: 'The song was not found or does not belong to this Telegram account.',
     settingsTitle: '⚙️ Settings\n\nChoose a category:',
   },
 } as const;
@@ -227,6 +243,13 @@ const LABELS = {
     miniApp: '🌐 Mini App', language: '🌍 Language', help: '🆘 Help', menu: '🏠 Menu',
   },
 } as const;
+
+export function parseShareMediaId(value: string): number | null {
+  const match = String(value ?? '').trim().match(/^share:(\d+)$/i);
+  if (!match) return null;
+  const id = Number(match[1]);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
 
 export async function handleTelegramMasterWebhook(request: Request, env: ExtendedEnv): Promise<Response> {
   const providedSecret = request.headers.get('X-Telegram-Bot-Api-Secret-Token') ?? '';
@@ -332,35 +355,47 @@ async function handleMasterUpdate(update: TelegramUpdate, env: ExtendedEnv): Pro
   const command = parseCommand(text);
   if (command.name === '/start' && command.args.startsWith('job_')) return false;
 
-  if (command.name === '/start' || command.name === '/menu' || label === LABELS.bg.menu.toLowerCase() || label === LABELS.en.menu.toLowerCase()) {
+  if (command.name === '/start' || command.name === '/menu' || isMenuLabel(label, 'menu')) {
     await sendMasterMenu(message.chat.id, language, env, command.name === '/start');
     return true;
   }
-  if (command.name === '/formats' || label === LABELS.bg.formats.toLowerCase() || label === LABELS.en.formats.toLowerCase()) {
+  if (command.name === '/formats' || isMenuLabel(label, 'formats')) {
     await sendFormats(message.chat.id, language, env);
     return true;
   }
-  if (command.name === '/language' || label === LABELS.bg.language.toLowerCase() || label === LABELS.en.language.toLowerCase()) {
+  if (command.name === '/language' || isMenuLabel(label, 'language')) {
     await sendLanguagePicker(message.chat.id, language, env);
     return true;
   }
-  if (command.name === '/share' || label === LABELS.bg.share.toLowerCase() || label === LABELS.en.share.toLowerCase()) {
+  if (command.name === '/share' || isMenuLabel(label, 'share')) {
     await sendShareMenu(message.chat.id, language, env);
     return true;
   }
-  if (command.name === '/settings' || label === LABELS.bg.settings.toLowerCase() || label === LABELS.en.settings.toLowerCase()) {
+  if (command.name === '/myfiles' || isMenuLabel(label, 'files')) {
+    await sendMySongs(message.chat.id, language, env);
+    return true;
+  }
+  if (command.name === '/queue' || isMenuLabel(label, 'queue')) {
+    await sendQueue(message.chat.id, language, env);
+    return true;
+  }
+  if (command.name === '/history' || isMenuLabel(label, 'history')) {
+    await sendHistory(message.chat.id, language, env);
+    return true;
+  }
+  if (command.name === '/settings' || isMenuLabel(label, 'settings')) {
     await sendSettingsMenu(message.chat.id, language, env);
     return true;
   }
-  if (command.name === '/help' || label === LABELS.bg.help.toLowerCase() || label === LABELS.en.help.toLowerCase()) {
+  if (command.name === '/help' || isMenuLabel(label, 'help')) {
     await sendMessage(message.chat.id, COPY[language].help, env, replyKeyboard(language, env));
     return true;
   }
-  if (command.name === '/search' || label === LABELS.bg.search.toLowerCase() || label === LABELS.en.search.toLowerCase()) {
+  if (command.name === '/search' || isMenuLabel(label, 'search')) {
     await sendMessage(message.chat.id, COPY[language].searchPrompt, env, replyKeyboard(language, env));
     return true;
   }
-  if (command.name === '/download' || label === LABELS.bg.download.toLowerCase() || label === LABELS.en.download.toLowerCase()) {
+  if (command.name === '/download' || isMenuLabel(label, 'download')) {
     await sendMessage(message.chat.id, COPY[language].downloadPrompt, env, replyKeyboard(language, env));
     return true;
   }
@@ -382,6 +417,9 @@ async function handleMasterCallback(query: TelegramCallbackQuery, env: ExtendedE
   else if (data === 'master:settings') await sendSettingsMenu(chatId, language, env);
   else if (data === 'master:language') await sendLanguagePicker(chatId, language, env);
   else if (data === 'master:share') await sendShareMenu(chatId, language, env);
+  else if (data === 'master:myfiles') await sendMySongs(chatId, language, env);
+  else if (data === 'master:queue') await sendQueue(chatId, language, env);
+  else if (data === 'master:history') await sendHistory(chatId, language, env);
   else if (data === 'master:help') await sendMessage(chatId, COPY[language].help, env, replyKeyboard(language, env));
   else if (data === 'master:lang:bg' || data === 'master:lang:en') {
     const nextLanguage: MasterLanguage = data.endsWith(':en') ? 'en' : 'bg';
@@ -404,12 +442,12 @@ async function sendMasterMenu(chatId: number, language: MasterLanguage, env: Ext
           { text: labels.download, callback_data: 'master:download' },
         ],
         [
-          { text: labels.files, callback_data: 'v10:myfiles' },
+          { text: labels.files, callback_data: 'master:myfiles' },
           { text: labels.share, callback_data: 'master:share' },
         ],
         [
-          { text: labels.queue, callback_data: 'v10:queue' },
-          { text: labels.history, callback_data: 'v10:history' },
+          { text: labels.queue, callback_data: 'master:queue' },
+          { text: labels.history, callback_data: 'master:history' },
         ],
         [{ text: labels.formats, callback_data: 'master:formats' }],
         [
@@ -466,6 +504,67 @@ async function sendLanguagePicker(chatId: number, language: MasterLanguage, env:
   });
 }
 
+async function sendQueue(chatId: number, language: MasterLanguage, env: ExtendedEnv): Promise<void> {
+  const rows = await listJobs(chatId, env, true);
+  if (!rows.length) {
+    await sendMessage(chatId, COPY[language].queueEmpty, env, replyKeyboard(language, env));
+    return;
+  }
+  const title = language === 'bg' ? '📥 Активна опашка' : '📥 Active queue';
+  const body = rows.map((row, index) => formatJobRow(row, index, language)).join('\n\n');
+  await sendMessage(chatId, `${title}\n\n${body}`, env, {
+    reply_markup: {
+      inline_keyboard: [[
+        { text: language === 'bg' ? '🔄 Обнови' : '🔄 Refresh', callback_data: 'master:queue' },
+        { text: language === 'bg' ? '🏠 Меню' : '🏠 Menu', callback_data: 'master:home' },
+      ]],
+    },
+  });
+}
+
+async function sendHistory(chatId: number, language: MasterLanguage, env: ExtendedEnv): Promise<void> {
+  const rows = await listJobs(chatId, env, false);
+  if (!rows.length) {
+    await sendMessage(chatId, COPY[language].historyEmpty, env, replyKeyboard(language, env));
+    return;
+  }
+  const title = language === 'bg' ? '🕘 Последни задачи' : '🕘 Recent jobs';
+  const body = rows.map((row, index) => formatJobRow(row, index, language)).join('\n\n');
+  await sendMessage(chatId, `${title}\n\n${body}`, env, {
+    reply_markup: {
+      inline_keyboard: [[
+        { text: language === 'bg' ? '🔄 Обнови' : '🔄 Refresh', callback_data: 'master:history' },
+        { text: language === 'bg' ? '🎧 Моите песни' : '🎧 My songs', callback_data: 'master:myfiles' },
+      ]],
+    },
+  });
+}
+
+async function sendMySongs(chatId: number, language: MasterLanguage, env: ExtendedEnv): Promise<void> {
+  const rows = await listShareableMedia(chatId, env, 8);
+  if (!rows.length) {
+    await sendMessage(chatId, COPY[language].filesEmpty, env, replyKeyboard(language, env));
+    return;
+  }
+  const inlineEnabled = await supportsInlineQueries(env);
+  const keyboard: Array<Array<Record<string, unknown>>> = rows.map((row) => {
+    const actions: Array<Record<string, unknown>> = [{
+      text: `🎵 ${(row.artist || '—').slice(0, 18)} - ${(row.title || 'Файл').slice(0, 22)}`,
+      callback_data: `v10:file:${row.id}`,
+    }];
+    if (inlineEnabled) actions.push(shareButton(row.id));
+    return actions;
+  });
+  keyboard.push([
+    { text: language === 'bg' ? '📤 Всички опции за споделяне' : '📤 Sharing options', callback_data: 'master:share' },
+    { text: language === 'bg' ? '🏠 Меню' : '🏠 Menu', callback_data: 'master:home' },
+  ]);
+  const title = language === 'bg'
+    ? `🎧 Моите песни\nГотови файлове: ${rows.length}`
+    : `🎧 My songs\nCompleted files: ${rows.length}`;
+  await sendMessage(chatId, title, env, { reply_markup: { inline_keyboard: keyboard } });
+}
+
 async function sendShareMenu(chatId: number, language: MasterLanguage, env: ExtendedEnv): Promise<void> {
   if (!await supportsInlineQueries(env)) {
     await sendMessage(chatId, COPY[language].inlineDisabled, env, replyKeyboard(language, env));
@@ -478,31 +577,38 @@ async function sendShareMenu(chatId: number, language: MasterLanguage, env: Exte
     return;
   }
 
-  const keyboard = rows.map((row) => [{
+  const keyboard: Array<Array<Record<string, unknown>>> = rows.map((row) => [{
     text: `📤 ${(row.artist || '—').slice(0, 20)} - ${(row.title || 'Файл').slice(0, 24)}`,
-    switch_inline_query_chosen_chat: {
-      query: `share:${row.id}`,
-      allow_user_chats: true,
-      allow_bot_chats: true,
-      allow_group_chats: true,
-      allow_channel_chats: true,
-    },
+    ...shareButtonPayload(row.id),
   }]);
   keyboard.push([{ text: language === 'bg' ? '🏠 Главно меню' : '🏠 Main menu', callback_data: 'master:home' }]);
   await sendMessage(chatId, COPY[language].shareTitle, env, { reply_markup: { inline_keyboard: keyboard } });
 }
 
+function shareButton(mediaId: number): Record<string, unknown> {
+  return { text: '📤', ...shareButtonPayload(mediaId) };
+}
+
+function shareButtonPayload(mediaId: number): Record<string, unknown> {
+  return {
+    switch_inline_query_chosen_chat: {
+      query: `share:${mediaId}`,
+      allow_user_chats: true,
+      allow_bot_chats: true,
+      allow_group_chats: true,
+      allow_channel_chats: true,
+    },
+  };
+}
+
 async function handleInlineQuery(query: TelegramInlineQuery, env: ExtendedEnv): Promise<void> {
-  const match = String(query.query ?? '').trim().match(/^share:(\d+)$/i);
-  if (!match) {
+  const mediaId = parseShareMediaId(query.query);
+  if (!mediaId) {
     await answerInlineQuery(query.id, [], env);
     return;
   }
 
-  const mediaId = Number(match[1]);
-  const media = Number.isSafeInteger(mediaId) && mediaId > 0
-    ? await loadOwnedMedia(query.from.id, mediaId, env)
-    : null;
+  const media = await loadOwnedMedia(query.from.id, mediaId, env);
   if (!media) {
     await answerInlineQuery(query.id, [], env);
     return;
@@ -553,14 +659,35 @@ async function handleInlineQuery(query: TelegramInlineQuery, env: ExtendedEnv): 
   await answerInlineQuery(query.id, [result], env);
 }
 
+async function listJobs(chatId: number, env: ExtendedEnv, activeOnly: boolean): Promise<JobMenuRow[]> {
+  const condition = activeOnly ? "AND status IN ('queued', 'processing', 'paused')" : '';
+  const result = await env.DB.prepare(
+    `SELECT id, url, source, format, quality, status, title, artist, created_at
+     FROM download_jobs
+     WHERE chat_id = ? ${condition}
+     ORDER BY created_at DESC
+     LIMIT 10`,
+  ).bind(chatId).all<JobMenuRow>();
+  return result.results ?? [];
+}
+
 async function listShareableMedia(chatId: number, env: ExtendedEnv, limit: number): Promise<ShareableMediaRow[]> {
   const result = await env.DB.prepare(
-    `SELECT m.id, m.job_id, m.media_kind, m.telegram_file_id, m.fallback_url,
-            m.title, m.artist, m.format, m.quality, m.file_size
-     FROM telegram_media_objects m
-     JOIN download_jobs j ON j.id = m.job_id
-     WHERE j.chat_id = ?
-     ORDER BY m.id DESC
+    `WITH owned_media AS (
+       SELECT m.id, j.id AS job_id, m.media_kind, m.telegram_file_id, m.fallback_url,
+              m.title, m.artist, m.format, m.quality, m.file_size,
+              ROW_NUMBER() OVER (PARTITION BY m.id ORDER BY j.created_at DESC) AS row_number
+       FROM telegram_media_objects m
+       JOIN download_jobs j
+         ON j.id = m.job_id
+         OR (m.content_hash IS NOT NULL AND j.content_hash = m.content_hash AND j.format = m.format)
+       WHERE j.chat_id = ? AND j.status = 'done'
+     )
+     SELECT id, job_id, media_kind, telegram_file_id, fallback_url,
+            title, artist, format, quality, file_size
+     FROM owned_media
+     WHERE row_number = 1
+     ORDER BY id DESC
      LIMIT ?`,
   ).bind(chatId, Math.max(1, Math.min(20, limit))).all<ShareableMediaRow>();
   return result.results ?? [];
@@ -568,11 +695,14 @@ async function listShareableMedia(chatId: number, env: ExtendedEnv, limit: numbe
 
 async function loadOwnedMedia(chatId: number, mediaId: number, env: ExtendedEnv): Promise<ShareableMediaRow | null> {
   return env.DB.prepare(
-    `SELECT m.id, m.job_id, m.media_kind, m.telegram_file_id, m.fallback_url,
+    `SELECT m.id, j.id AS job_id, m.media_kind, m.telegram_file_id, m.fallback_url,
             m.title, m.artist, m.format, m.quality, m.file_size
      FROM telegram_media_objects m
-     JOIN download_jobs j ON j.id = m.job_id
-     WHERE m.id = ? AND j.chat_id = ?
+     JOIN download_jobs j
+       ON j.id = m.job_id
+       OR (m.content_hash IS NOT NULL AND j.content_hash = m.content_hash AND j.format = m.format)
+     WHERE m.id = ? AND j.chat_id = ? AND j.status = 'done'
+     ORDER BY j.created_at DESC
      LIMIT 1`,
   ).bind(mediaId, chatId).first<ShareableMediaRow>();
 }
@@ -594,6 +724,41 @@ function replyKeyboard(language: MasterLanguage, env: ExtendedEnv): Record<strin
       input_field_placeholder: language === 'bg' ? 'Име на песен или публичен URL…' : 'Song name or public URL…',
     },
   };
+}
+
+function isMenuLabel(value: string, key: keyof typeof LABELS.bg): boolean {
+  return value === LABELS.bg[key].toLowerCase() || value === LABELS.en[key].toLowerCase();
+}
+
+function formatJobRow(row: JobMenuRow, index: number, language: MasterLanguage): string {
+  const title = row.title || shortUrl(row.url);
+  const artist = row.artist || '—';
+  return `${index + 1}. ${statusIcon(row.status)} ${artist} - ${title}\n   ${row.format.toUpperCase()} ${row.quality} · ${statusLabel(row.status, language)} · #${row.id.slice(0, 8)}`;
+}
+
+function statusIcon(status: string): string {
+  if (status === 'done') return '✅';
+  if (status === 'failed') return '❌';
+  if (status === 'processing') return '⚙️';
+  if (status === 'paused') return '⏸';
+  return '⏳';
+}
+
+function statusLabel(status: string, language: MasterLanguage): string {
+  const labels: Record<MasterLanguage, Record<string, string>> = {
+    bg: { queued: 'чака', processing: 'обработва се', paused: 'пауза', done: 'готово', failed: 'грешка' },
+    en: { queued: 'queued', processing: 'processing', paused: 'paused', done: 'done', failed: 'failed' },
+  };
+  return labels[language][status] ?? status;
+}
+
+function shortUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    return `${url.hostname}${url.pathname}`.slice(0, 50);
+  } catch {
+    return value.slice(0, 50);
+  }
 }
 
 async function getLanguage(chatId: number, env: ExtendedEnv): Promise<MasterLanguage> {
@@ -654,8 +819,7 @@ async function telegramRequest<T = unknown>(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const body = await response.json() as TelegramApiResponse<T>;
-    return body;
+    return await response.json() as TelegramApiResponse<T>;
   } catch (error) {
     return { ok: false, description: error instanceof Error ? error.message : String(error) };
   }
