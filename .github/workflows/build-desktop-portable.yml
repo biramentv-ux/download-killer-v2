@@ -38,19 +38,20 @@ jobs:
         run: |
           python -m py_compile .\external_engines\spotify_oggmp4_gui.py
           python -m unittest external_engines.test_spotify_oggmp4_gui
+          python -c 'from pathlib import Path; sources = [Path("sounddrop_desktop.py").read_text(encoding="utf-8"), Path("macos_portable/sounddrop_desktop.py").read_text(encoding="utf-8")]; assert all("DEFAULT_PRIMARY_URL" in source and "https://dyrakarmy.eu" in source for source in sources); assert all("https://dyrakarmy.online" in source for source in sources)'
 
       - name: Build Windows EXEs
         run: |
-          pyinstaller --noconfirm --clean --onefile --noconsole --name SoundDropDesktop sounddrop_desktop.py
+          pyinstaller --noconfirm --clean --onefile --noconsole --name DyrakArmyDesktop sounddrop_desktop.py
           pyinstaller --noconfirm --clean --onefile --noconsole --name DyrakArmySpotifyOggMp4Engine .\external_engines\spotify_oggmp4_gui.py
 
       - name: Upload Windows artifact
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: SoundDropDesktop-windows
+          name: DyrakArmyDesktop-windows
           path: |
-            desktop_launcher/dist/SoundDropDesktop.exe
+            desktop_launcher/dist/DyrakArmyDesktop.exe
             desktop_launcher/dist/DyrakArmySpotifyOggMp4Engine.exe
 
   build-macos:
@@ -78,19 +79,20 @@ jobs:
         run: |
           python -m py_compile ./external_engines/spotify_oggmp4_gui.py
           python -m unittest external_engines.test_spotify_oggmp4_gui
+          python -c 'from pathlib import Path; sources = [Path("sounddrop_desktop.py").read_text(encoding="utf-8"), Path("macos_portable/sounddrop_desktop.py").read_text(encoding="utf-8")]; assert all("DEFAULT_PRIMARY_URL" in source and "https://dyrakarmy.eu" in source for source in sources); assert all("https://dyrakarmy.online" in source for source in sources)'
 
       - name: Build macOS app bundle
         run: |
-          pyinstaller --noconfirm --clean --windowed --name SoundDropDesktop sounddrop_desktop.py
+          pyinstaller --noconfirm --clean --windowed --name DyrakArmyDesktop sounddrop_desktop.py
 
       - name: Archive macOS app
         run: |
           cd dist
-          ditto -c -k --sequesterRsrc --keepParent "SoundDropDesktop.app" "SoundDropDesktop-macOS.zip"
+          ditto -c -k --sequesterRsrc --keepParent "DyrakArmyDesktop.app" "DyrakArmyDesktop-macOS.zip"
 
       - name: Upload macOS artifact
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: SoundDropDesktop-macos
-          path: desktop_launcher/dist/SoundDropDesktop-macOS.zip
+          name: DyrakArmyDesktop-macos
+          path: desktop_launcher/dist/DyrakArmyDesktop-macOS.zip

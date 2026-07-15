@@ -34,13 +34,17 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1
 
 Generated files:
 
-- `dist/DyrakArmy-Extension-Chrome.zip`
+- `dist/DyrakArmy-Extension-Legacy-Chrome.zip`
 - `dist/DyrakArmy-Extension-Firefox.zip`
 
 They are also copied to:
 
-- `worker/public/downloads/DyrakArmy-Extension-Chrome.zip`
+- `worker/public/downloads/DyrakArmy-Extension-Legacy-Chrome.zip`
 - `worker/public/downloads/DyrakArmy-Extension-Firefox.zip`
+
+The maintained `extension/spotify-web-companion` package exclusively owns the
+canonical `DyrakArmy-Extension-Chrome.zip` name. This legacy package uses a
+different Chrome filename so parallel CI builds cannot overwrite it.
 
 ## Install locally (developer mode)
 

@@ -10,13 +10,14 @@
     "test": "vitest run",
     "telegram:setup": "node scripts/setup-telegram-platform.mjs",
     "telegram:setup:secondary": "node scripts/setup-telegram-secondary.mjs",
+    "db:repair:telegram": "node scripts/repair-telegram-schema.mjs",
     "build:tg-archive-seed": "node scripts/build-telegram-archive-seed.mjs --out telegram_archive_seed.sql",
     "secrets:rotate": "node scripts/rotate-secrets.mjs --generate-missing --apply"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260520.0",
+    "@cloudflare/workers-types": "^5.20260715.1",
     "typescript": "^5.8.3",
-    "vitest": "^2.1.9",
-    "wrangler": "^4.20.0"
+    "vitest": "^4.1.10",
+    "wrangler": "^4.111.0"
   }
 }

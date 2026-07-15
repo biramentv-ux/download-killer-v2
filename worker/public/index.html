@@ -6,12 +6,15 @@
   <meta name="theme-color" content="#050713">
   <meta name="description" content="Download Killer — web и Telegram платформа с обща опашка, история и файлов архив.">
   <title>Download Killer Platform</title>
-  <link rel="canonical" href="https://dyrakarmy.online/">
+  <link rel="canonical" href="https://dyrakarmy.eu/">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/platform/platform.css">
+  <link rel="stylesheet" href="/media-lab/media-lab.css">
   <style>
     .hero-actions{flex-wrap:wrap}.bot-link{border-color:rgba(92,200,255,.46)}.bot-link:hover{border-color:rgba(92,200,255,.82)}
     .language-picker{height:42px;padding:0 34px 0 14px;border:1px solid var(--line);border-radius:999px;background:rgba(8,13,28,.84);color:var(--text);font:700 .78rem var(--mono);cursor:pointer}
@@ -59,7 +62,7 @@
           <a class="primary-button magnetic" href="#tutorial"><span data-i18n="see_tutorial">Виж как работи</span><b>↓</b></a>
           <a class="secondary-button telegram-link" href="https://web.telegram.org/k/#@download_killerBOT" data-telegram-mode="miniapp" data-i18n="open_miniapp">Отвори Telegram Mini App</a>
           <a class="secondary-button" href="https://web.telegram.org/k/#@dyrakarmy_bot" target="_blank" rel="noreferrer">Алтернативен бот: @dyrakarmy_bot</a>
-          <a class="secondary-button" id="canonicalDomainLink" href="https://dyrakarmy.online/"><span>dyrakarmy.online</span></a>
+          <a class="secondary-button" id="canonicalDomainLink" href="https://dyrakarmy.eu/"><span>dyrakarmy.eu</span></a>
         </div>
         <div class="trust-row">
           <span><b>Cloudflare</b><small>Worker · D1 · KV · Queues</small></span>
@@ -83,8 +86,8 @@
           <p data-i18n="tutorial_intro">Платформата приема публичен URL, валидира го, добавя задачата в обща опашка и предава обработката към наличния backend. Резултатът се връща в сайта или в Telegram.</p>
         </div>
         <div class="domain-switch glass">
-          <a class="primary-button" id="alternateDomainLink" href="https://dyrakarmy.eu/"><span data-i18n="open_other_domain">Отвори резервния домейн</span><b>↗</b></a>
-          <a class="secondary-button" href="https://dyrakarmy.online/"><span data-i18n="open_primary_domain">Отвори основния .online домейн</span></a>
+          <a class="primary-button" id="alternateDomainLink" href="https://dyrakarmy.online/"><span data-i18n="open_other_domain">Отвори резервния домейн</span><b>↗</b></a>
+          <a class="secondary-button" href="https://dyrakarmy.online/"><span data-i18n="open_primary_domain">Отвори резервния .online домейн</span></a>
           <div class="mirror-note"><i></i><span data-i18n="mirror_note">Двата адреса използват една и съща база, опашка и Telegram интеграция.</span></div>
         </div>
       </div>
@@ -159,10 +162,13 @@
   <footer>
     <div><a class="brand footer-brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span><strong>Download</strong>Killer</span></a><p data-i18n="footer_text">Web и Telegram workflow върху общ edge backend.</p></div>
     <div class="footer-links"><a class="telegram-link" href="https://web.telegram.org/k/#@download_killerBOT" data-telegram-mode="bot">@download_killerBOT</a><a href="https://web.telegram.org/k/#@dyrakarmy_bot" target="_blank" rel="noreferrer">@dyrakarmy_bot</a><a href="/telegram/">Mini App</a><a href="https://dyrakarmy.online/">dyrakarmy.online</a><a href="https://dyrakarmy.eu/">dyrakarmy.eu</a><a href="/api/health">API Health</a></div>
-    <small>© <span id="year"></span> Download Killer · Platform v12.1</small>
+    <small>© <span id="year"></span> Download Killer · Platform v12.2.0</small>
   </footer>
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
+  <script src="/platform/status-backoff.js"></script>
+  <script src="/platform/site-defaults.js" defer></script>
   <script src="/platform/platform.js" defer></script>
+  <script src="/media-lab/media-lab.js" defer></script>
 </body>
 </html>

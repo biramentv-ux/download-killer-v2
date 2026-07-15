@@ -1,0 +1,44 @@
+.dyrakarmy-track-download {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 14px;
+  height: 28px;
+  justify-content: center;
+  margin-inline: 6px;
+  min-width: 28px;
+  padding: 0 8px;
+  transition: background-color 120ms ease, border-color 120ms ease, opacity 120ms ease, transform 120ms ease;
+  vertical-align: middle;
+  z-index: 2;
+}
+
+.dyrakarmy-track-download:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.7);
+  transform: scale(1.04);
+}
+
+.dyrakarmy-track-download:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.dyrakarmy-track-download:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+.dyrakarmy-track-download[data-state="queued"] {
+  border-color: currentColor;
+}
+
+.dyrakarmy-track-download[data-state="error"] {
+  border-style: dashed;
+}

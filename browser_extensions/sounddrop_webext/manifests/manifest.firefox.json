@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DyrakArmy Downloader",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Queue and download tracks/clips with DyrakArmy directly from your browser.",
   "action": {
     "default_title": "DyrakArmy",
@@ -41,6 +41,8 @@
     "notifications"
   ],
   "host_permissions": [
+    "https://dyrakarmy.eu/*",
+    "https://www.dyrakarmy.eu/*",
     "https://dyrakarmy.online/*",
     "https://www.dyrakarmy.online/*",
     "https://open.spotify.com/*"

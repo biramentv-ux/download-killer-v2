@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "integration_id": "unplayplay-metadata-profile",
+  "mode": "metadata-only",
+  "upstream": {
+    "name": "unplayplay",
+    "version": "1.0.3",
+    "description": "playplay key decryptor",
+    "repository": "https://git.gay/glomatico/unplayplay.git",
+    "commit": "f19a71e2f1d9cd2be2b107f1794fe53ed6d0f04b",
+    "license": "MIT"
+  },
+  "provided_files": [
+    {
+      "path": ".gitignore",
+      "bytes": 79,
+      "sha256": "ed77d1e6be979d8e0e59759738eb2fa4714eaa91a8a72eca0416eebc62dcb01d"
+    },
+    {
+      "path": "binding.gyp",
+      "bytes": 656,
+      "sha256": "8f5185f65b58c9346b762c579bc925e2ebbddcb002d1136443123f09ffeff040"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1082,
+      "sha256": "3025601848bc4342000d99b159dd616104b48a2e63d43c2fa744121cd2fb8aaf"
+    },
+    {
+      "path": "package.json",
+      "bytes": 649,
+      "sha256": "6c9db3fce7353132da12dfe60ba8c354e1d3e8aacfcf8b8d6293ac063c7e0a9c"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "bytes": 1270,
+      "sha256": "b31517a097bf45602993783d80555c930851e1a0867d926b468327aba997f626"
+    },
+    {
+      "path": "README.md",
+      "bytes": 364,
+      "sha256": "8b685501a0d2e33113245015caafe80f6d3c33b0afc6a6d7536d953175ae217e"
+    },
+    {
+      "path": "tsconfig.json",
+      "bytes": 299,
+      "sha256": "06b9896338f6fb38b644c6944ffd93dd4d38097f7381ef69999395f3876f95ac"
+    }
+  ],
+  "runtime_imported_files": [],
+  "runtime_capabilities": {
+    "native_addon_build": false,
+    "native_addon_loading": false,
+    "subprocess_execution": false,
+    "network_access": false,
+    "credential_access": false,
+    "key_deobfuscation": false,
+    "drm_decryption": false
+  },
+  "source_code_bundled": false,
+  "package_scripts_executed": false,
+  "notice": "The supplied root files are represented only by provenance metadata and SHA-256 fingerprints. No native source, executable, package install hook, key routine, or decryptor is bundled or executed."
+}

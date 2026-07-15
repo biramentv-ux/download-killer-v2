@@ -139,6 +139,16 @@ pre { min-height: 330px; max-height: 390px; margin: 0; padding: 18px; border: 1p
 .cap-grid b { font: 700 .72rem var(--mono); }
 .cap-grid span { color: var(--lime); font: 700 .68rem var(--mono); }
 
+.research-profile { margin-top: 72px; padding: 26px; border: 1px solid rgba(89,230,255,.2); border-radius: var(--radius); background: linear-gradient(125deg, rgba(89,230,255,.07), rgba(126,151,255,.05)); }
+.profile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.profile-grid article { min-height: 116px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: rgba(6,8,20,.62); }
+.profile-grid small, .profile-grid b, .profile-grid span { display: block; }
+.profile-grid small { color: var(--cyan); font: 700 .66rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.profile-grid b { margin-top: 12px; font: 700 .82rem var(--mono); }
+.profile-grid span { margin-top: 6px; color: var(--muted); font-size: .78rem; }
+.profile-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 18px; padding: 0 15px; border: 1px solid rgba(200,255,88,.3); border-radius: 13px; color: var(--lime); background: rgba(200,255,88,.05); text-decoration: none; font: 700 .72rem var(--mono); transition: .2s ease; }
+.profile-link:hover { transform: translateY(-2px); border-color: rgba(200,255,88,.58); }
+
 .flow { margin-top: 72px; padding: 26px; border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(120deg, rgba(126,151,255,.07), rgba(200,255,88,.045)); }
 .flow-row { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 18px; margin-top: 21px; }
 .flow-row > i { color: var(--lime); font-style: normal; }
@@ -167,6 +177,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; width: min(12
   .hero { padding-top: 30px; }
   .capability-orbit { width: min(330px, 84vw); }
   .cap-grid { grid-template-columns: repeat(2, 1fr); }
+  .profile-grid { grid-template-columns: 1fr; }
   .nav-links { display: none; }
 }
 

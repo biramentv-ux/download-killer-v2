@@ -40,21 +40,28 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
 
   let html = await response.text();
   const favicon = '<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">';
-  html = html.replace('</head>', `  ${favicon}\n</head>`);
+  if (!html.includes('href="/favicon.svg"')) {
+    html = html.replace('</head>', `  ${favicon}\n</head>`);
+  }
 
   if (isRoot) {
-    html = html
-      .replace(
-        '<link rel="canonical" href="https://dyrakarmy.online/">',
-        '<link rel="canonical" href="https://dyrakarmy.eu/">',
-      )
-      .replace('<script src="/platform/platform.js" defer></script>', [
+    html = html.replace(
+      /<link rel="canonical" href="[^"]+">/,
+      '<link rel="canonical" href="https://dyrakarmy.eu/">',
+    );
+    if (!html.includes('/platform/status-backoff.js')) {
+      html = html.replace('<script src="/platform/platform.js" defer></script>', [
         '<script src="/platform/status-backoff.js"></script>',
         '<script src="/platform/site-defaults.js" defer></script>',
         '<script src="/platform/platform.js" defer></script>',
-      ].join('\n  '))
-      .replace('</head>', '  <link rel="stylesheet" href="/media-lab/media-lab.css">\n</head>')
-      .replace('</body>', '  <script src="/media-lab/media-lab.js" defer></script>\n</body>');
+      ].join('\n  '));
+    }
+    if (!html.includes('/media-lab/media-lab.css')) {
+      html = html.replace('</head>', '  <link rel="stylesheet" href="/media-lab/media-lab.css">\n</head>');
+    }
+    if (!html.includes('/media-lab/media-lab.js')) {
+      html = html.replace('</body>', '  <script src="/media-lab/media-lab.js" defer></script>\n</body>');
+    }
   } else {
     html = html.replace(
       /<script src="\.\/telegram\.js(?:\?[^\"]*)?" defer><\/script>/,

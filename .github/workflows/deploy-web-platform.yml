@@ -74,8 +74,26 @@ jobs:
           const sw = fs.readFileSync('public/sw.js', 'utf8');
           const wrangler = fs.readFileSync('wrangler.jsonc', 'utf8');
 
+          const requiredArtifacts = new Map([
+            ['public/downloads/DyrakArmyDesktop.exe', 10_000_000],
+            ['public/downloads/DyrakArmyDesktop-macOS.zip', 10_000],
+            ['public/downloads/DyrakArmy-Extension-Chrome.zip', 10_000],
+            ['public/downloads/DyrakArmy-Extension-Legacy-Chrome.zip', 10_000],
+            ['public/downloads/DyrakArmy-Extension-Firefox.zip', 10_000],
+          ]);
+          for (const [artifact, minimumBytes] of requiredArtifacts) {
+            if (!fs.existsSync(artifact) || fs.statSync(artifact).size < minimumBytes) {
+              throw new Error(`Missing or incomplete release artifact: ${artifact}`);
+            }
+          }
+          if (fs.readFileSync('public/downloads/DyrakArmyDesktop.exe').subarray(0, 2).toString('ascii') !== 'MZ') {
+            throw new Error('Windows desktop artifact is not a PE executable');
+          }
+
           const requiredHtml = [
             '<title>Download Killer Platform</title>',
+            '<link rel="canonical" href="https://dyrakarmy.eu/">',
+            'Platform v12.2.0',
             'id="tutorial"',
             'id="languageSelect"',
             '<option value="ru">RU</option>',
@@ -91,8 +109,13 @@ jobs:
             'https://dyrakarmy.online/',
             'https://dyrakarmy.eu/',
             '/telegram/',
+            'href="/favicon.svg"',
             '/platform/platform.css',
+            '/platform/status-backoff.js',
+            '/platform/site-defaults.js',
             '/platform/platform.js',
+            '/media-lab/media-lab.css',
+            '/media-lab/media-lab.js',
           ];
           for (const marker of requiredHtml) {
             if (!html.includes(marker)) throw new Error(`Missing homepage marker: ${marker}`);
@@ -161,6 +184,9 @@ jobs:
           ]) {
             if (!wrangler.includes(mirrorMarker)) throw new Error(`Missing EU primary config: ${mirrorMarker}`);
           }
+          if (wrangler.includes('trycloudflare.com')) {
+            throw new Error('Ephemeral trycloudflare origin must not ship in production configuration');
+          }
 
           if (!legacyPlatform.includes("window.location.replace('/')")) {
             throw new Error('Legacy /platform route does not redirect to the main homepage');
@@ -171,11 +197,11 @@ jobs:
           for (const endpoint of ['/download', '/health', '/runtime-config', '/history']) {
             if (!js.includes(endpoint)) throw new Error(`Missing API integration: ${endpoint}`);
           }
-          if (manifest.name !== 'Download Killer Platform v12') {
-            throw new Error('PWA manifest version is not v12');
+          if (manifest.name !== 'Download Killer Platform v12.2.0') {
+            throw new Error('PWA manifest version is not v12.2.0');
           }
-          if (!sw.includes('download-killer-static-v13')) {
-            throw new Error('Service-worker cache version is not v13');
+          if (!sw.includes('download-killer-static-v12.2.0')) {
+            throw new Error('Service-worker cache version is not v12.2.0');
           }
           for (const asset of [
             '/media-lab/media-lab.css',
@@ -212,7 +238,8 @@ jobs:
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Cloudflare secrets are missing. Validation passed, but deployment was skipped."
+            echo "::error::Cloudflare production credentials are missing; refusing a false-green deployment."
+            exit 1
           fi
 
       - name: Deploy Worker and static platform
@@ -230,19 +257,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          urls=(
+          required_urls=(
             "https://dyrakarmy.eu/"
             "https://www.dyrakarmy.eu/"
-            "https://dyrakarmy.online/"
-            "https://www.dyrakarmy.online/"
             "https://sounddrop.biramentv.workers.dev/"
           )
-          failed=0
-          for url in "${urls[@]}"; do
+          optional_urls=(
+            "https://dyrakarmy.online/"
+            "https://www.dyrakarmy.online/"
+          )
+
+          check_url() {
+            local url="$1"
+            local ok=0
             echo "Checking $url"
-            ok=0
             for attempt in 1 2 3 4 5 6; do
-              if body="$(curl -fsSL --retry 2 --retry-delay 3 --max-time 25 "$url" 2>/dev/null)"; then
+              if body="$(curl -fsSL -A "Mozilla/5.0 (Download Killer release smoke)" --retry 2 --retry-delay 3 --max-time 25 "$url" 2>/dev/null)"; then
                 if grep -q "Download Killer Platform" <<<"$body" && grep -q "download_killerBOT" <<<"$body" && grep -q "/media-lab/media-lab.js" <<<"$body"; then
                   echo "Live: $url"
                   ok=1
@@ -251,9 +281,48 @@ jobs:
               fi
               sleep 10
             done
-            if [ "$ok" -ne 1 ]; then
-              echo "::error::Mirror endpoint is not serving Download Killer Media Lab: $url"
+            return $((1 - ok))
+          }
+
+          failed=0
+          for url in "${required_urls[@]}"; do
+            if ! check_url "$url"; then
+              echo "::error::Required endpoint is not serving Download Killer Media Lab: $url"
               failed=1
             fi
           done
+
+          for url in "${optional_urls[@]}"; do
+            if ! check_url "$url"; then
+              echo "::warning::Optional mirror is unavailable or challenged by edge security: $url"
+            fi
+          done
+
+          json_endpoints=(
+            "https://dyrakarmy.eu/api/health"
+            "https://dyrakarmy.eu/api/runtime-config"
+            "https://dyrakarmy.eu/api/telegram/v10/config"
+            "https://dyrakarmy.eu/api/telegram/v10-secondary/config"
+            "https://dyrakarmy.eu/api/telegram/v12/health"
+          )
+          for url in "${json_endpoints[@]}"; do
+            echo "Checking API $url"
+            if ! body="$(curl -fsSL -A "Mozilla/5.0 (Download Killer release smoke)" --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$url")"; then
+              echo "::error::Required API endpoint failed: $url"
+              failed=1
+              continue
+            fi
+            if ! grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$body"; then
+              echo "::error::Required API endpoint did not return ok=true: $url"
+              failed=1
+            fi
+          done
+
+          downloader_url="https://dyrakarmy-downloader-primary.onrender.com/health"
+          echo "Checking downloader origin $downloader_url"
+          if ! body="$(curl -fsSL -A "Mozilla/5.0 (Download Killer release smoke)" --retry 8 --retry-all-errors --retry-delay 10 --max-time 90 "$downloader_url")" || ! grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$body"; then
+            echo "::error::Primary downloader origin is not healthy: $downloader_url"
+            failed=1
+          fi
+
           exit "$failed"

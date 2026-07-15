@@ -19,10 +19,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DEFAULT_PRIMARY_URL = 'https://dyrakarmy.online'
+DEFAULT_PRIMARY_URL = 'https://dyrakarmy.eu'
 DEFAULT_FALLBACK_URLS = [
-    'https://www.dyrakarmy.online',
+    'https://www.dyrakarmy.eu',
     'https://dyrakarmy.online',
+    'https://www.dyrakarmy.online',
 ]
 ENV_URL = 'DYRAKARMY_URL'
 ENV_SYNC_KEY = 'DYRAKARMY_SYNC_KEY'
@@ -43,7 +44,7 @@ SUPPORTED_QUALITIES = {'320', '256', '192', '128', '96', 'best', 'lossless'}
 FALLBACK_SOURCES = {'spotify', 'deezer', 'apple'}
 IS_WINDOWS = sys.platform.startswith('win')
 IS_MACOS = sys.platform == 'darwin'
-APP_VERSION = '7.2.0'
+APP_VERSION = '7.2.1'
 APP_PLATFORM = 'windows' if IS_WINDOWS else ('macos' if IS_MACOS else 'desktop')
 APP_USER_AGENT = f'DyrakArmyDesktop/{APP_VERSION} ({APP_PLATFORM})'
 APP_HTTP_USER_AGENT = f'Mozilla/5.0 (compatible; {APP_USER_AGENT})'
