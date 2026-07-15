@@ -1,7 +1,7 @@
 {
   "name": "download-killer-spotify-web-companion",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "scripts": {
     "validate": "node scripts/validate.mjs && node --test tests/validators.test.mjs"
