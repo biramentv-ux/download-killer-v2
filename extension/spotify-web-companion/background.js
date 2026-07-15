@@ -18,16 +18,17 @@ import {
 
 const PROCESS_ALARM = "download-killer-process-queue";
 const RECOVERY_DELAY_MINUTES = 0.5;
-const QUICK_POLL_MS = 4500;
+const BASE_POLL_MS = 8000;
+const MAX_POLL_MS = 45000;
 let stepRunning = false;
 let quickTimer = null;
 
 chrome.runtime.onInstalled.addListener(() => {
-  void initializeState().then(() => scheduleProcess(250));
+  void initializeAndRecover();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  void initializeState().then(() => scheduleProcess(250));
+  void initializeAndRecover();
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -91,6 +92,31 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   return false;
 });
 
+async function initializeAndRecover() {
+  await initializeState();
+  const state = await mutateState((current) => {
+    const transientIds = new Set(
+      current.queue
+        .filter((item) => item.jobId && item.status === "failed" && isTransientPollingMessage(item.error))
+        .map((item) => item.localId)
+    );
+    if (!transientIds.size) return current;
+    return {
+      ...current,
+      queue: current.queue.map((item) => transientIds.has(item.localId)
+        ? { ...item, status: "processing", attempts: 0, error: "", updatedAt: Date.now() }
+        : item),
+      history: current.history.filter((item) => !transientIds.has(item.localId))
+    };
+  });
+  broadcastState(state, "Временните rate-limit грешки са възстановени");
+  scheduleProcess(250);
+}
+
+function isTransientPollingMessage(value) {
+  return /too many status requests|rate.?limit|status checks are temporarily limited/i.test(String(value || ""));
+}
+
 async function enqueueTracks(rawTracks, settingsOverride = {}) {
   const state = await getState();
   const settings = normalizeSettings({ ...state.settings, ...settingsOverride });
@@ -137,9 +163,8 @@ async function processQueueStep() {
 
   try {
     const state = await getState();
-    const task = state.queue.find((item) =>
-      ["queued", "submitting", "processing"].includes(String(item.status))
-    );
+    const task = state.queue.find((item) => ["queued", "submitting"].includes(String(item.status))) ||
+      state.queue.find((item) => item.status === "processing");
 
     if (!task) {
       await chrome.alarms.clear(PROCESS_ALARM);
@@ -167,7 +192,7 @@ async function processQueueStep() {
           updatedAt: Date.now()
         });
         broadcastLatest(`Изпратено: ${job.title || task.title}`);
-        scheduleProcess(QUICK_POLL_MS);
+        scheduleProcess(350);
       } catch (error) {
         await failOrRetry(task, error);
       }
@@ -197,11 +222,12 @@ async function processQueueStep() {
           artist: job.artist || task.artist,
           downloadUrl: job.downloadUrl || task.downloadUrl,
           filename: job.filename || task.filename,
-          attempts: Number(task.attempts || 0) + 1,
+          attempts: 0,
+          error: "",
           updatedAt: Date.now()
         });
         broadcastLatest(`Обработва се: ${job.title || task.title}`);
-        scheduleProcess(QUICK_POLL_MS);
+        scheduleProcess(BASE_POLL_MS);
       } catch (error) {
         await failOrRetry(task, error);
       }
@@ -218,21 +244,45 @@ function normalizeRemoteStatus(value) {
   return "processing";
 }
 
+function retryDelay(error, attempts) {
+  const serverDelay = Number(error?.retryAfterMs || 0);
+  if (serverDelay > 0) return Math.min(MAX_POLL_MS, Math.max(BASE_POLL_MS, serverDelay));
+  return Math.min(MAX_POLL_MS, BASE_POLL_MS * Math.max(1, 2 ** Math.min(attempts, 3)));
+}
+
 async function failOrRetry(task, error) {
   const attempts = Number(task.attempts || 0) + 1;
-  if (attempts >= 8) {
-    await markTaskFailed(task, error?.message || String(error));
+  const message = String(error?.message || error).slice(0, 500);
+  const delay = retryDelay(error, attempts);
+
+  if (task.jobId) {
+    await updateTask(task.localId, {
+      status: "processing",
+      attempts,
+      error: error?.status === 429 ? "Изчакване след ограничение на status заявките" : message,
+      updatedAt: Date.now()
+    });
+    broadcastLatest(error?.status === 429
+      ? `Изчакване ${Math.ceil(delay / 1000)} сек. преди следващата проверка`
+      : `Временна връзка с backend-а, нов опит след ${Math.ceil(delay / 1000)} сек.`);
+    scheduleProcess(delay);
+    return;
+  }
+
+  if (error?.retryable === false || attempts >= 8) {
+    await markTaskFailed(task, message);
     scheduleProcess(250);
     return;
   }
+
   await updateTask(task.localId, {
-    status: task.jobId ? "processing" : "queued",
+    status: "queued",
     attempts,
-    error: String(error?.message || error).slice(0, 500),
+    error: message,
     updatedAt: Date.now()
   });
-  broadcastLatest(`Временна грешка, опит ${attempts}/8`);
-  scheduleProcess(Math.min(30000, QUICK_POLL_MS * attempts));
+  broadcastLatest(`Временна грешка при изпращане, опит ${attempts}/8`);
+  scheduleProcess(delay);
 }
 
 async function finishTask(task, job) {
@@ -244,8 +294,7 @@ async function finishTask(task, job) {
 
   if (settings.autoDownload && downloadUrl) {
     try {
-      const suggested = job.filename ||
-        `${job.artist || task.artist} - ${job.title || task.title}`;
+      const suggested = job.filename || `${job.artist || task.artist} - ${job.title || task.title}`;
       downloadId = await chrome.downloads.download({
         url: downloadUrl,
         filename: safeFilename(suggested, job.format || task.format),
@@ -286,38 +335,30 @@ async function markTaskFailed(task, message) {
 async function updateTask(localId, patch) {
   return mutateState((state) => ({
     ...state,
-    queue: state.queue.map((item) =>
-      item.localId === localId ? { ...item, ...patch } : item
-    )
+    queue: state.queue.map((item) => item.localId === localId ? { ...item, ...patch } : item)
   }));
 }
 
 async function cancelAll() {
   const state = await getState();
-  const active = state.queue.filter((item) =>
-    ["queued", "submitting", "processing"].includes(item.status)
-  );
+  const active = state.queue.filter((item) => ["queued", "submitting", "processing"].includes(item.status));
 
   await Promise.allSettled(
-    active
-      .filter((item) => item.jobId)
-      .map((item) => cancelJob(item.backendUrl, item.jobId))
+    active.filter((item) => item.jobId).map((item) => cancelJob(item.backendUrl, item.jobId))
   );
 
   const next = await mutateState((current) => ({
     ...current,
-    queue: current.queue.map((item) =>
-      ["queued", "submitting", "processing"].includes(item.status)
-        ? { ...item, status: "cancelled", updatedAt: Date.now() }
-        : item
-    )
+    queue: current.queue.map((item) => ["queued", "submitting", "processing"].includes(item.status)
+      ? { ...item, status: "cancelled", updatedAt: Date.now() }
+      : item)
   }));
   await chrome.alarms.clear(PROCESS_ALARM);
   if (quickTimer) clearTimeout(quickTimer);
   broadcastState(next, "Всички локални задачи са спрени");
 }
 
-function scheduleProcess(delayMs = QUICK_POLL_MS) {
+function scheduleProcess(delayMs = BASE_POLL_MS) {
   if (quickTimer) clearTimeout(quickTimer);
   quickTimer = setTimeout(() => void processQueueStep(), Math.max(0, delayMs));
   void chrome.alarms.create(PROCESS_ALARM, { delayInMinutes: RECOVERY_DELAY_MINUTES });
@@ -329,9 +370,5 @@ async function broadcastLatest(message) {
 }
 
 function broadcastState(state, message) {
-  void chrome.runtime.sendMessage({
-    action: "stateUpdate",
-    message,
-    state
-  }).catch(() => undefined);
+  void chrome.runtime.sendMessage({ action: "stateUpdate", message, state }).catch(() => undefined);
 }
