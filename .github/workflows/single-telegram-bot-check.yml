@@ -32,6 +32,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Scan retired bot references first
+        run: node scripts/validate-single-telegram-bot.mjs
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -41,9 +44,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Validate sole native Telegram bot
-        run: npm run validate:single-bot
 
       - name: Typecheck Worker
         run: npm run typecheck
