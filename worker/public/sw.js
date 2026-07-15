@@ -3,8 +3,11 @@ const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
 const APP_SHELL = [
   '/',
   '/index.html',
+  '/favicon.svg',
   '/manifest.webmanifest',
   '/platform/platform.css',
+  '/platform/status-backoff.js',
+  '/platform/site-defaults.js',
   '/platform/platform.js',
   '/media-lab/media-lab.css',
   '/media-lab/media-lab.js',
