@@ -78,6 +78,7 @@ jobs:
             'telegram-v12.css?v=12.2.0',
             'telegram-runtime-v12.js?v=12.2.0',
             'id="runtimeDiagnostic"',
+            'Обнови без кеш',
             'Команден център',
             'data-open-tab="download"',
             'data-miniapp-version',
@@ -88,7 +89,6 @@ jobs:
           for (const marker of [
             '/api/telegram/v12/health',
             'TELEGRAM_AUTH_FAILED',
-            'Обнови без кеш',
             'serviceWorker.getRegistrations',
             'download-killer-static-',
           ]) {
