@@ -1,0 +1,9 @@
+{
+  "profile": "unified-platform-v14.1",
+  "public_registry": true,
+  "telegram_control_center": true,
+  "shared_game_profile": true,
+  "games": ["dyrakarmy-arena", "latency-strike"],
+  "remote_structured_content_only": true,
+  "arbitrary_code_execution": false
+}
