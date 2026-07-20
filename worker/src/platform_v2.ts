@@ -1,10 +1,10 @@
 import legacyHandler from './index';
 import type { DownloadJob, Env, JobHistoryEvent } from './types';
-import { handleLatencyStrikeApi } from './latency_strike';
 import {
   ensureLatencyStrikeBotCommands,
   handleLatencyStrikeTelegramWebhook,
 } from './latency_strike_bot';
+import { handleLatencyStrikeGameApi } from './latency_strike_native';
 import { handleMediaLabApi } from './media_lab';
 import { handleJobStatusBridge } from './job_status_bridge';
 import {
@@ -89,7 +89,9 @@ async function enforceNativeTelegramApi(
       latency_strike: {
         enabled: true,
         version: '1.0.0',
+        short_name: 'latency_strike',
         path: '/games/latency-strike/',
+        native_deep_link: `tg://resolve?domain=${links.username}&game=latency_strike`,
       },
     },
   });
@@ -136,7 +138,7 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
     );
     if (!html.includes('data-game="latency-strike"')) {
       const archiveCard = '<button class="command-card" type="button" data-open-tab="archive"><i>☁</i><b>Архив</b><small>Telegram file_id и повторна употреба</small></button>';
-      const gameCard = '<a class="command-card" data-game="latency-strike" href="/games/latency-strike/?v=1.0.0" style="text-decoration:none"><i>⚡</i><b>Latency Strike</b><small>Реакция, XP, награди и седмична класация</small></a>';
+      const gameCard = '<a class="command-card" data-game="latency-strike" href="tg://resolve?domain=dyrakarmy_bot&game=latency_strike" style="text-decoration:none"><i>⚡</i><b>Latency Strike</b><small>Native Game, XP, награди и седмична класация</small></a>';
       html = html.replace(archiveCard, `${archiveCard}\n        ${gameCard}`);
     }
   }
@@ -156,7 +158,7 @@ export default {
     const telegramHealthResponse = handleTelegramMiniAppHealth(request, env);
     if (telegramHealthResponse) return telegramHealthResponse;
 
-    const gameResponse = await handleLatencyStrikeApi(request, env);
+    const gameResponse = await handleLatencyStrikeGameApi(request, env);
     if (gameResponse) return gameResponse;
 
     const jobStatusResponse = await handleJobStatusBridge(request, env);
