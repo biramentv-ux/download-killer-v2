@@ -2,7 +2,7 @@ import type { Env } from './types';
 
 type ExtendedEnv = Env & { TELEGRAM_BOT_API_BASE?: string };
 
-const COMMAND_MARKER = 'tg:dyrakarmy:commands:v4';
+const COMMAND_MARKER = 'tg:dyrakarmy:commands:v5';
 
 const BG_COMMANDS = [
   { command: 'start', description: 'Старт и главно меню' },
@@ -11,6 +11,8 @@ const BG_COMMANDS = [
   { command: 'team', description: 'Моят Arena отбор и ранг' },
   { command: 'game', description: 'Играй Latency Strike' },
   { command: 'rewards', description: 'Ранг и игрови награди' },
+  { command: 'control', description: 'Мобилен Control Center' },
+  { command: 'id', description: 'Покажи моя Telegram ID' },
   { command: 'search', description: 'Търсене по име' },
   { command: 'download', description: 'Свали от публичен URL' },
   { command: 'myfiles', description: 'Моите готови песни' },
@@ -34,6 +36,8 @@ const EN_COMMANDS = [
   { command: 'team', description: 'My Arena team and rank' },
   { command: 'game', description: 'Play Latency Strike' },
   { command: 'rewards', description: 'Game rank and rewards' },
+  { command: 'control', description: 'Mobile Control Center' },
+  { command: 'id', description: 'Show my Telegram ID' },
   { command: 'search', description: 'Search by name' },
   { command: 'download', description: 'Download from a public URL' },
   { command: 'myfiles', description: 'My completed songs' },
@@ -57,6 +61,14 @@ export async function ensureDyrakArmyArenaCommands(env: ExtendedEnv): Promise<vo
     telegramRequest('setMyCommands', { commands: BG_COMMANDS }, env),
     telegramRequest('setMyCommands', { commands: BG_COMMANDS, language_code: 'bg' }, env),
     telegramRequest('setMyCommands', { commands: EN_COMMANDS, language_code: 'en' }, env),
+    telegramRequest('setMyDescription', {
+      description: 'Download Killer: DyrakArmy Arena, Latency Strike, общ профил, Control Center, опашка и Telegram архив.',
+      language_code: 'bg',
+    }, env),
+    telegramRequest('setMyShortDescription', {
+      short_description: 'Arena, игри, Control Center, архив и обща опашка.',
+      language_code: 'bg',
+    }, env),
   ]);
   if (results.every((result) => result.ok)) {
     await env.CACHE.put(COMMAND_MARKER, '1', { expirationTtl: 86400 });
