@@ -93,15 +93,19 @@ async function validateUnifiedContracts() {
     read('worker/public/control/control.js'),
     read('worker/public/games/dyrakarmy-arena/index.html'),
     read('worker/public/games/dyrakarmy-arena/arena.js'),
+    read('worker/public/games/archive-raid/index.html'),
+    read('worker/public/games/archive-raid/raid.js'),
     read('worker/public/sw.js'),
     read('worker/public/manifest.webmanifest'),
     read('worker/src/platform_v2.ts'),
     read('worker/src/platform_control.ts'),
     read('worker/src/dyrakarmy_arena.ts'),
+    read('worker/src/archive_raid.ts'),
     read('worker/migrations/0013_dyrakarmy_arena_v1.sql'),
     read('worker/migrations/0014_platform_control_center_v1.sql'),
+    read('worker/migrations/0015_archive_raid_v1.sql'),
   ]);
-  const [html, css, landing, gamesCss, gamesJs, publicJs, controlHtml, controlJs, arenaHtml, arenaJs, sw, manifestText, platformV2, controlTs, arenaTs, arenaMigration, controlMigration] = files;
+  const [html, css, landing, gamesCss, gamesJs, publicJs, controlHtml, controlJs, arenaHtml, arenaJs, raidHtml, raidJs, sw, manifestText, platformV2, controlTs, arenaTs, raidTs, arenaMigration, controlMigration, raidMigration] = files;
 
   for (const id of ['mobileNavToggle', 'mainNav', 'downloadForm', 'mediaUrl', 'sourceSelect', 'formatSelect', 'qualitySelect', 'launchBtn', 'jobFeed', 'historyList', 'edgeStatus', 'originStatus', 'formatStatus', 'latencyStatus']) {
     assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
@@ -115,8 +119,10 @@ async function validateUnifiedContracts() {
   assert.ok(landing.includes("event.key === 'Escape'"));
   assert.ok(gamesCss.includes('.game-showcase'));
   assert.ok(gamesJs.includes('DyrakArmy Arena'));
+  assert.ok(gamesJs.includes('Archive Raid'));
   assert.ok(publicJs.includes('/api/platform/public'));
   assert.ok(publicJs.includes('data-platform-hidden'));
+  assert.ok(publicJs.includes('archive-raid'));
 
   for (const marker of ['DyrakArmy Control Center', 'TELEGRAM_ADMIN_IDS', '/api/platform/control']) {
     assert.ok(`${controlHtml}\n${controlJs}\n${controlTs}`.includes(marker), `missing control marker ${marker}`);
@@ -124,23 +130,32 @@ async function validateUnifiedContracts() {
   for (const marker of ['DyrakArmy Arena', '/api/games/dyrakarmy-arena', 'arena_teams', 'arena_runs']) {
     assert.ok(`${arenaHtml}\n${arenaJs}\n${arenaTs}\n${arenaMigration}`.includes(marker), `missing Arena marker ${marker}`);
   }
-  for (const marker of ['handlePlatformControlApi', 'handlePlatformControlTelegramWebhook', 'isPlatformModuleEnabled', 'handleDyrakArmyArenaApi']) {
+  for (const marker of ['Archive Raid', '/api/games/archive-raid', 'archive_raid_inventory', 'Army Exclusive']) {
+    assert.ok(`${raidHtml}\n${raidJs}\n${raidTs}\n${raidMigration}`.includes(marker), `missing Archive Raid marker ${marker}`);
+  }
+  for (const marker of ['handlePlatformControlApi', 'handlePlatformControlTelegramWebhook', 'isPlatformModuleEnabled', 'handleDyrakArmyArenaApi', 'handleArchiveRaidApi', 'handleArchiveRaidTelegramWebhook']) {
     assert.ok(platformV2.includes(marker), `missing Worker marker ${marker}`);
   }
   assert.ok(controlMigration.includes('CREATE TABLE IF NOT EXISTS platform_modules'));
   assert.ok(controlMigration.includes('CREATE TABLE IF NOT EXISTS platform_audit'));
-  assert.ok(sw.includes('download-killer-static-v14-unified'));
+  assert.ok(raidMigration.includes('protected_content_access'));
+  assert.ok(sw.includes('download-killer-static-v15-archive-raid'));
   assert.ok(sw.includes('/games/dyrakarmy-arena/arena.js?v=1.0.0'));
+  assert.ok(sw.includes('/games/archive-raid/raid.js?v=1.0.0'));
   assert.ok(sw.includes('/control/control.js?v=1.0.0'));
 
   const manifest = JSON.parse(manifestText);
   const shortcuts = new Set((manifest.shortcuts || []).map((shortcut) => shortcut.url));
   assert.ok(shortcuts.has('/games/dyrakarmy-arena/'));
   assert.ok(shortcuts.has('/games/latency-strike/'));
+  assert.ok(shortcuts.has('/games/archive-raid/'));
   assert.ok(shortcuts.has('/control/'));
   assert.ok(!controlTs.includes('eval('));
   assert.ok(!controlTs.includes('new Function('));
   assert.ok(!controlJs.includes('TELEGRAM_BOT_TOKEN'));
+  assert.ok(raidTs.includes('protected_content_access: false'));
+  assert.ok(!raidTs.toLowerCase().includes('widevine'));
+  assert.ok(!raidTs.toLowerCase().includes('playplay'));
 }
 
 async function simulateLandingNavigation() {
@@ -236,7 +251,7 @@ async function simulateServiceWorker() {
   }
   const caches = {
     open: async (name) => openCache(name),
-    keys: async () => ['old-cache', 'download-killer-static-v13-responsive', 'download-killer-static-v14-unified', 'download-killer-offline-media-v2'],
+    keys: async () => ['old-cache', 'download-killer-static-v14-unified', 'download-killer-static-v15-archive-raid', 'download-killer-offline-media-v2'],
     delete: async (name) => { deleted.push(name); return true; },
     match: async (request) => {
       const key = typeof request === 'string' ? request : request.url;
@@ -249,28 +264,29 @@ async function simulateServiceWorker() {
   vm.runInNewContext(source, { console, self, caches, fetch, Request, Response, URL, Promise }, { filename: 'sw.js' });
   let pending;
   handlers.get('install')({ waitUntil: (promise) => { pending = promise; } }); await pending;
-  const shell = stores.get('download-killer-static-v14-unified');
+  const shell = stores.get('download-killer-static-v15-archive-raid');
   assert.ok(shell.has('/platform/games-v14.js'));
   assert.ok(shell.has('/games/dyrakarmy-arena/arena.js?v=1.0.0'));
+  assert.ok(shell.has('/games/archive-raid/raid.js?v=1.0.0'));
   assert.ok(shell.has('/control/control.js?v=1.0.0'));
   handlers.get('activate')({ waitUntil: (promise) => { pending = promise; } }); await pending;
-  assert.deepEqual(deleted.sort(), ['download-killer-static-v13-responsive', 'old-cache']);
-  const arenaRequest = new Request('https://dyrakarmy.eu/games/dyrakarmy-arena/?v=1.0.0');
+  assert.deepEqual(deleted.sort(), ['download-killer-static-v14-unified', 'old-cache']);
+  const raidRequest = new Request('https://dyrakarmy.eu/games/archive-raid/?v=1.0.0');
   let responsePromise;
-  handlers.get('fetch')({ request: arenaRequest, respondWith: (promise) => { responsePromise = promise; } });
+  handlers.get('fetch')({ request: raidRequest, respondWith: (promise) => { responsePromise = promise; } });
   assert.equal(await (await responsePromise).text(), 'network');
   online = false;
-  handlers.get('fetch')({ request: arenaRequest, respondWith: (promise) => { responsePromise = promise; } });
+  handlers.get('fetch')({ request: raidRequest, respondWith: (promise) => { responsePromise = promise; } });
   assert.equal(await (await responsePromise).text(), 'network');
   const apiRequest = new Request('https://dyrakarmy.eu/api/platform/public');
   handlers.get('fetch')({ request: apiRequest, respondWith: (promise) => { responsePromise = promise; } });
   await assert.rejects(responsePromise, /offline/);
 }
 
-await runScenario('Unified Platform', 'site, games, registry and Control Center contracts', validateUnifiedContracts);
+await runScenario('Unified Platform', 'site, three games, registry and Control Center contracts', validateUnifiedContracts);
 await runScenario('Web UI', 'mobile navigation and language simulation', simulateLandingNavigation);
 await runScenario('Polling', 'dedupe and Retry-After simulation', simulateStatusBackoff);
-await runScenario('PWA', 'v14 install, migration, Arena cache and API bypass', simulateServiceWorker);
+await runScenario('PWA', 'v15 install, Archive Raid cache and API bypass', simulateServiceWorker);
 
 const failed = results.filter((scenario) => !scenario.passed);
 const report = {
