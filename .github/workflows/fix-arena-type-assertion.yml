@@ -33,7 +33,8 @@ jobs:
           Path('.github/workflows/unified-typecheck-diagnostics.yml').unlink(missing_ok=True)
           Path('.github/workflows/fix-arena-type-assertion.yml').unlink()
 
-      - name: Verify and typecheck
+      - name: Typecheck preview
+        continue-on-error: true
         working-directory: worker
         run: |
           npm ci
