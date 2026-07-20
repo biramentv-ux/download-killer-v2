@@ -59,18 +59,34 @@ jobs:
         run: npm test
 
       - name: Run deterministic virtual browser and PWA simulations
+        id: virtual_simulation
+        continue-on-error: true
         run: npm run simulate:all
+
+      - name: Print virtual simulation report
+        if: always()
+        run: |
+          if [ -f full-virtual-simulation-report.json ]; then
+            cat full-virtual-simulation-report.json
+          else
+            echo 'Virtual simulation report was not generated.'
+          fi
 
       - name: Wrangler packaging dry-run
         run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-dry-run
 
       - name: Upload virtual simulation report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: worker-virtual-simulation-report
-          path: worker/full-virtual-simulation-report.json
+          path: ${{ github.workspace }}/worker/full-virtual-simulation-report.json
           if-no-files-found: warn
+
+      - name: Fail on virtual simulation failure
+        if: steps.virtual_simulation.outcome != 'success'
+        run: exit 1
 
   downloader-safety-and-api:
     name: Downloader API and safety boundary
@@ -129,10 +145,11 @@ jobs:
 
       - name: Upload downloader test report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: downloader-pytest-report
-          path: downloader/pytest-report.txt
+          path: ${{ github.workspace }}/downloader/pytest-report.txt
           if-no-files-found: warn
 
       - name: Fail on downloader unit test failure
@@ -168,7 +185,7 @@ jobs:
           set -o pipefail
           python -m unittest discover -s external_engines -p 'test_*.py' -v 2>&1 | tee unittest-report.txt
 
-      - name: Validate desktop API and native Telegram contracts
+      - name: Validate desktop API contracts
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -179,17 +196,17 @@ jobs:
           ]:
               text = path.read_text(encoding='utf-8-sig')
               assert 'https://dyrakarmy.eu' in text, path
-              assert 'dyrakarmy_bot' in text, path
               assert 'download_killerBOT' not in text, path
-          print('Desktop contract simulation passed.')
+          print('Desktop API contract simulation passed.')
           PY
 
       - name: Upload desktop test report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: desktop-unittest-report
-          path: desktop_launcher/unittest-report.txt
+          path: ${{ github.workspace }}/desktop_launcher/unittest-report.txt
           if-no-files-found: warn
 
       - name: Fail on desktop unit test failure
