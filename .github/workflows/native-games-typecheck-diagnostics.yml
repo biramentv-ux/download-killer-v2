@@ -1,0 +1,47 @@
+name: Native Games Typecheck Diagnostics
+
+on:
+  push:
+    branches:
+      - feature/latency-strike-native-games
+    paths:
+      - .github/workflows/native-games-typecheck-diagnostics.yml
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/latency-strike-native-games
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - run: cd worker && npm ci
+      - name: Capture compiler output
+        shell: bash
+        run: |
+          cd worker
+          set +e
+          npm run typecheck > native-games-typecheck.txt 2>&1
+          echo $? > native-games-exit.txt
+          set -e
+      - name: Comment diagnostics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const report = fs.readFileSync('worker/native-games-typecheck.txt', 'utf8').slice(-30000);
+            const exitCode = fs.readFileSync('worker/native-games-exit.txt', 'utf8').trim();
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 24,
+              body: `## Native Games TypeScript diagnostics\n\nExit: \`${exitCode}\`\n\n\`\`\`text\n${report}\n\`\`\``
+            });
