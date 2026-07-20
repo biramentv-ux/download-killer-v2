@@ -1,5 +1,10 @@
 import legacyHandler from './index';
 import type { DownloadJob, Env, JobHistoryEvent } from './types';
+import { handleLatencyStrikeApi } from './latency_strike';
+import {
+  ensureLatencyStrikeBotCommands,
+  handleLatencyStrikeTelegramWebhook,
+} from './latency_strike_bot';
 import { handleMediaLabApi } from './media_lab';
 import { handleJobStatusBridge } from './job_status_bridge';
 import {
@@ -80,6 +85,13 @@ async function enforceNativeTelegramApi(
       miniapp_link: links.miniAppLink,
       native_only: true,
     },
+    games: {
+      latency_strike: {
+        enabled: true,
+        version: '1.0.0',
+        path: '/games/latency-strike/',
+      },
+    },
   });
 }
 
@@ -122,6 +134,11 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
       /<script src="\.\/telegram\.js(?:\?[^\"]*)?" defer><\/script>/,
       `<script src="/platform/status-backoff.js?v=${TELEGRAM_MINIAPP_VERSION}"></script>\n  <script src="./telegram.js?v=${TELEGRAM_MINIAPP_VERSION}" defer></script>`,
     );
+    if (!html.includes('data-game="latency-strike"')) {
+      const archiveCard = '<button class="command-card" type="button" data-open-tab="archive"><i>☁</i><b>Архив</b><small>Telegram file_id и повторна употреба</small></button>';
+      const gameCard = '<a class="command-card" data-game="latency-strike" href="/games/latency-strike/?v=1.0.0" style="text-decoration:none"><i>⚡</i><b>Latency Strike</b><small>Реакция, XP, награди и седмична класация</small></a>';
+      html = html.replace(archiveCard, `${archiveCard}\n        ${gameCard}`);
+    }
   }
 
   const headers = new Headers(response.headers);
@@ -139,6 +156,9 @@ export default {
     const telegramHealthResponse = handleTelegramMiniAppHealth(request, env);
     if (telegramHealthResponse) return telegramHealthResponse;
 
+    const gameResponse = await handleLatencyStrikeApi(request, env);
+    if (gameResponse) return gameResponse;
+
     const jobStatusResponse = await handleJobStatusBridge(request, env);
     if (jobStatusResponse) return jobStatusResponse;
 
@@ -146,6 +166,8 @@ export default {
     if (mediaLabResponse) return mediaLabResponse;
 
     if (url.pathname === '/telegram/webhook') {
+      const gameWebhookResponse = await handleLatencyStrikeTelegramWebhook(request.clone(), env);
+      if (gameWebhookResponse) return gameWebhookResponse;
       return handleTelegramMasterWebhook(request, env);
     }
 
@@ -179,6 +201,7 @@ export default {
     context.waitUntil((async () => {
       await ensureTelegramV10Commands(env);
       await ensureTelegramMasterCommands(env);
+      await ensureLatencyStrikeBotCommands(env);
     })());
   },
 } satisfies ExportedHandler<ExtendedEnv, DownloadJob | JobHistoryEvent>;

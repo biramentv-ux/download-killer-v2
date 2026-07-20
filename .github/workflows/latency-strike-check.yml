@@ -1,0 +1,81 @@
+name: Latency Strike v1 Checks
+
+on:
+  pull_request:
+    paths:
+      - worker/src/latency_strike.ts
+      - worker/src/latency_strike.test.ts
+      - worker/src/latency_strike_bot.ts
+      - worker/src/platform_v2.ts
+      - worker/public/games/latency-strike/**
+      - worker/public/sw.js
+      - worker/public/manifest.webmanifest
+      - worker/scripts/setup-telegram-platform.mjs
+      - worker/migrations/0012_latency_strike_v1.sql
+      - .github/workflows/latency-strike-check.yml
+      - .github/workflows/deploy-web-platform.yml
+  push:
+    branches: [main]
+    paths:
+      - worker/src/latency_strike.ts
+      - worker/src/latency_strike.test.ts
+      - worker/src/latency_strike_bot.ts
+      - worker/src/platform_v2.ts
+      - worker/public/games/latency-strike/**
+      - worker/public/sw.js
+      - worker/public/manifest.webmanifest
+      - worker/scripts/setup-telegram-platform.mjs
+      - worker/migrations/0012_latency_strike_v1.sql
+      - .github/workflows/latency-strike-check.yml
+      - .github/workflows/deploy-web-platform.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - run: npm ci
+      - name: Typecheck Worker
+        run: npm run typecheck
+      - name: Run Worker and game tests
+        run: npm test
+      - name: Validate game JavaScript
+        run: |
+          node --check public/games/latency-strike/game.js
+          node --check public/sw.js
+          node --check scripts/setup-telegram-platform.mjs
+      - name: Validate complete integration contract
+        run: |
+          grep -q 'Latency Strike v1' public/games/latency-strike/index.html
+          grep -q '@media(max-width:480px)' public/games/latency-strike/game.css
+          grep -q '/api/games/latency-strike/session' src/latency_strike.ts
+          grep -q '/api/games/latency-strike/score' src/latency_strike.ts
+          grep -q '/api/games/latency-strike/equip' src/latency_strike.ts
+          grep -q '/api/games/latency-strike/leaderboard' src/latency_strike.ts
+          grep -q 'frame_champion' src/latency_strike.ts
+          grep -q 'icon_crown' src/latency_strike.ts
+          grep -q 'badge_queue_master' src/latency_strike.ts
+          grep -q 'waveform_void' src/latency_strike.ts
+          grep -q 'theme_gold' src/latency_strike.ts
+          grep -q 'title_queue_master' src/latency_strike.ts
+          grep -q "command: 'game'" src/latency_strike_bot.ts
+          grep -q "command: 'rewards'" src/latency_strike_bot.ts
+          grep -q 'handleLatencyStrikeApi' src/platform_v2.ts
+          grep -q 'handleLatencyStrikeTelegramWebhook' src/platform_v2.ts
+          grep -q 'CREATE TABLE IF NOT EXISTS game_profiles' migrations/0012_latency_strike_v1.sql
+          grep -q 'CREATE TABLE IF NOT EXISTS game_runs' migrations/0012_latency_strike_v1.sql
+          grep -q 'CREATE TABLE IF NOT EXISTS game_unlocks' migrations/0012_latency_strike_v1.sql
+          grep -q '/games/latency-strike/' public/manifest.webmanifest
+          grep -q '/games/latency-strike/game.js?v=1.0.0' public/sw.js
+          grep -q 'd1 migrations apply sounddrop-db --remote' ../.github/workflows/deploy-web-platform.yml

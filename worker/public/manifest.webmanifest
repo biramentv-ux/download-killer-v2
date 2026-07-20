@@ -9,8 +9,8 @@
   "orientation": "any",
   "background_color": "#050713",
   "theme_color": "#050713",
-  "description": "Download Killer web and Telegram platform with a four-language tutorial, shared queues, live progress and Telegram file archive.",
-  "categories": ["music", "utilities", "productivity"],
+  "description": "Download Killer web and Telegram platform with shared queues, Latency Strike, live progress and Telegram file archive.",
+  "categories": ["music", "utilities", "productivity", "games"],
   "lang": "bg",
   "dir": "ltr",
   "icons": [
@@ -18,6 +18,13 @@
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "shortcuts": [
+    {
+      "name": "Latency Strike",
+      "short_name": "Game",
+      "description": "Play the Telegram reaction game and unlock profile rewards.",
+      "url": "/games/latency-strike/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
     {
       "name": "Quick Start Tutorial",
       "short_name": "Tutorial",

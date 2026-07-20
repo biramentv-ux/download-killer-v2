@@ -14,6 +14,10 @@ const APP_SHELL = [
   '/platform/platform.js',
   '/media-lab/media-lab.css',
   '/media-lab/media-lab.js',
+  '/games/latency-strike/',
+  '/games/latency-strike/index.html',
+  '/games/latency-strike/game.css?v=1.0.0',
+  '/games/latency-strike/game.js?v=1.0.0',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/apple-touch-icon.png',
@@ -45,16 +49,16 @@ async function warmRecentCache(urls) {
   }));
 }
 
-async function networkFirstTelegram(request) {
+async function networkFirstApp(request, offlineMessage) {
   const cache = await caches.open(CACHE_NAME);
   try {
     const response = await fetch(request, { cache: 'no-store' });
     if (response.ok) await cache.put(request, response.clone());
     return response;
   } catch {
-    const cached = await cache.match(request, { ignoreSearch: false });
+    const cached = await cache.match(request, { ignoreSearch: false }) || await caches.match(request);
     if (cached) return cached;
-    return new Response('Telegram Mini App is temporarily offline. Reopen it from the bot.', {
+    return new Response(offlineMessage, {
       status: 503,
       headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
     });
@@ -68,7 +72,10 @@ self.addEventListener('message', (event) => {
     event.waitUntil(caches.open(CACHE_NAME).then(async (cache) => {
       const keys = await cache.keys();
       await Promise.all(keys
-        .filter((request) => new URL(request.url).pathname.startsWith('/telegram/'))
+        .filter((request) => {
+          const pathname = new URL(request.url).pathname;
+          return pathname.startsWith('/telegram/') || pathname.startsWith('/games/latency-strike/');
+        })
         .map((request) => cache.delete(request)));
     }));
   }
@@ -81,9 +88,15 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   const isWarmableApi = url.pathname.startsWith('/api/file/') || url.pathname.startsWith('/api/archive/file/');
   const isTelegramAsset = url.pathname.startsWith('/telegram/');
+  const isLatencyStrikeAsset = url.pathname.startsWith('/games/latency-strike/');
 
-  if (isTelegramAsset) {
-    event.respondWith(networkFirstTelegram(request));
+  if (isTelegramAsset || isLatencyStrikeAsset) {
+    event.respondWith(networkFirstApp(
+      request,
+      isLatencyStrikeAsset
+        ? 'Latency Strike is temporarily offline. Reopen the game from @dyrakarmy_bot.'
+        : 'Telegram Mini App is temporarily offline. Reopen it from the bot.',
+    ));
     return;
   }
   if (url.pathname.startsWith('/api/') && !isWarmableApi) {

@@ -7,6 +7,7 @@ const expectedUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'dyrakarmy_
 const dropPending = String(process.env.TELEGRAM_DROP_PENDING_UPDATES || '0') === '1';
 const miniAppVersion = String(process.env.TELEGRAM_MINIAPP_VERSION || '12.2.0').trim();
 const miniAppUrl = `${publicBase}/telegram/?v=${encodeURIComponent(miniAppVersion)}`;
+const latencyStrikeUrl = `${publicBase}/games/latency-strike/?v=1.0.0`;
 
 if (!token) {
   console.error('TELEGRAM_BOT_TOKEN is required. Set it as an environment variable; do not commit it.');
@@ -35,6 +36,8 @@ async function call(method, payload = {}) {
 const commands = [
   { command: 'start', description: 'Старт и главно меню' },
   { command: 'menu', description: 'Главно меню' },
+  { command: 'game', description: 'Играй Latency Strike' },
+  { command: 'rewards', description: 'Ранг и игрови награди' },
   { command: 'search', description: 'Търсене по име' },
   { command: 'download', description: 'Свали от публичен URL' },
   { command: 'myfiles', description: 'Моите готови песни' },
@@ -72,11 +75,11 @@ try {
     },
   });
   await call('setMyDescription', {
-    description: 'Download Killer: Mini App v12, българско меню, обща опашка, формати, Telegram архив и споделяне.',
+    description: 'Download Killer: Mini App v12, Latency Strike, обща опашка, формати, Telegram архив и споделяне.',
     language_code: 'bg',
   });
   await call('setMyShortDescription', {
-    short_description: 'Mini App v12, BG меню, архив и споделяне.',
+    short_description: 'Mini App v12, Latency Strike, архив и споделяне.',
     language_code: 'bg',
   });
 
@@ -96,7 +99,9 @@ try {
   if (webhook.last_error_message) console.warn(`Last webhook error: ${webhook.last_error_message}`);
   console.log(`Native link: tg://resolve?domain=${expectedUsername}`);
   console.log(`Mini App v${miniAppVersion}: ${miniAppUrl}`);
+  console.log(`Latency Strike v1: ${latencyStrikeUrl}`);
   console.log(`Health: ${publicBase}/api/telegram/v12/health`);
+  console.log('Optional native Games catalog: in @BotFather open Games → Create a New Game and use short name latency_strike.');
   console.log('Next: close the existing Telegram WebView completely and open the Menu button again.');
   console.log('Add the bot as an administrator to a private storage channel with permission to post messages.');
 } catch (error) {
