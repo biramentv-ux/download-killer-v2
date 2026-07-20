@@ -1,5 +1,5 @@
 {
-  "name": "Download Killer Platform v12.2.0",
+  "name": "Download Killer Unified Platform v14",
   "short_name": "Download Killer",
   "id": "/",
   "start_url": "/",
@@ -7,9 +7,9 @@
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone"],
   "orientation": "any",
-  "background_color": "#050713",
-  "theme_color": "#050713",
-  "description": "Download Killer web and Telegram platform with shared queues, Latency Strike, live progress and Telegram file archive.",
+  "background_color": "#070a18",
+  "theme_color": "#070a18",
+  "description": "Unified Download Killer platform with Telegram, DyrakArmy Arena, Latency Strike, shared profiles, remote Control Center and public content registry.",
   "categories": ["music", "utilities", "productivity", "games"],
   "lang": "bg",
   "dir": "ltr",
@@ -19,17 +19,24 @@
   ],
   "shortcuts": [
     {
+      "name": "DyrakArmy Arena",
+      "short_name": "Arena",
+      "description": "Team challenges, weekly leagues and monthly seasons.",
+      "url": "/games/dyrakarmy-arena/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
       "name": "Latency Strike",
-      "short_name": "Game",
+      "short_name": "Reaction",
       "description": "Play the Telegram reaction game and unlock profile rewards.",
       "url": "/games/latency-strike/",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Quick Start Tutorial",
-      "short_name": "Tutorial",
-      "description": "Learn how the shared web and Telegram workflow operates.",
-      "url": "/#tutorial",
+      "name": "DyrakArmy Control Center",
+      "short_name": "Control",
+      "description": "Administrator-only remote platform management.",
+      "url": "/control/",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
@@ -42,7 +49,7 @@
     {
       "name": "Telegram Mini App",
       "short_name": "Telegram",
-      "description": "Open the shared Telegram queue, history and archive.",
+      "description": "Open the shared Telegram queue, games, history and archive.",
       "url": "/telegram/",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
