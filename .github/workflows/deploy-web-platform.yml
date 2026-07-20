@@ -49,13 +49,14 @@ jobs:
       - name: Run Worker tests
         run: npm test
 
-      - name: Validate public platform assets
+      - name: Validate public platform and game assets
         run: |
           node --check public/platform/platform.js
           node --check public/platform/status-backoff.js
           node --check public/platform/site-defaults.js
           node --check public/platform/landing-v13.js
           node --check public/media-lab/media-lab.js
+          node --check public/games/latency-strike/game.js
           node --check public/sw.js
           grep -q '<title>Download Killer Platform</title>' public/index.html
           grep -q 'Responsive Design v13' public/index.html
@@ -70,9 +71,13 @@ jobs:
           grep -q '/media-lab/media-lab.js' public/index.html
           grep -q '@media (max-width: 600px)' public/platform/landing-v13.css
           grep -q '@media (prefers-reduced-motion: reduce)' public/platform/landing-v13.css
+          grep -q 'Latency Strike v1' public/games/latency-strike/index.html
+          grep -q '/api/games/latency-strike' public/games/latency-strike/game.js
+          grep -q 'CREATE TABLE IF NOT EXISTS game_profiles' migrations/0012_latency_strike_v1.sql
           grep -q "download-killer-static-v13-responsive" public/sw.js
           grep -q '/platform/landing-v13.css' public/sw.js
           grep -q '/platform/landing-v13.js' public/sw.js
+          grep -q '/games/latency-strike/game.js?v=1.0.0' public/sw.js
           ! grep -R --exclude='full-virtual-simulation.mjs' -n -E 'download_killerBOT|TELEGRAM_SECONDARY_|v10-secondary|telegram/webhook/dyrakarmy|web\.telegram\.org' src public scripts wrangler.jsonc package.json
 
   deploy:
@@ -93,6 +98,14 @@ jobs:
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN" || { echo '::error::CLOUDFLARE_API_TOKEN is missing'; exit 1; }
           test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo '::error::CLOUDFLARE_ACCOUNT_ID is missing'; exit 1; }
+
+      - name: Apply remote D1 migrations
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: d1 migrations apply sounddrop-db --remote --config wrangler.jsonc
 
       - name: Deploy Worker and static platform
         id: cloudflare
@@ -117,8 +130,18 @@ jobs:
             grep -q 'tg://resolve?domain=dyrakarmy_bot' <<<"$home"
             ! grep -q 'download_killerBOT' <<<"$home"
             ! grep -q 'web.telegram.org' <<<"$home"
+
+            game="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/games/latency-strike/?v=1.0.0")"
+            grep -q 'Latency Strike v1' <<<"$game"
+            grep -q 'id="rewardGrid"' <<<"$game"
+            grep -q 'id="leaderboardList"' <<<"$game"
           done
           health="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/telegram/v12/health)"
           grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$health"
           grep -q '"username":"dyrakarmy_bot"' <<<"$health"
           grep -q 'tg://resolve?domain=dyrakarmy_bot' <<<"$health"
+
+          game_config="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/games/latency-strike/config)"
+          grep -q '"game":"latency-strike"' <<<"$game_config"
+          grep -q '"version":"1.0.0"' <<<"$game_config"
+          grep -q 'title_queue_master' <<<"$game_config"
