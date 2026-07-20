@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#070a18">
+  <meta name="description" content="DyrakArmy Arena — Telegram team challenges, seasons and leaderboards.">
+  <title>DyrakArmy Arena</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./arena.css?v=1.0.0">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="./arena.js?v=1.0.0" defer></script>
+</head>
+<body>
+  <div class="arena-bg" aria-hidden="true"><i></i><i></i><i></i></div>
+  <header class="arena-topbar">
+    <a href="/" class="arena-brand" aria-label="Download Killer"><span>DK</span><b>DyrakArmy Arena</b><small>SEASON 01</small></a>
+    <div class="arena-status" id="authStatus"><i></i><span>Зареждане</span></div>
+  </header>
+
+  <main class="arena-shell">
+    <section class="arena-hero">
+      <div class="arena-copy">
+        <span class="eyebrow">DAILY TEAM BATTLE</span>
+        <h1>Събери армия.<br><em>Превземи класацията.</em></h1>
+        <p>Осем кратки мисии проверяват реакция, логика, сигурност и познаване на системата. Всеки резултат носи XP за профила и точки за отбора.</p>
+        <div class="hero-actions">
+          <button class="primary" id="startArenaBtn" type="button">⚔️ Започни дневната Arena</button>
+          <button class="secondary" id="practiceBtn" type="button">Practice режим</button>
+        </div>
+        <div class="attempt-meter"><span>Ranked опити днес</span><strong id="attemptsText">— / 3</strong><div><i id="attemptsBar"></i></div></div>
+      </div>
+      <div class="arena-core" aria-hidden="true">
+        <div class="core-ring ring-one"></div><div class="core-ring ring-two"></div><div class="core-ring ring-three"></div>
+        <div class="core-center"><b>DA</b><small>ARENA</small></div>
+        <span class="core-node node-a">QUEUE</span><span class="core-node node-b">SECURITY</span><span class="core-node node-c">FORMAT</span><span class="core-node node-d">ROUTING</span>
+      </div>
+    </section>
+
+    <nav class="arena-tabs" aria-label="Arena sections">
+      <button class="active" data-tab="battle" type="button">⚔️ Битка</button>
+      <button data-tab="team" type="button">🛡 Отбор</button>
+      <button data-tab="leaderboard" type="button">🏆 Класация</button>
+      <button data-tab="profile" type="button">✨ Профил</button>
+    </nav>
+
+    <section class="arena-panel active" data-panel="battle">
+      <div class="panel-heading"><div><span>DAILY CHALLENGE</span><h2 id="challengeTitle">Днешната мисия</h2></div><div class="challenge-meta"><b id="dayKey">—</b><small>8 задачи · до 650 XP</small></div></div>
+      <div class="battle-stage" id="battleStage">
+        <div class="battle-idle">
+          <span class="mission-icon">⚔</span>
+          <h3>Готов ли си, оператор?</h3>
+          <p>Натисни „Започни“, отговаряй бързо и не губи combo поредицата.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="arena-panel" data-panel="team">
+      <div class="panel-heading"><div><span>YOUR ARMY</span><h2>Отборен команден център</h2></div></div>
+      <div id="teamContent" class="team-layout">
+        <article class="team-empty glass">
+          <span>🛡</span><h3>Все още нямаш отбор</h3><p>Създай нова армия или използвай шестцифрен код за присъединяване.</p>
+        </article>
+        <div class="team-actions glass">
+          <label><span>Име на нов отбор</span><input id="teamNameInput" maxlength="28" placeholder="Dark Operators"></label>
+          <button id="createTeamBtn" class="primary" type="button">Създай отбор</button>
+          <div class="or"><i></i><span>или</span><i></i></div>
+          <label><span>Код за присъединяване</span><input id="teamCodeInput" maxlength="6" placeholder="A7X9Q2" autocapitalize="characters"></label>
+          <button id="joinTeamBtn" class="secondary" type="button">Присъедини се</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="arena-panel" data-panel="leaderboard">
+      <div class="panel-heading"><div><span>LIVE RANKINGS</span><h2>Класации</h2></div><div class="leader-controls"><select id="leaderScope"><option value="teams">Отбори</option><option value="players">Играчи</option></select><select id="leaderPeriod"><option value="week">Седмица</option><option value="season">Сезон</option></select></div></div>
+      <div class="podium" id="podium"></div>
+      <div class="leader-list glass" id="leaderList"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+    </section>
+
+    <section class="arena-panel" data-panel="profile">
+      <div class="panel-heading"><div><span>SHARED GAME PROFILE</span><h2>Ранг и награди</h2></div></div>
+      <div class="profile-grid" id="profileGrid">
+        <article class="profile-card glass"><div class="avatar-frame" id="profileAvatar">DA</div><div><span id="profileTitle">Recruit</span><h3 id="profileName">Arena Player</h3><p id="profileRank">Ранг: Recruit</p></div></article>
+        <article class="stat-card glass"><span>Общ XP</span><strong id="profileXp">0</strong><small>Latency Strike + Arena</small></article>
+        <article class="stat-card glass"><span>Седмична позиция</span><strong id="profilePosition">—</strong><small>лична Arena класация</small></article>
+        <article class="stat-card glass"><span>Най-добър score</span><strong id="profileBest">0</strong><small>общ игрови профил</small></article>
+      </div>
+      <a class="reward-link" href="/games/latency-strike/">Отвори профилните рамки, badges, waveforms и теми →</a>
+    </section>
+  </main>
+
+  <div class="arena-toast" id="arenaToast" role="status" aria-live="polite"></div>
+</body>
+</html>

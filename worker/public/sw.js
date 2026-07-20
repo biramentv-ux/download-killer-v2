@@ -1,5 +1,6 @@
-const CACHE_NAME = 'download-killer-static-v13-responsive';
-const LEGACY_CACHE_NAME = 'download-killer-static-v12.2.0';
+const CACHE_NAME = 'download-killer-static-v14-unified';
+const LEGACY_CACHE_NAME = 'download-killer-static-v13-responsive';
+const LEGACY_V12_CACHE_NAME = 'download-killer-static-v12.2.0';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
 const APP_SHELL = [
   '/',
@@ -8,10 +9,14 @@ const APP_SHELL = [
   '/manifest.webmanifest',
   '/platform/platform.css',
   '/platform/landing-v13.css',
+  '/platform/games-v14.css',
+  '/platform/platform-public.css',
   '/platform/status-backoff.js',
   '/platform/site-defaults.js',
   '/platform/landing-v13.js',
   '/platform/platform.js',
+  '/platform/games-v14.js',
+  '/platform/platform-public.js',
   '/media-lab/media-lab.css',
   '/media-lab/media-lab.js',
   '/games/latency-strike/',
@@ -19,13 +24,29 @@ const APP_SHELL = [
   '/games/latency-strike/game.css?v=1.0.0',
   '/games/latency-strike/native-bridge.js?v=1.0.0',
   '/games/latency-strike/game.js?v=1.0.0',
+  '/games/dyrakarmy-arena/',
+  '/games/dyrakarmy-arena/index.html',
+  '/games/dyrakarmy-arena/arena.css?v=1.0.0',
+  '/games/dyrakarmy-arena/arena.js?v=1.0.0',
+  '/control/',
+  '/control/index.html',
+  '/control/control.css?v=1.0.0',
+  '/control/control.js?v=1.0.0',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/apple-touch-icon.png',
 ];
 
+async function installAppShell() {
+  const cache = await caches.open(CACHE_NAME);
+  await Promise.allSettled(APP_SHELL.map(async (url) => {
+    const response = await fetch(url, { cache: 'reload' });
+    if (response.ok) await cache.put(url, response.clone());
+  }));
+}
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+  event.waitUntil(installAppShell());
   self.skipWaiting();
 });
 
@@ -69,13 +90,16 @@ async function networkFirstApp(request, offlineMessage) {
 self.addEventListener('message', (event) => {
   const data = event.data || {};
   if (data.type === 'WARM_RECENT_CACHE') event.waitUntil(warmRecentCache(data.urls));
-  if (data.type === 'CLEAR_TELEGRAM_CACHE') {
+  if (data.type === 'CLEAR_TELEGRAM_CACHE' || data.type === 'CLEAR_PLATFORM_CACHE') {
     event.waitUntil(caches.open(CACHE_NAME).then(async (cache) => {
       const keys = await cache.keys();
       await Promise.all(keys
         .filter((request) => {
           const pathname = new URL(request.url).pathname;
-          return pathname.startsWith('/telegram/') || pathname.startsWith('/games/latency-strike/');
+          return pathname.startsWith('/telegram/')
+            || pathname.startsWith('/games/latency-strike/')
+            || pathname.startsWith('/games/dyrakarmy-arena/')
+            || pathname.startsWith('/control/');
         })
         .map((request) => cache.delete(request)));
     }));
@@ -90,14 +114,15 @@ self.addEventListener('fetch', (event) => {
   const isWarmableApi = url.pathname.startsWith('/api/file/') || url.pathname.startsWith('/api/archive/file/');
   const isTelegramAsset = url.pathname.startsWith('/telegram/');
   const isLatencyStrikeAsset = url.pathname.startsWith('/games/latency-strike/');
+  const isArenaAsset = url.pathname.startsWith('/games/dyrakarmy-arena/');
+  const isControlAsset = url.pathname.startsWith('/control/');
 
-  if (isTelegramAsset || isLatencyStrikeAsset) {
-    event.respondWith(networkFirstApp(
-      request,
-      isLatencyStrikeAsset
-        ? 'Latency Strike is temporarily offline. Reopen the game from @dyrakarmy_bot.'
-        : 'Telegram Mini App is temporarily offline. Reopen it from the bot.',
-    ));
+  if (isTelegramAsset || isLatencyStrikeAsset || isArenaAsset || isControlAsset) {
+    let offlineMessage = 'Telegram Mini App is temporarily offline. Reopen it from the bot.';
+    if (isLatencyStrikeAsset) offlineMessage = 'Latency Strike is temporarily offline. Reopen the game from @dyrakarmy_bot.';
+    if (isArenaAsset) offlineMessage = 'DyrakArmy Arena is temporarily offline. Reopen it from @dyrakarmy_bot.';
+    if (isControlAsset) offlineMessage = 'Control Center needs a network connection and a valid Telegram administrator session.';
+    event.respondWith(networkFirstApp(request, offlineMessage));
     return;
   }
   if (url.pathname.startsWith('/api/') && !isWarmableApi) {
