@@ -1,7 +1,8 @@
 {
-  "profile": "full-v13.1",
+  "profile": "full-v13.2",
   "mode": "deterministic-virtual-simulation",
   "external_network": false,
+  "requires_all_subsystems": true,
   "covers": [
     "worker",
     "web-responsive-ui",
