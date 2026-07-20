@@ -404,7 +404,7 @@ async function buildProfile(userId: number, env: ExtendedEnv) {
   return {
     profile: profile ? { ...profile, rank: latencyStrikeRank(Number(profile.total_xp || 0)) } : null,
     inventory,
-    collection: { unique: inventory.length, total: inventory.reduce((sum, item) => sum + Number(item.quantity || 0), 0), catalog_total: ARCHIVE_RAID_CARDS.length },
+    collection: { unique: inventory.length, total: inventory.reduce((sum, item) => sum + Number((item as Record<string, unknown>).quantity || 0), 0), catalog_total: ARCHIVE_RAID_CARDS.length },
     attempts_today: await attemptsToday(userId, env),
     attempts_limit: DAILY_RANKED_ATTEMPTS,
   };
