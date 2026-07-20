@@ -1,0 +1,8 @@
+{
+  "game": "latency-strike",
+  "version": "1.0.0",
+  "telegram_short_name": "latency_strike",
+  "launch_modes": ["native-game", "mini-app", "practice"],
+  "score_sync": "setGameScore",
+  "inline_mode": true
+}
