@@ -3,6 +3,9 @@ import type { Env } from './types';
 type ExtendedEnv = Env & { TELEGRAM_BOT_API_BASE?: string };
 
 const COMMAND_MARKER = 'tg:dyrakarmy:commands:v5';
+const LATENCY_MARKER = 'tg:latency-strike:commands:v2';
+const V10_MARKER = 'tg:commands:bg:v10';
+const LEGACY_MARKER = 'tg:commands:bg:v4';
 
 const BG_COMMANDS = [
   { command: 'start', description: 'Старт и главно меню' },
@@ -70,9 +73,17 @@ export async function ensureDyrakArmyArenaCommands(env: ExtendedEnv): Promise<vo
       language_code: 'bg',
     }, env),
   ]);
-  if (results.every((result) => result.ok)) {
-    await env.CACHE.put(COMMAND_MARKER, '1', { expirationTtl: 86400 });
-  }
+  if (!results.every((result) => result.ok)) return;
+
+  const username = String(env.TELEGRAM_BOT_USERNAME || 'dyrakarmy_bot').replace(/^@+/, '').toLowerCase();
+  const markers = [
+    COMMAND_MARKER,
+    LATENCY_MARKER,
+    V10_MARKER,
+    LEGACY_MARKER,
+    `tg:master:commands:v1:${username}`,
+  ];
+  await Promise.all(markers.map((marker) => env.CACHE.put(marker, '1', { expirationTtl: 86400 })));
 }
 
 async function telegramRequest(
