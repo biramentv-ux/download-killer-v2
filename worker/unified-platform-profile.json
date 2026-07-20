@@ -1,5 +1,5 @@
 {
-  "profile": "unified-platform-v14.3",
+  "profile": "unified-platform-v14.4",
   "public_registry": true,
   "telegram_control_center": true,
   "shared_game_profile": true,
@@ -7,5 +7,6 @@
   "remote_structured_content_only": true,
   "arbitrary_code_execution": false,
   "strict_typecheck_fixes": true,
-  "leaderboard_assertion_fixed": true
+  "leaderboard_assertion_fixed": true,
+  "temporary_workflows_removed": true
 }
