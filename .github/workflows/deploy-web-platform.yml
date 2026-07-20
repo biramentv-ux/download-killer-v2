@@ -49,35 +49,45 @@ jobs:
       - name: Run Worker tests
         run: npm test
 
-      - name: Validate public platform and game assets
+      - name: Validate unified public platform assets
         run: |
           node --check public/platform/platform.js
           node --check public/platform/status-backoff.js
           node --check public/platform/site-defaults.js
           node --check public/platform/landing-v13.js
+          node --check public/platform/games-v14.js
+          node --check public/platform/platform-public.js
           node --check public/media-lab/media-lab.js
           node --check public/games/latency-strike/game.js
+          node --check public/games/dyrakarmy-arena/arena.js
+          node --check public/control/control.js
           node --check public/sw.js
+          node --check scripts/setup-telegram-platform.mjs
           grep -q '<title>Download Killer Platform</title>' public/index.html
           grep -q 'Responsive Design v13' public/index.html
-          grep -q '/platform/landing-v13.css' public/index.html
-          grep -q '/platform/landing-v13.js' public/index.html
           grep -q 'id="mobileNavToggle"' public/index.html
           grep -q 'id="downloadForm"' public/index.html
           grep -q 'id="jobFeed"' public/index.html
           grep -q 'id="historyList"' public/index.html
           grep -q 'tg://resolve?domain=dyrakarmy_bot' public/index.html
           grep -q '@dyrakarmy_bot' public/index.html
-          grep -q '/media-lab/media-lab.js' public/index.html
-          grep -q '@media (max-width: 600px)' public/platform/landing-v13.css
-          grep -q '@media (prefers-reduced-motion: reduce)' public/platform/landing-v13.css
-          grep -q 'Latency Strike v1' public/games/latency-strike/index.html
-          grep -q '/api/games/latency-strike' public/games/latency-strike/game.js
+          grep -q 'DyrakArmy Arena' public/games/dyrakarmy-arena/index.html
+          grep -q '/api/games/dyrakarmy-arena' public/games/dyrakarmy-arena/arena.js
+          grep -q 'DyrakArmy Control Center' public/control/index.html
+          grep -q '/api/platform/control' public/control/control.js
+          grep -q '/api/platform/public' public/platform/platform-public.js
           grep -q 'CREATE TABLE IF NOT EXISTS game_profiles' migrations/0012_latency_strike_v1.sql
-          grep -q "download-killer-static-v13-responsive" public/sw.js
-          grep -q '/platform/landing-v13.css' public/sw.js
-          grep -q '/platform/landing-v13.js' public/sw.js
-          grep -q '/games/latency-strike/game.js?v=1.0.0' public/sw.js
+          grep -q 'CREATE TABLE IF NOT EXISTS arena_teams' migrations/0013_dyrakarmy_arena_v1.sql
+          grep -q 'CREATE TABLE IF NOT EXISTS platform_modules' migrations/0014_platform_control_center_v1.sql
+          grep -q 'CREATE TABLE IF NOT EXISTS platform_audit' migrations/0014_platform_control_center_v1.sql
+          grep -q 'download-killer-static-v14-unified' public/sw.js
+          grep -q '/platform/games-v14.js' public/sw.js
+          grep -q '/platform/platform-public.js' public/sw.js
+          grep -q '/games/dyrakarmy-arena/arena.js?v=1.0.0' public/sw.js
+          grep -q '/control/control.js?v=1.0.0' public/sw.js
+          grep -q "command: 'arena'" scripts/setup-telegram-platform.mjs
+          grep -q "command: 'control'" scripts/setup-telegram-platform.mjs
+          grep -q "command: 'id'" scripts/setup-telegram-platform.mjs
           ! grep -R --exclude='full-virtual-simulation.mjs' -n -E 'download_killerBOT|TELEGRAM_SECONDARY_|v10-secondary|telegram/webhook/dyrakarmy|web\.telegram\.org' src public scripts wrangler.jsonc package.json
 
   deploy:
@@ -125,23 +135,41 @@ jobs:
             home="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/")"
             grep -q 'Download Killer Platform' <<<"$home"
             grep -q 'Responsive Design v13' <<<"$home"
-            grep -q '/platform/landing-v13.css' <<<"$home"
+            grep -q '/platform/games-v14.css' <<<"$home"
+            grep -q '/platform/games-v14.js' <<<"$home"
+            grep -q '/platform/platform-public.js' <<<"$home"
             grep -q '@dyrakarmy_bot' <<<"$home"
-            grep -q 'tg://resolve?domain=dyrakarmy_bot' <<<"$home"
             ! grep -q 'download_killerBOT' <<<"$home"
             ! grep -q 'web.telegram.org' <<<"$home"
 
-            game="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/games/latency-strike/?v=1.0.0")"
-            grep -q 'Latency Strike v1' <<<"$game"
-            grep -q 'id="rewardGrid"' <<<"$game"
-            grep -q 'id="leaderboardList"' <<<"$game"
+            arena="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/games/dyrakarmy-arena/?v=1.0.0")"
+            grep -q 'DyrakArmy Arena' <<<"$arena"
+            grep -q 'id="battleStage"' <<<"$arena"
+            grep -q 'id="teamContent"' <<<"$arena"
+
+            latency="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/games/latency-strike/?v=1.0.0")"
+            grep -q 'Latency Strike v1' <<<"$latency"
+            grep -q 'id="rewardGrid"' <<<"$latency"
+
+            control="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/control/?v=1.0.0")"
+            grep -q 'DyrakArmy Control Center' <<<"$control"
+            grep -q 'id="moduleList"' <<<"$control"
+            grep -q 'id="contentList"' <<<"$control"
           done
+
+          registry="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/platform/public)"
+          grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$registry"
+          grep -q '"dyrakarmy-arena"' <<<"$registry"
+          grep -q '"control-center"' <<<"$registry"
+
+          arena_config="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/games/dyrakarmy-arena/config)"
+          grep -q '"game":"dyrakarmy-arena"' <<<"$arena_config"
+          grep -q '"daily_attempts":3' <<<"$arena_config"
+
+          latency_config="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/games/latency-strike/config)"
+          grep -q '"game":"latency-strike"' <<<"$latency_config"
+          grep -q 'title_queue_master' <<<"$latency_config"
+
           health="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/telegram/v12/health)"
           grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$health"
           grep -q '"username":"dyrakarmy_bot"' <<<"$health"
-          grep -q 'tg://resolve?domain=dyrakarmy_bot' <<<"$health"
-
-          game_config="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/games/latency-strike/config)"
-          grep -q '"game":"latency-strike"' <<<"$game_config"
-          grep -q '"version":"1.0.0"' <<<"$game_config"
-          grep -q 'title_queue_master' <<<"$game_config"
