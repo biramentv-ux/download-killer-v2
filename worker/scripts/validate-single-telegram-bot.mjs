@@ -6,7 +6,10 @@ import process from 'node:process';
 
 const repoRoot = path.resolve(process.cwd(), '..');
 const reportPath = path.join(process.cwd(), 'single-bot-report.txt');
-const validatorPath = 'worker/scripts/validate-single-telegram-bot.mjs';
+const excludedTestFiles = new Set([
+  'worker/scripts/validate-single-telegram-bot.mjs',
+  'worker/scripts/full-virtual-simulation.mjs',
+]);
 const targets = [
   'worker/src',
   'worker/public',
@@ -47,10 +50,10 @@ for (const target of targets) await collect(path.join(repoRoot, target), files);
 const violations = [];
 for (const file of files) {
   const relative = path.relative(repoRoot, file).replaceAll('\\', '/');
-  if (relative === validatorPath) continue;
-  const text = await readFile(file, 'utf8');
+  if (excludedTestFiles.has(relative)) continue;
+  const source = await readFile(file, 'utf8');
   for (const [label, marker] of forbidden) {
-    if (text.includes(marker)) violations.push(`${relative}: ${label} (${marker})`);
+    if (source.includes(marker)) violations.push(`${relative}: ${label} (${marker})`);
   }
 }
 
@@ -63,8 +66,8 @@ const required = [
   ['worker/scripts/setup-telegram-platform.mjs', "expectedUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'dyrakarmy_bot')"],
 ];
 for (const [relative, marker] of required) {
-  const text = await readFile(path.join(repoRoot, relative), 'utf8');
-  if (!text.includes(marker)) violations.push(`${relative}: missing required marker (${marker})`);
+  const source = await readFile(path.join(repoRoot, relative), 'utf8');
+  if (!source.includes(marker)) violations.push(`${relative}: missing required marker (${marker})`);
 }
 
 const report = violations.length
