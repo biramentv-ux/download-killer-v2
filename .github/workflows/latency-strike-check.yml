@@ -13,7 +13,7 @@ on:
       - worker/scripts/setup-telegram-platform.mjs
       - worker/migrations/0012_latency_strike_v1.sql
       - .github/workflows/latency-strike-check.yml
-      - .github/workflows/latency-strike-ranking-codemod.yml
+      - .github/workflows/deploy-web-platform.yml
   push:
     branches: [main]
     paths:
@@ -27,114 +27,13 @@ on:
       - worker/scripts/setup-telegram-platform.mjs
       - worker/migrations/0012_latency_strike_v1.sql
       - .github/workflows/latency-strike-check.yml
+      - .github/workflows/deploy-web-platform.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  normalize-ranking:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: feature/latency-strike-v1
-          fetch-depth: 0
-      - name: Patch one-real-run weekly ranking
-        shell: python
-        run: |
-          from pathlib import Path
-
-          marker = Path('.github/workflows/latency-strike-ranking-codemod.yml')
-          if not marker.exists():
-              print('Ranking is already normalized.')
-              raise SystemExit(0)
-
-          path = Path('worker/src/latency_strike.ts')
-          source = path.read_text(encoding='utf-8')
-          old_rank = '''  const result = await env.DB.prepare(`
-    WITH best AS (
-      SELECT telegram_user_id, MAX(score) AS score, MIN(avg_reaction_ms) AS avg_reaction_ms
-      FROM game_runs WHERE week_key = ? GROUP BY telegram_user_id
-    ), ranked AS (
-      SELECT telegram_user_id,
-        ROW_NUMBER() OVER (ORDER BY score DESC, avg_reaction_ms ASC, telegram_user_id ASC) AS rank
-      FROM best
-    )
-    SELECT rank FROM ranked WHERE telegram_user_id = ? LIMIT 1
-  `).bind(weekKey, userId).first<{ rank: number }>();'''
-          new_rank = '''  const result = await env.DB.prepare(`
-    WITH ranked_runs AS (
-      SELECT telegram_user_id, score, avg_reaction_ms,
-        ROW_NUMBER() OVER (
-          PARTITION BY telegram_user_id
-          ORDER BY score DESC, avg_reaction_ms ASC, created_at ASC, id ASC
-        ) AS run_rank
-      FROM game_runs
-      WHERE week_key = ?
-    ), best AS (
-      SELECT telegram_user_id, score, avg_reaction_ms
-      FROM ranked_runs
-      WHERE run_rank = 1
-    ), ranked AS (
-      SELECT telegram_user_id,
-        ROW_NUMBER() OVER (ORDER BY score DESC, avg_reaction_ms ASC, telegram_user_id ASC) AS rank
-      FROM best
-    )
-    SELECT rank FROM ranked WHERE telegram_user_id = ? LIMIT 1
-  `).bind(weekKey, userId).first<{ rank: number }>();'''
-          old_board = '''  const result = await env.DB.prepare(`
-    WITH best AS (
-      SELECT telegram_user_id, MAX(score) AS score, MIN(avg_reaction_ms) AS avg_reaction_ms, COUNT(*) AS games_played
-      FROM game_runs WHERE week_key = ? GROUP BY telegram_user_id
-    )
-    SELECT p.telegram_user_id, p.username, p.display_name, b.score, b.avg_reaction_ms, b.games_played,
-      p.equipped_frame, p.equipped_icon, p.equipped_badge, p.equipped_waveform,
-      p.equipped_theme, p.equipped_title
-    FROM best b JOIN game_profiles p ON p.telegram_user_id = b.telegram_user_id
-    ORDER BY b.score DESC, b.avg_reaction_ms ASC, p.telegram_user_id ASC
-    LIMIT ?
-  `).bind(weekKey, limit).all<LeaderboardRow>();'''
-          new_board = '''  const result = await env.DB.prepare(`
-    WITH ranked_runs AS (
-      SELECT telegram_user_id, score, avg_reaction_ms,
-        COUNT(*) OVER (PARTITION BY telegram_user_id) AS games_played,
-        ROW_NUMBER() OVER (
-          PARTITION BY telegram_user_id
-          ORDER BY score DESC, avg_reaction_ms ASC, created_at ASC, id ASC
-        ) AS run_rank
-      FROM game_runs
-      WHERE week_key = ?
-    ), best AS (
-      SELECT telegram_user_id, score, avg_reaction_ms, games_played
-      FROM ranked_runs
-      WHERE run_rank = 1
-    )
-    SELECT p.telegram_user_id, p.username, p.display_name, b.score, b.avg_reaction_ms, b.games_played,
-      p.equipped_frame, p.equipped_icon, p.equipped_badge, p.equipped_waveform,
-      p.equipped_theme, p.equipped_title
-    FROM best b JOIN game_profiles p ON p.telegram_user_id = b.telegram_user_id
-    ORDER BY b.score DESC, b.avg_reaction_ms ASC, p.telegram_user_id ASC
-    LIMIT ?
-  `).bind(weekKey, limit).all<LeaderboardRow>();'''
-
-          if old_rank not in source or old_board not in source:
-              raise SystemExit('Expected ranking SQL was not found')
-          path.write_text(source.replace(old_rank, new_rank).replace(old_board, new_board), encoding='utf-8')
-          marker.unlink()
-      - name: Commit normalized ranking when changed
-        run: |
-          if git diff --quiet; then
-            exit 0
-          fi
-          git config user.name "download-killer-games"
-          git config user.email "actions@users.noreply.github.com"
-          git add worker/src/latency_strike.ts .github/workflows/latency-strike-ranking-codemod.yml
-          git commit -m "Use one best run for weekly Latency Strike ranking"
-          git push origin HEAD:feature/latency-strike-v1
-
   validate:
-    needs: normalize-ranking
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -179,3 +78,4 @@ jobs:
           grep -q 'CREATE TABLE IF NOT EXISTS game_unlocks' migrations/0012_latency_strike_v1.sql
           grep -q '/games/latency-strike/' public/manifest.webmanifest
           grep -q '/games/latency-strike/game.js?v=1.0.0' public/sw.js
+          grep -q 'd1 migrations apply sounddrop-db --remote' ../.github/workflows/deploy-web-platform.yml
