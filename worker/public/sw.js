@@ -1,5 +1,6 @@
 const CACHE_NAME = 'download-killer-static-v14-unified';
 const LEGACY_CACHE_NAME = 'download-killer-static-v13-responsive';
+const LEGACY_V12_CACHE_NAME = 'download-killer-static-v12.2.0';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
 const APP_SHELL = [
   '/',
