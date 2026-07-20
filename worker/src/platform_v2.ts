@@ -1,5 +1,6 @@
 import legacyHandler from './index';
 import type { DownloadJob, Env, JobHistoryEvent } from './types';
+import { handleLatencyStrikeApi } from './latency_strike';
 import { handleMediaLabApi } from './media_lab';
 import { handleJobStatusBridge } from './job_status_bridge';
 import {
@@ -80,6 +81,13 @@ async function enforceNativeTelegramApi(
       miniapp_link: links.miniAppLink,
       native_only: true,
     },
+    games: {
+      latency_strike: {
+        enabled: true,
+        version: '1.0.0',
+        path: '/games/latency-strike/',
+      },
+    },
   });
 }
 
@@ -138,6 +146,9 @@ export default {
 
     const telegramHealthResponse = handleTelegramMiniAppHealth(request, env);
     if (telegramHealthResponse) return telegramHealthResponse;
+
+    const gameResponse = await handleLatencyStrikeApi(request, env);
+    if (gameResponse) return gameResponse;
 
     const jobStatusResponse = await handleJobStatusBridge(request, env);
     if (jobStatusResponse) return jobStatusResponse;
