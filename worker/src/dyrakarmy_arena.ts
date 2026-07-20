@@ -466,8 +466,9 @@ async function playerLeaderboard(
     WHERE ${column} = ? GROUP BY p.telegram_user_id
     ORDER BY points DESC, best_score DESC, games ASC LIMIT ?
   `).bind(value, limit).all<Record<string, unknown>>();
-  return ((result.results || []).map((row, index) => ({ ...row, position: index + 1 })))
-    as Array<Record<string, unknown> & { position: number }>;
+  return (result.results || []).map(
+    (row, index) => ({ ...row, position: index + 1 }),
+  ) as Array<Record<string, unknown> & { position: number }>;
 }
 
 async function teamLeaderboard(env: ExtendedEnv, period: 'week' | 'season', limit: number) {
