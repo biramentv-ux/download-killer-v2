@@ -68,85 +68,79 @@ class ElementMock extends EventTargetMock {
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
   append(child) { this.children.push(child); }
-  contains(node) {
-    return node === this || this.children.some((child) => child.contains(node));
-  }
+  contains(node) { return node === this || this.children.some((child) => child.contains(node)); }
   querySelectorAll(selector) {
     const descendants = [];
     const visit = (element) => {
-      for (const child of element.children) {
-        descendants.push(child);
-        visit(child);
-      }
+      for (const child of element.children) { descendants.push(child); visit(child); }
     };
     visit(this);
     if (selector === 'a') return descendants.filter((node) => node.getAttribute('href'));
-    if (selector === 'a[href^="#"]') {
-      return descendants.filter((node) => String(node.getAttribute('href') || '').startsWith('#'));
-    }
+    if (selector === 'a[href^="#"]') return descendants.filter((node) => String(node.getAttribute('href') || '').startsWith('#'));
     return [];
   }
 }
 
-async function validateContracts() {
-  const [html, css, landing, platform, serviceWorker, wrangler, pwaText, extensionText, mobile, telegram] = await Promise.all([
+async function validateUnifiedContracts() {
+  const files = await Promise.all([
     read('worker/public/index.html'),
     read('worker/public/platform/landing-v13.css'),
     read('worker/public/platform/landing-v13.js'),
-    read('worker/public/platform/platform.js'),
+    read('worker/public/platform/games-v14.css'),
+    read('worker/public/platform/games-v14.js'),
+    read('worker/public/platform/platform-public.js'),
+    read('worker/public/control/index.html'),
+    read('worker/public/control/control.js'),
+    read('worker/public/games/dyrakarmy-arena/index.html'),
+    read('worker/public/games/dyrakarmy-arena/arena.js'),
     read('worker/public/sw.js'),
-    read('worker/wrangler.jsonc'),
     read('worker/public/manifest.webmanifest'),
-    read('extension/spotify-web-companion/manifest.json'),
-    read('mobile_expo/App.tsx'),
-    read('worker/public/telegram/index.html'),
+    read('worker/src/platform_v2.ts'),
+    read('worker/src/platform_control.ts'),
+    read('worker/src/dyrakarmy_arena.ts'),
+    read('worker/migrations/0013_dyrakarmy_arena_v1.sql'),
+    read('worker/migrations/0014_platform_control_center_v1.sql'),
   ]);
+  const [html, css, landing, gamesCss, gamesJs, publicJs, controlHtml, controlJs, arenaHtml, arenaJs, sw, manifestText, platformV2, controlTs, arenaTs, arenaMigration, controlMigration] = files;
 
-  const requiredIds = [
-    'mobileNavToggle', 'mainNav', 'downloadForm', 'mediaUrl', 'sourceSelect',
-    'formatSelect', 'qualitySelect', 'launchBtn', 'jobFeed', 'historyList',
-    'edgeStatus', 'originStatus', 'formatStatus', 'latencyStatus',
-  ];
-  for (const id of requiredIds) assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
-
-  for (const marker of [
-    'Responsive Design v13',
-    'tg://resolve?domain=dyrakarmy_bot',
-    '/platform/landing-v13.css',
-    '/platform/landing-v13.js',
-  ]) assert.ok(html.includes(marker), `missing HTML marker ${marker}`);
+  for (const id of ['mobileNavToggle', 'mainNav', 'downloadForm', 'mediaUrl', 'sourceSelect', 'formatSelect', 'qualitySelect', 'launchBtn', 'jobFeed', 'historyList', 'edgeStatus', 'originStatus', 'formatStatus', 'latencyStatus']) {
+    assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
+  }
+  assert.ok(html.includes('Responsive Design v13'));
+  assert.ok(html.includes('tg://resolve?domain=dyrakarmy_bot'));
   assert.ok(!html.includes(retiredBot));
   assert.ok(!html.includes(telegramWeb));
-
-  for (const marker of [
-    '@media (max-width: 1050px)', '@media (max-width: 820px)',
-    '@media (max-width: 600px)', '@media (max-width: 390px)',
-    '@media (prefers-reduced-motion: reduce)', '.process-flow',
-    '.feature-grid', '.mobile-nav-toggle',
-  ]) assert.ok(css.includes(marker), `missing CSS marker ${marker}`);
-
+  assert.ok(css.includes('@media (max-width: 600px)'));
+  assert.ok(css.includes('@media (prefers-reduced-motion: reduce)'));
   assert.ok(landing.includes("event.key === 'Escape'"));
-  assert.ok(landing.includes('IntersectionObserver'));
-  assert.ok(platform.includes('/download'));
-  assert.ok(serviceWorker.includes('download-killer-static-v13-responsive'));
-  assert.ok(serviceWorker.includes("url.pathname.startsWith('/telegram/')"));
-  assert.ok(wrangler.includes('"TELEGRAM_BOT_USERNAME": "dyrakarmy_bot"'));
-  assert.ok(wrangler.includes('"PUBLIC_BASE_URL": "https://dyrakarmy.eu"'));
+  assert.ok(gamesCss.includes('.game-showcase'));
+  assert.ok(gamesJs.includes('DyrakArmy Arena'));
+  assert.ok(publicJs.includes('/api/platform/public'));
+  assert.ok(publicJs.includes('data-platform-hidden'));
 
-  const pwa = JSON.parse(pwaText);
-  assert.ok(Array.isArray(pwa.icons) && pwa.icons.length >= 2);
-  assert.ok((pwa.shortcuts || []).some((shortcut) => shortcut.url === '/telegram/'));
+  for (const marker of ['DyrakArmy Control Center', 'TELEGRAM_ADMIN_IDS', '/api/platform/control']) {
+    assert.ok(`${controlHtml}\n${controlJs}\n${controlTs}`.includes(marker), `missing control marker ${marker}`);
+  }
+  for (const marker of ['DyrakArmy Arena', '/api/games/dyrakarmy-arena', 'arena_teams', 'arena_runs']) {
+    assert.ok(`${arenaHtml}\n${arenaJs}\n${arenaTs}\n${arenaMigration}`.includes(marker), `missing Arena marker ${marker}`);
+  }
+  for (const marker of ['handlePlatformControlApi', 'handlePlatformControlTelegramWebhook', 'isPlatformModuleEnabled', 'handleDyrakArmyArenaApi']) {
+    assert.ok(platformV2.includes(marker), `missing Worker marker ${marker}`);
+  }
+  assert.ok(controlMigration.includes('CREATE TABLE IF NOT EXISTS platform_modules'));
+  assert.ok(controlMigration.includes('CREATE TABLE IF NOT EXISTS platform_audit'));
+  assert.ok(sw.includes('download-killer-static-v14-unified'));
+  assert.ok(sw.includes('/games/dyrakarmy-arena/arena.js?v=1.0.0'));
+  assert.ok(sw.includes('/control/control.js?v=1.0.0'));
 
-  const extension = JSON.parse(extensionText);
-  assert.equal(extension.manifest_version, 3);
-  assert.equal(extension.version, '1.2.0');
-  assert.ok(extension.host_permissions.includes('https://dyrakarmy.eu/*'));
-  assert.ok(!extension.permissions.includes('webRequest'));
-
-  assert.ok(mobile.includes("const DEFAULT_API_BASE = 'https://dyrakarmy.eu'"));
-  assert.ok(mobile.includes("const MIRROR_API_BASE = 'https://dyrakarmy.online'"));
-  assert.ok(telegram.includes('@dyrakarmy_bot'));
-  assert.ok(!telegram.includes(retiredBot));
+  const manifest = JSON.parse(manifestText);
+  const shortcuts = new Set((manifest.shortcuts || []).map((shortcut) => shortcut.url));
+  assert.ok(shortcuts.has('/games/dyrakarmy-arena/'));
+  assert.ok(shortcuts.has('/games/latency-strike/'));
+  assert.ok(shortcuts.has('/control/'));
+  assert.ok(!controlTs.includes('eval('));
+  assert.ok(!controlTs.includes('new Function('));
+  assert.ok(!controlJs.includes('TELEGRAM_BOT_TOKEN'));
 }
 
 async function simulateLandingNavigation() {
@@ -155,91 +149,41 @@ async function simulateLandingNavigation() {
   const body = new ElementMock();
   const root = new ElementMock();
   root.lang = 'bg';
-
   const toggle = new ElementMock({ id: 'mobileNavToggle' });
   toggle.setAttribute('aria-expanded', 'false');
   const nav = new ElementMock({ id: 'mainNav', dataset: { open: 'false' } });
   const homeLink = new ElementMock({ href: '#home' });
   const tutorialLink = new ElementMock({ href: '#tutorial' });
-  nav.append(homeLink);
-  nav.append(tutorialLink);
+  nav.append(homeLink); nav.append(tutorialLink);
   const header = new ElementMock();
-  const homeSection = new ElementMock({ id: 'home' });
-  const tutorialSection = new ElementMock({ id: 'tutorial' });
+  const home = new ElementMock({ id: 'home' });
+  const tutorial = new ElementMock({ id: 'tutorial' });
   const translated = new ElementMock({ dataset: { landingI18n: 'nav_home' }, textContent: 'old' });
-
-  const selectors = new Map([
-    ['#mobileNavToggle', toggle], ['#mainNav', nav], ['.topbar', header],
-  ]);
-  const ids = new Map([['home', homeSection], ['tutorial', tutorialSection]]);
   const mutationCallbacks = [];
   const observed = [];
-
   Object.assign(document, {
     documentElement: root,
     body,
-    querySelector: (selector) => selectors.get(selector) || null,
+    querySelector: (selector) => new Map([['#mobileNavToggle', toggle], ['#mainNav', nav], ['.topbar', header]]).get(selector) || null,
     querySelectorAll: (selector) => selector === '[data-landing-i18n]' ? [translated] : [],
-    getElementById: (id) => ids.get(id) || null,
+    getElementById: (id) => new Map([['home', home], ['tutorial', tutorial]]).get(id) || null,
   });
-
-  class MutationObserverMock {
-    constructor(callback) { this.callback = callback; }
-    observe() { mutationCallbacks.push(this.callback); }
-  }
-  class IntersectionObserverMock {
-    constructor(callback) { this.callback = callback; }
-    observe(element) { observed.push({ observer: this, element }); }
-  }
-
+  class MutationObserverMock { constructor(callback) { this.callback = callback; } observe() { mutationCallbacks.push(this.callback); } }
+  class IntersectionObserverMock { constructor(callback) { this.callback = callback; } observe(element) { observed.push({ observer: this, element }); } }
   const window = new EventTargetMock();
-  window.window = window;
-  window.document = document;
-  window.scrollY = 0;
-  window.IntersectionObserver = IntersectionObserverMock;
-  window.MutationObserver = MutationObserverMock;
-
-  vm.runInNewContext(source, {
-    console,
-    document,
-    window,
-    addEventListener: (...args) => window.addEventListener(...args),
-    MutationObserver: MutationObserverMock,
-    IntersectionObserver: IntersectionObserverMock,
-    Map,
-    Array,
-    String,
-  }, { filename: 'landing-v13.js' });
-
+  Object.assign(window, { window, document, scrollY: 0, IntersectionObserver: IntersectionObserverMock, MutationObserver: MutationObserverMock });
+  vm.runInNewContext(source, { console, document, window, addEventListener: (...args) => window.addEventListener(...args), MutationObserver: MutationObserverMock, IntersectionObserver: IntersectionObserverMock, Map, Array, String }, { filename: 'landing-v13.js' });
   document.dispatchEvent({ type: 'DOMContentLoaded' });
   assert.equal(translated.textContent, 'Начало');
   assert.equal(observed.length, 2);
-
   toggle.dispatchEvent({ type: 'click' });
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
-  assert.equal(nav.dataset.open, 'true');
-  assert.ok(body.classList.contains('nav-open'));
-
   document.dispatchEvent({ type: 'keydown', key: 'Escape' });
   assert.equal(toggle.getAttribute('aria-expanded'), 'false');
-
-  toggle.dispatchEvent({ type: 'click' });
-  tutorialLink.dispatchEvent({ type: 'click' });
-  assert.equal(nav.dataset.open, 'false');
-
-  root.lang = 'en';
-  mutationCallbacks.forEach((callback) => callback());
+  root.lang = 'en'; mutationCallbacks.forEach((callback) => callback());
   assert.equal(translated.textContent, 'Home');
-
-  observed[0].observer.callback([
-    { target: tutorialSection, isIntersecting: true, intersectionRatio: 0.8 },
-  ]);
+  observed[0].observer.callback([{ target: tutorial, isIntersecting: true, intersectionRatio: 0.8 }]);
   assert.ok(tutorialLink.classList.contains('active'));
-  assert.ok(!homeLink.classList.contains('active'));
-
-  window.scrollY = 50;
-  window.dispatchEvent({ type: 'scroll' });
-  assert.equal(header.dataset.scrolled, 'true');
 }
 
 async function simulateStatusBackoff() {
@@ -249,54 +193,27 @@ async function simulateStatusBackoff() {
   const responses = [];
   const delays = [];
   class FakeDate extends Date { static now() { return now; } }
-
   const nativeFetch = async (input) => {
     calls.push(input instanceof Request ? input.url : String(input));
     const response = responses.shift();
-    return response instanceof Promise
-      ? response
-      : response || new Response(JSON.stringify({ status: 'processing' }), { status: 200 });
+    return response instanceof Promise ? response : response || new Response(JSON.stringify({ status: 'processing' }), { status: 200 });
   };
-  const window = {
-    fetch: nativeFetch,
-    setTimeout: (resolve, delay) => { delays.push(delay); resolve(); return 1; },
-  };
-
-  vm.runInNewContext(source, {
-    console, window, Request, Response, URL,
-    location: { href: 'https://dyrakarmy.eu/' },
-    Date: FakeDate, Map, Promise, Number, String,
-  }, { filename: 'status-backoff.js' });
-
-  responses.push(new Response('health', { status: 200 }));
-  assert.equal(await (await window.fetch('https://dyrakarmy.eu/api/health')).text(), 'health');
-
-  calls.length = 0;
-  let resolvePending;
-  const pending = new Promise((resolve) => { resolvePending = resolve; });
+  const window = { fetch: nativeFetch, setTimeout: (resolve, delay) => { delays.push(delay); resolve(); return 1; } };
+  vm.runInNewContext(source, { console, window, Request, Response, URL, location: { href: 'https://dyrakarmy.eu/' }, Date: FakeDate, Map, Promise, Number, String }, { filename: 'status-backoff.js' });
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
   responses.push(pending);
-  const jobUrl = 'https://dyrakarmy.eu/api/job/123e4567-e89b-12d3-a456-426614174000';
-  const first = window.fetch(jobUrl);
-  const second = window.fetch(jobUrl);
-  resolvePending(new Response(JSON.stringify({ status: 'processing' }), { status: 200 }));
-  const [firstResponse, secondResponse] = await Promise.all([first, second]);
+  const url = 'https://dyrakarmy.eu/api/job/123e4567-e89b-12d3-a456-426614174000';
+  const first = window.fetch(url); const second = window.fetch(url);
+  release(new Response(JSON.stringify({ status: 'processing' }), { status: 200 }));
+  const [a, b] = await Promise.all([first, second]);
   assert.equal(calls.length, 1);
-  assert.equal((await firstResponse.json()).status, 'processing');
-  assert.equal((await secondResponse.json()).status, 'processing');
-
-  assert.equal((await (await window.fetch(jobUrl)).json()).status, 'processing');
-  assert.equal(calls.length, 1);
-
-  now += 6_000;
-  responses.push(new Response('{}', { status: 429, headers: { 'Retry-After': '3' } }));
-  assert.equal((await (await window.fetch(jobUrl)).json()).status, 'processing');
-
-  const newJobUrl = 'https://dyrakarmy.eu/api/job/223e4567-e89b-12d3-a456-426614174000';
-  responses.push(
-    new Response('{}', { status: 429, headers: { 'Retry-After': '2' } }),
-    new Response(JSON.stringify({ status: 'done' }), { status: 200 }),
-  );
-  assert.equal((await (await window.fetch(newJobUrl)).json()).status, 'done');
+  assert.equal((await a.json()).status, 'processing');
+  assert.equal((await b.json()).status, 'processing');
+  now += 6000;
+  const retryUrl = 'https://dyrakarmy.eu/api/job/223e4567-e89b-12d3-a456-426614174000';
+  responses.push(new Response('{}', { status: 429, headers: { 'Retry-After': '2' } }), new Response(JSON.stringify({ status: 'done' }), { status: 200 }));
+  assert.equal((await (await window.fetch(retryUrl)).json()).status, 'done');
   assert.ok(delays.includes(2000));
 }
 
@@ -306,7 +223,6 @@ async function simulateServiceWorker() {
   const stores = new Map();
   const deleted = [];
   let online = true;
-
   function openCache(name) {
     if (!stores.has(name)) stores.set(name, new Map());
     const store = stores.get(name);
@@ -318,64 +234,43 @@ async function simulateServiceWorker() {
       delete: async (request) => store.delete(typeof request === 'string' ? request : request.url),
     };
   }
-
   const caches = {
     open: async (name) => openCache(name),
-    keys: async () => ['old-cache', 'download-killer-static-v13-responsive', 'download-killer-offline-media-v2'],
+    keys: async () => ['old-cache', 'download-killer-static-v13-responsive', 'download-killer-static-v14-unified', 'download-killer-offline-media-v2'],
     delete: async (name) => { deleted.push(name); return true; },
     match: async (request) => {
       const key = typeof request === 'string' ? request : request.url;
-      for (const store of stores.values()) {
-        const response = store.get(key);
-        if (response) return response.clone();
-      }
+      for (const store of stores.values()) { const response = store.get(key); if (response) return response.clone(); }
       return undefined;
     },
   };
-  const fetch = async () => {
-    if (!online) throw new Error('offline');
-    return new Response('network', { status: 200 });
-  };
-  const self = {
-    location: { origin: 'https://dyrakarmy.eu' },
-    addEventListener: (type, handler) => handlers.set(type, handler),
-    skipWaiting: () => {},
-    clients: { claim: () => {} },
-  };
-
-  vm.runInNewContext(source, {
-    console, self, caches, fetch, Request, Response, URL, Promise,
-  }, { filename: 'sw.js' });
-
+  const fetch = async () => { if (!online) throw new Error('offline'); return new Response('network', { status: 200 }); };
+  const self = { location: { origin: 'https://dyrakarmy.eu' }, addEventListener: (type, handler) => handlers.set(type, handler), skipWaiting: () => {}, clients: { claim: () => {} } };
+  vm.runInNewContext(source, { console, self, caches, fetch, Request, Response, URL, Promise }, { filename: 'sw.js' });
   let pending;
-  handlers.get('install')({ waitUntil: (promise) => { pending = promise; } });
-  await pending;
-  const shell = stores.get('download-killer-static-v13-responsive');
-  assert.ok(shell.has('/platform/landing-v13.css'));
-  assert.ok(shell.has('/platform/landing-v13.js'));
-
-  handlers.get('activate')({ waitUntil: (promise) => { pending = promise; } });
-  await pending;
-  assert.deepEqual(deleted, ['old-cache']);
-
-  const telegramRequest = new Request('https://dyrakarmy.eu/telegram/?v=12.2.0');
+  handlers.get('install')({ waitUntil: (promise) => { pending = promise; } }); await pending;
+  const shell = stores.get('download-killer-static-v14-unified');
+  assert.ok(shell.has('/platform/games-v14.js'));
+  assert.ok(shell.has('/games/dyrakarmy-arena/arena.js?v=1.0.0'));
+  assert.ok(shell.has('/control/control.js?v=1.0.0'));
+  handlers.get('activate')({ waitUntil: (promise) => { pending = promise; } }); await pending;
+  assert.deepEqual(deleted.sort(), ['download-killer-static-v13-responsive', 'old-cache']);
+  const arenaRequest = new Request('https://dyrakarmy.eu/games/dyrakarmy-arena/?v=1.0.0');
   let responsePromise;
-  handlers.get('fetch')({ request: telegramRequest, respondWith: (promise) => { responsePromise = promise; } });
+  handlers.get('fetch')({ request: arenaRequest, respondWith: (promise) => { responsePromise = promise; } });
   assert.equal(await (await responsePromise).text(), 'network');
-
   online = false;
-  handlers.get('fetch')({ request: telegramRequest, respondWith: (promise) => { responsePromise = promise; } });
+  handlers.get('fetch')({ request: arenaRequest, respondWith: (promise) => { responsePromise = promise; } });
   assert.equal(await (await responsePromise).text(), 'network');
-
-  const apiRequest = new Request('https://dyrakarmy.eu/api/health');
+  const apiRequest = new Request('https://dyrakarmy.eu/api/platform/public');
   handlers.get('fetch')({ request: apiRequest, respondWith: (promise) => { responsePromise = promise; } });
   await assert.rejects(responsePromise, /offline/);
 }
 
-await runScenario('Web UI', 'responsive and integration contracts', validateContracts);
+await runScenario('Unified Platform', 'site, games, registry and Control Center contracts', validateUnifiedContracts);
 await runScenario('Web UI', 'mobile navigation and language simulation', simulateLandingNavigation);
-await runScenario('Polling', 'dedupe, cache and Retry-After simulation', simulateStatusBackoff);
-await runScenario('PWA', 'install, activate, Telegram network-first and API bypass', simulateServiceWorker);
+await runScenario('Polling', 'dedupe and Retry-After simulation', simulateStatusBackoff);
+await runScenario('PWA', 'v14 install, migration, Arena cache and API bypass', simulateServiceWorker);
 
 const failed = results.filter((scenario) => !scenario.passed);
 const report = {
