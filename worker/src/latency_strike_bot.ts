@@ -31,10 +31,20 @@ interface TelegramUpdate {
   callback_query?: TelegramCallbackQuery;
 }
 
+interface WebhookRequestLike {
+  headers: Headers;
+  json(): Promise<unknown>;
+}
+
+interface TelegramMethodResult {
+  ok: boolean;
+  description?: string;
+}
+
 const COMMAND_MARKER = 'tg:latency-strike:commands:v1';
 
 export async function handleLatencyStrikeTelegramWebhook(
-  request: Request,
+  request: WebhookRequestLike,
   env: ExtendedEnv,
 ): Promise<Response | null> {
   const providedSecret = request.headers.get('X-Telegram-Bot-Api-Secret-Token') || '';
@@ -191,14 +201,20 @@ async function telegramRequest(
   method: string,
   payload: Record<string, unknown>,
   env: ExtendedEnv,
-): Promise<{ ok: boolean; description?: string }> {
+): Promise<TelegramMethodResult> {
   const base = String(env.TELEGRAM_BOT_API_BASE || 'https://api.telegram.org').replace(/\/+$/, '');
   const response = await fetch(`${base}/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  return response.json().catch(() => ({ ok: false, description: `HTTP ${response.status}` }));
+  const parsed = await response.json().catch(() => null) as Partial<TelegramMethodResult> | null;
+  return {
+    ok: parsed?.ok === true,
+    description: typeof parsed?.description === 'string'
+      ? parsed.description
+      : response.ok ? undefined : `HTTP ${response.status}`,
+  };
 }
 
 function constantTimeEqual(left: string, right: string): boolean {
