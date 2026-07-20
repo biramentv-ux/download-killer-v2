@@ -1,6 +1,10 @@
 import legacyHandler from './index';
 import type { DownloadJob, Env, JobHistoryEvent } from './types';
 import { handleLatencyStrikeApi } from './latency_strike';
+import {
+  ensureLatencyStrikeBotCommands,
+  handleLatencyStrikeTelegramWebhook,
+} from './latency_strike_bot';
 import { handleMediaLabApi } from './media_lab';
 import { handleJobStatusBridge } from './job_status_bridge';
 import {
@@ -157,6 +161,8 @@ export default {
     if (mediaLabResponse) return mediaLabResponse;
 
     if (url.pathname === '/telegram/webhook') {
+      const gameWebhookResponse = await handleLatencyStrikeTelegramWebhook(request.clone(), env);
+      if (gameWebhookResponse) return gameWebhookResponse;
       return handleTelegramMasterWebhook(request, env);
     }
 
@@ -190,6 +196,7 @@ export default {
     context.waitUntil((async () => {
       await ensureTelegramV10Commands(env);
       await ensureTelegramMasterCommands(env);
+      await ensureLatencyStrikeBotCommands(env);
     })());
   },
 } satisfies ExportedHandler<ExtendedEnv, DownloadJob | JobHistoryEvent>;
