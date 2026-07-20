@@ -134,6 +134,11 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
       /<script src="\.\/telegram\.js(?:\?[^\"]*)?" defer><\/script>/,
       `<script src="/platform/status-backoff.js?v=${TELEGRAM_MINIAPP_VERSION}"></script>\n  <script src="./telegram.js?v=${TELEGRAM_MINIAPP_VERSION}" defer></script>`,
     );
+    if (!html.includes('data-game="latency-strike"')) {
+      const archiveCard = '<button class="command-card" type="button" data-open-tab="archive"><i>☁</i><b>Архив</b><small>Telegram file_id и повторна употреба</small></button>';
+      const gameCard = '<a class="command-card" data-game="latency-strike" href="/games/latency-strike/?v=1.0.0" style="text-decoration:none"><i>⚡</i><b>Latency Strike</b><small>Реакция, XP, награди и седмична класация</small></a>';
+      html = html.replace(archiveCard, `${archiveCard}\n        ${gameCard}`);
+    }
   }
 
   const headers = new Headers(response.headers);
