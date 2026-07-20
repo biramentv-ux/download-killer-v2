@@ -1,5 +1,7 @@
 import legacyHandler from './index';
 import type { DownloadJob, Env, JobHistoryEvent } from './types';
+import { handleArchiveRaidApi } from './archive_raid';
+import { handleArchiveRaidTelegramWebhook } from './archive_raid_bot';
 import { handleDyrakArmyArenaApi } from './dyrakarmy_arena';
 import { handleDyrakArmyArenaTelegramWebhook } from './dyrakarmy_arena_bot';
 import { ensureDyrakArmyArenaCommands } from './dyrakarmy_arena_commands';
@@ -80,9 +82,10 @@ async function enforceNativeTelegramApi(
   }
 
   if (path !== '/api/runtime-config') return response;
-  const [latencyEnabled, arenaEnabled, downloadsEnabled, mediaLabEnabled] = await Promise.all([
+  const [latencyEnabled, arenaEnabled, raidEnabled, downloadsEnabled, mediaLabEnabled] = await Promise.all([
     isPlatformModuleEnabled(env, 'latency-strike'),
     isPlatformModuleEnabled(env, 'dyrakarmy-arena'),
+    isPlatformModuleEnabled(env, 'archive-raid'),
     isPlatformModuleEnabled(env, 'downloads'),
     isPlatformModuleEnabled(env, 'media-lab'),
   ]);
@@ -121,6 +124,14 @@ async function enforceNativeTelegramApi(
         path: '/games/dyrakarmy-arena/',
         miniapp_deep_link: `tg://resolve?domain=${links.username}&startapp=arena`,
         modes: ['daily-arena', 'team-league', 'practice'],
+      },
+      archive_raid: {
+        enabled: raidEnabled,
+        version: '1.0.0',
+        path: '/games/archive-raid/',
+        miniapp_deep_link: `tg://resolve?domain=${links.username}&startapp=archive_raid`,
+        modes: ['ranked-raid', 'practice', 'daily-crate', 'collection'],
+        protected_content_access: false,
       },
     },
   });
@@ -170,6 +181,9 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
     if (!html.includes('data-game="dyrakarmy-arena"')) {
       cards.push('<a class="command-card" data-game="dyrakarmy-arena" href="tg://resolve?domain=dyrakarmy_bot&startapp=arena" style="text-decoration:none"><i>⚔️</i><b>DyrakArmy Arena</b><small>Отбори, дневни мисии, сезони и класации</small></a>');
     }
+    if (!html.includes('data-game="archive-raid"')) {
+      cards.push('<a class="command-card" data-game="archive-raid" href="tg://resolve?domain=dyrakarmy_bot&startapp=archive_raid" style="text-decoration:none"><i>🗃</i><b>Archive Raid</b><small>Collectible карти, crates, общ XP и профилни ефекти</small></a>');
+    }
     if (!html.includes('data-control-center')) {
       cards.push('<a class="command-card" data-control-center href="/control/" style="text-decoration:none"><i>⚙</i><b>Control Center</b><small>Защитено дистанционно управление за администратори</small></a>');
     }
@@ -187,6 +201,7 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
 async function disabledModuleResponse(request: Request, env: ExtendedEnv): Promise<Response | null> {
   const url = new URL(request.url);
   const checks: Array<[string, boolean]> = [
+    ['archive-raid', url.pathname.startsWith('/api/games/archive-raid/') || url.pathname.startsWith('/games/archive-raid/')],
     ['dyrakarmy-arena', url.pathname.startsWith('/api/games/dyrakarmy-arena/') || url.pathname.startsWith('/games/dyrakarmy-arena/')],
     ['latency-strike', url.pathname.startsWith('/api/games/latency-strike/') || url.pathname.startsWith('/games/latency-strike/')],
     ['downloads', request.method === 'POST' && url.pathname === '/api/download'],
@@ -216,6 +231,9 @@ export default {
     const telegramHealthResponse = handleTelegramMiniAppHealth(request, env);
     if (telegramHealthResponse) return telegramHealthResponse;
 
+    const raidResponse = await handleArchiveRaidApi(request, env);
+    if (raidResponse) return raidResponse;
+
     const arenaResponse = await handleDyrakArmyArenaApi(request, env);
     if (arenaResponse) return arenaResponse;
 
@@ -232,6 +250,10 @@ export default {
       await ensureDyrakArmyArenaCommands(env);
       const controlWebhookResponse = await handlePlatformControlTelegramWebhook(request.clone(), env);
       if (controlWebhookResponse) return controlWebhookResponse;
+      if (await isPlatformModuleEnabled(env, 'archive-raid')) {
+        const raidWebhookResponse = await handleArchiveRaidTelegramWebhook(request.clone(), env);
+        if (raidWebhookResponse) return raidWebhookResponse;
+      }
       if (await isPlatformModuleEnabled(env, 'dyrakarmy-arena')) {
         const arenaWebhookResponse = await handleDyrakArmyArenaTelegramWebhook(request.clone(), env);
         if (arenaWebhookResponse) return arenaWebhookResponse;
