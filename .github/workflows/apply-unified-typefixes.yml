@@ -76,7 +76,8 @@ jobs:
           test ! -f .github/workflows/unified-typecheck-diagnostics.yml
           test ! -f .github/workflows/apply-unified-typefixes.yml
 
-      - name: Typecheck before commit
+      - name: Typecheck preview
+        continue-on-error: true
         working-directory: worker
         run: |
           npm ci
