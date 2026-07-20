@@ -8,6 +8,7 @@
     games: '#games',
     'dyrakarmy-arena': '[data-platform-module="dyrakarmy-arena"]',
     'latency-strike': '[data-platform-module="latency-strike"]',
+    'archive-raid': '[data-platform-module="archive-raid"]',
     downloads: '#console',
     'media-lab': '#media-lab',
     telegram: '#telegram',
