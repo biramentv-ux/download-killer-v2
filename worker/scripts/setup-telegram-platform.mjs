@@ -8,6 +8,7 @@ const dropPending = String(process.env.TELEGRAM_DROP_PENDING_UPDATES || '0') ===
 const miniAppVersion = String(process.env.TELEGRAM_MINIAPP_VERSION || '12.2.0').trim();
 const miniAppUrl = `${publicBase}/telegram/?v=${encodeURIComponent(miniAppVersion)}`;
 const latencyStrikeUrl = `${publicBase}/games/latency-strike/?v=1.0.0`;
+const arenaUrl = `${publicBase}/games/dyrakarmy-arena/?v=1.0.0`;
 
 if (!token) {
   console.error('TELEGRAM_BOT_TOKEN is required. Set it as an environment variable; do not commit it.');
@@ -36,6 +37,8 @@ async function call(method, payload = {}) {
 const commands = [
   { command: 'start', description: 'Старт и главно меню' },
   { command: 'menu', description: 'Главно меню' },
+  { command: 'arena', description: 'Играй DyrakArmy Arena' },
+  { command: 'team', description: 'Моят Arena отбор и ранг' },
   { command: 'game', description: 'Играй Latency Strike' },
   { command: 'rewards', description: 'Ранг и игрови награди' },
   { command: 'search', description: 'Търсене по име' },
@@ -62,7 +65,7 @@ try {
     throw new Error(`Token belongs to @${actualUsername}, expected @${expectedUsername}. Refusing to bind the wrong Mini App session key.`);
   }
   if (!me.supports_inline_queries) {
-    console.warn('Inline sharing is disabled. In @BotFather run /setinline for this bot and set a placeholder such as "Сподели песен".');
+    console.warn('Inline sharing is disabled. In @BotFather run /setinline for this bot and set a placeholder such as "Сподели песен или Arena".');
   }
 
   await call('setMyCommands', { commands, language_code: 'bg' });
@@ -75,11 +78,11 @@ try {
     },
   });
   await call('setMyDescription', {
-    description: 'Download Killer: Mini App v12, Latency Strike, обща опашка, формати, Telegram архив и споделяне.',
+    description: 'Download Killer: Mini App v12, DyrakArmy Arena, Latency Strike, обща опашка, Telegram архив и споделяне.',
     language_code: 'bg',
   });
   await call('setMyShortDescription', {
-    short_description: 'Mini App v12, Latency Strike, архив и споделяне.',
+    short_description: 'Mini App, Arena, Latency Strike, архив и споделяне.',
     language_code: 'bg',
   });
 
@@ -99,9 +102,10 @@ try {
   if (webhook.last_error_message) console.warn(`Last webhook error: ${webhook.last_error_message}`);
   console.log(`Native link: tg://resolve?domain=${expectedUsername}`);
   console.log(`Mini App v${miniAppVersion}: ${miniAppUrl}`);
+  console.log(`DyrakArmy Arena v1: ${arenaUrl}`);
   console.log(`Latency Strike v1: ${latencyStrikeUrl}`);
   console.log(`Health: ${publicBase}/api/telegram/v12/health`);
-  console.log('Optional native Games catalog: in @BotFather open Games → Create a New Game and use short name latency_strike.');
+  console.log('Optional native Games catalog: in @BotFather create latency_strike. Arena runs as a team Mini App.');
   console.log('Next: close the existing Telegram WebView completely and open the Menu button again.');
   console.log('Add the bot as an administrator to a private storage channel with permission to post messages.');
 } catch (error) {
