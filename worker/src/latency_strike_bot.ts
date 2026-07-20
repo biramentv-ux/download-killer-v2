@@ -18,9 +18,17 @@ interface TelegramMessage {
   text?: string;
 }
 
+interface TelegramCallbackQuery {
+  id: string;
+  from: TelegramUser;
+  message?: TelegramMessage;
+  data?: string;
+}
+
 interface TelegramUpdate {
   update_id: number;
   message?: TelegramMessage;
+  callback_query?: TelegramCallbackQuery;
 }
 
 const COMMAND_MARKER = 'tg:latency-strike:commands:v1';
@@ -35,13 +43,25 @@ export async function handleLatencyStrikeTelegramWebhook(
   }
 
   const update = await request.json().catch(() => null) as TelegramUpdate | null;
-  const message = update?.message;
+  if (!update) return null;
+
+  if (update.callback_query?.data === 'latency:rewards') {
+    const query = update.callback_query;
+    await telegramRequest('answerCallbackQuery', { callback_query_id: query.id }, env);
+    const chatId = query.message?.chat.id || query.from.id;
+    const language = languageFor(query.from);
+    const summary = await getLatencyStrikeBotSummary(query.from.id, env, language);
+    await sendMessage(chatId, summary, env, rewardKeyboard(language, env));
+    return Response.json({ ok: true });
+  }
+
+  const message = update.message;
   if (!message || message.chat.type !== 'private') return null;
   const text = String(message.text || '').trim();
   if (!text) return null;
   const command = text.split(/\s+/)[0]?.split('@')[0]?.toLowerCase() || '';
   const label = text.toLowerCase();
-  const language = message.from?.language_code?.toLowerCase().startsWith('en') ? 'en' : 'bg';
+  const language = languageFor(message.from);
 
   const isGame = command === '/game' || command === '/games' || label === '🎮 latency strike' || label === '🎮 games';
   const isRewards = command === '/rewards' || command === '/rank' || label === '🏆 награди' || label === '🏆 rewards';
@@ -50,7 +70,7 @@ export async function handleLatencyStrikeTelegramWebhook(
   await ensureLatencyStrikeBotCommands(env);
   if (isRewards) {
     const summary = await getLatencyStrikeBotSummary(message.from?.id || message.chat.id, env, language);
-    await sendMessage(message.chat.id, summary, env, gameKeyboard(language, env));
+    await sendMessage(message.chat.id, summary, env, rewardKeyboard(language, env));
     return Response.json({ ok: true });
   }
 
@@ -79,12 +99,6 @@ export async function handleLatencyStrikeTelegramWebhook(
         [{ text: language === 'bg' ? '⚡ Играй Latency Strike' : '⚡ Play Latency Strike', web_app: { url: gameUrl } }],
         [{ text: language === 'bg' ? '🏆 Моят ранг и награди' : '🏆 My rank and rewards', callback_data: 'latency:rewards' }],
       ],
-      keyboard: [[
-        { text: '🎮 Latency Strike', web_app: { url: gameUrl } },
-        { text: language === 'bg' ? '🏆 Награди' : '🏆 Rewards' },
-      ]],
-      resize_keyboard: true,
-      is_persistent: true,
     },
   });
   return Response.json({ ok: true });
@@ -139,20 +153,18 @@ export async function ensureLatencyStrikeBotCommands(env: ExtendedEnv): Promise<
   }
 }
 
-function gameKeyboard(language: 'bg' | 'en', env: ExtendedEnv): Record<string, unknown> {
+function rewardKeyboard(language: 'bg' | 'en', env: ExtendedEnv): Record<string, unknown> {
   return {
     reply_markup: {
       inline_keyboard: [[
-        { text: language === 'bg' ? '⚡ Играй отново' : '⚡ Play again', web_app: { url: latencyStrikeUrl(env) } },
+        { text: language === 'bg' ? '⚡ Играй Latency Strike' : '⚡ Play Latency Strike', web_app: { url: latencyStrikeUrl(env) } },
       ]],
-      keyboard: [[
-        { text: '🎮 Latency Strike', web_app: { url: latencyStrikeUrl(env) } },
-        { text: language === 'bg' ? '🏆 Награди' : '🏆 Rewards' },
-      ]],
-      resize_keyboard: true,
-      is_persistent: true,
     },
   };
+}
+
+function languageFor(user?: TelegramUser): 'bg' | 'en' {
+  return user?.language_code?.toLowerCase().startsWith('en') ? 'en' : 'bg';
 }
 
 function latencyStrikeUrl(env: ExtendedEnv): string {
