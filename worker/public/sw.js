@@ -1,5 +1,5 @@
-const CACHE_NAME = 'download-killer-static-v12.2.0';
-const LEGACY_CACHE_NAME = 'download-killer-static-v15';
+const CACHE_NAME = 'download-killer-static-v13-responsive';
+const LEGACY_CACHE_NAME = 'download-killer-static-v12.2.0';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
 const APP_SHELL = [
   '/',
@@ -7,8 +7,10 @@ const APP_SHELL = [
   '/favicon.svg',
   '/manifest.webmanifest',
   '/platform/platform.css',
+  '/platform/landing-v13.css',
   '/platform/status-backoff.js',
   '/platform/site-defaults.js',
+  '/platform/landing-v13.js',
   '/platform/platform.js',
   '/media-lab/media-lab.css',
   '/media-lab/media-lab.js',
@@ -78,12 +80,14 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   const isWarmableApi = url.pathname.startsWith('/api/file/') || url.pathname.startsWith('/api/archive/file/');
-  if (url.pathname.startsWith('/api/') && !isWarmableApi) {
-    event.respondWith(fetch(request));
+  const isTelegramAsset = url.pathname.startsWith('/telegram/');
+
+  if (isTelegramAsset) {
+    event.respondWith(networkFirstTelegram(request));
     return;
   }
-  if (url.pathname.startsWith('/telegram/')) {
-    event.respondWith(networkFirstTelegram(request));
+  if (url.pathname.startsWith('/api/') && !isWarmableApi) {
+    event.respondWith(fetch(request));
     return;
   }
   if (isWarmableApi && request.headers.has('range')) {
@@ -109,5 +113,3 @@ self.addEventListener('fetch', (event) => {
     }),
   );
 });
-
-void LEGACY_CACHE_NAME;
