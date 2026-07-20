@@ -31,6 +31,12 @@ interface TelegramMethodResponse<T = unknown> {
   description?: string;
 }
 
+interface GameScorePayload {
+  result?: {
+    score?: number;
+  };
+}
+
 const NATIVE_SESSION_PREFIX = 'game:latency:native:';
 const NATIVE_SESSION_TTL_SECONDS = 900;
 
@@ -86,7 +92,7 @@ export async function handleLatencyStrikeGameApi(
   if (!response) return null;
 
   if (url.pathname.endsWith('/score') && response.ok) {
-    const payload = await response.clone().json<{ result?: { score?: number } }>().catch(() => ({}));
+    const payload = await response.clone().json<GameScorePayload>().catch((): GameScorePayload => ({}));
     const score = Math.max(0, Math.floor(Number(payload.result?.score || 0)));
     if (score > 0) {
       await syncNativeTelegramScore(session, score, env).catch((error) => {
