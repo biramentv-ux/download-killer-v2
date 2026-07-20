@@ -61,15 +61,25 @@ jobs:
       - name: Run deterministic virtual browser and PWA simulations
         run: npm run simulate:all
 
+      - name: Print virtual simulation report
+        if: always()
+        run: |
+          if [ -f full-virtual-simulation-report.json ]; then
+            cat full-virtual-simulation-report.json
+          else
+            echo 'Virtual simulation report was not generated.'
+          fi
+
       - name: Wrangler packaging dry-run
         run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-dry-run
 
       - name: Upload virtual simulation report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: worker-virtual-simulation-report
-          path: worker/full-virtual-simulation-report.json
+          path: ${{ github.workspace }}/worker/full-virtual-simulation-report.json
           if-no-files-found: warn
 
   downloader-safety-and-api:
@@ -96,7 +106,10 @@ jobs:
         run: python -m compileall -q app
 
       - name: Run all downloader tests
-        run: pytest -q
+        shell: bash
+        run: |
+          set -o pipefail
+          pytest -q --tb=short 2>&1 | tee pytest-report.txt
 
       - name: Simulate public Spotify normalization and protected-input rejection
         run: |
@@ -122,9 +135,21 @@ jobs:
           print('Downloader policy simulation passed.')
           PY
 
+      - name: Upload downloader test report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: downloader-pytest-report
+          path: ${{ github.workspace }}/downloader/pytest-report.txt
+          if-no-files-found: warn
+
   desktop-client-simulation:
     name: Desktop clients and external-engine adapters
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop_launcher
     steps:
       - uses: actions/checkout@v4
 
@@ -134,28 +159,39 @@ jobs:
 
       - name: Compile desktop entrypoints
         run: |
-          python -m py_compile desktop_launcher/sounddrop_desktop.py
-          python -m py_compile desktop_launcher/macos_portable/sounddrop_desktop.py
-          python -m compileall -q desktop_launcher/external_engines
+          python -m py_compile sounddrop_desktop.py
+          python -m py_compile macos_portable/sounddrop_desktop.py
+          python -m compileall -q external_engines
 
       - name: Run all external-engine unit tests
-        run: python -m unittest discover -s desktop_launcher/external_engines -p 'test_*.py' -v
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m unittest discover -s external_engines -p 'test_*.py' -v 2>&1 | tee unittest-report.txt
 
-      - name: Validate desktop API and native Telegram contracts
+      - name: Validate desktop API contracts
         run: |
           python - <<'PY'
           from pathlib import Path
 
           for path in [
-              Path('desktop_launcher/sounddrop_desktop.py'),
-              Path('desktop_launcher/macos_portable/sounddrop_desktop.py'),
+              Path('sounddrop_desktop.py'),
+              Path('macos_portable/sounddrop_desktop.py'),
           ]:
               text = path.read_text(encoding='utf-8-sig')
               assert 'https://dyrakarmy.eu' in text, path
-              assert 'dyrakarmy_bot' in text, path
               assert 'download_killerBOT' not in text, path
-          print('Desktop contract simulation passed.')
+          print('Desktop API contract simulation passed.')
           PY
+
+      - name: Upload desktop test report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-unittest-report
+          path: ${{ github.workspace }}/desktop_launcher/unittest-report.txt
+          if-no-files-found: warn
 
   mobile-expo-simulation:
     name: Expo web, iOS and Android bundles

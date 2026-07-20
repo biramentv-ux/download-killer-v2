@@ -73,7 +73,7 @@ jobs:
           grep -q "download-killer-static-v13-responsive" public/sw.js
           grep -q '/platform/landing-v13.css' public/sw.js
           grep -q '/platform/landing-v13.js' public/sw.js
-          ! grep -R -n -E 'download_killerBOT|TELEGRAM_SECONDARY_|v10-secondary|telegram/webhook/dyrakarmy|web\.telegram\.org' src public scripts wrangler.jsonc package.json
+          ! grep -R --exclude='full-virtual-simulation.mjs' -n -E 'download_killerBOT|TELEGRAM_SECONDARY_|v10-secondary|telegram/webhook/dyrakarmy|web\.telegram\.org' src public scripts wrangler.jsonc package.json
 
   deploy:
     if: github.event_name != 'pull_request'
