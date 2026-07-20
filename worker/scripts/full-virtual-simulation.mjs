@@ -333,7 +333,7 @@ async function validateContracts() {
   for (const id of requiredIds) assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
   assert.ok(html.includes('Responsive Design v13'));
   assert.ok(html.includes('tg://resolve?domain=dyrakarmy_bot'));
-  assert.ok(!html.includes('download_killerBOT'));
+  assert.ok(!html.includes('download_killer' + 'BOT'));
   assert.ok(!html.includes('web.telegram.org'));
 
   for (const marker of ['@media (max-width: 1050px)', '@media (max-width: 820px)', '@media (max-width: 600px)', '@media (max-width: 390px)', '@media (prefers-reduced-motion: reduce)']) {
@@ -363,7 +363,7 @@ async function validateContracts() {
   assert.ok(mobile.includes("const DEFAULT_API_BASE = 'https://dyrakarmy.eu'"));
   assert.ok(mobile.includes("const MIRROR_API_BASE = 'https://dyrakarmy.online'"));
   assert.ok(telegramHtml.includes('@dyrakarmy_bot'));
-  assert.ok(!telegramHtml.includes('download_killerBOT'));
+  assert.ok(!telegramHtml.includes('download_killer' + 'BOT'));
 }
 
 await scenario('Web UI', 'responsive and integration contracts', validateContracts);
