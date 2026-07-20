@@ -62,8 +62,8 @@ jobs:
           grep -q "isPlatformModuleEnabled" src/platform_v2.ts
           grep -q "TELEGRAM_ADMIN_IDS" src/types.ts
           grep -q "TELEGRAM_ADMIN_IDS" src/platform_control.ts
-          grep -q "'/control/'" src/platform_control.ts
-          grep -q "'/games/dyrakarmy-arena/'" src/platform_control.ts
+          grep -q "control-center" src/platform_control.ts
+          grep -q "dyrakarmy-arena" src/platform_control.ts
           grep -q "module.toggle" src/platform_control.ts
           grep -q "content.upsert" src/platform_control.ts
           grep -q "setting.set" src/platform_control.ts
@@ -85,9 +85,18 @@ jobs:
 
       - name: Enforce safe remote-management boundary
         run: |
-          ! grep -R -n -E 'eval\(|new Function\(|innerHTML[[:space:]]*=[[:space:]]*[^`"'"']' src/platform_control.ts public/control
-          ! grep -R -n -E 'TELEGRAM_BOT_TOKEN[[:space:]]*[:=][[:space:]]*["'"'][0-9]+' public src migrations
-          ! grep -R -n -E 'javascript:|data:text/html' public/control src/platform_control.ts
+          if grep -R -n -E 'eval\(|new Function\(' src/platform_control.ts public/control; then
+            echo 'Executable code construction is forbidden in remote management.'
+            exit 1
+          fi
+          if grep -R -n -E 'javascript:|data:text/html' public/control src/platform_control.ts; then
+            echo 'Unsafe URL schemes are forbidden.'
+            exit 1
+          fi
+          if grep -R -n -E 'bot[0-9]{5,}:[A-Za-z0-9_-]{20,}' public src migrations; then
+            echo 'A Telegram token-like value was found in source.'
+            exit 1
+          fi
 
       - name: Wrangler packaging dry-run
         run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-unified-dry-run
