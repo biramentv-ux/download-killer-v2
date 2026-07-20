@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080914">
+  <meta name="description" content="Archive Raid: виртуална collectible игра с общ DyrakArmy XP и профил.">
+  <title>Archive Raid</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./raid.css?v=1.0.0">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="./raid.js?v=1.0.0" defer></script>
+</head>
+<body>
+  <header class="raid-header">
+    <a class="brand" href="/" aria-label="Download Killer"><b>DK</b><span>ARCHIVE RAID<small>DYRAKARMY GAME</small></span></a>
+    <div class="identity" id="identity"><i></i><span>Practice</span></div>
+  </header>
+
+  <main class="raid-shell">
+    <section class="hero">
+      <div><span class="eyebrow">VIRTUAL COLLECTIBLE RAID · V1</span><h1>Пробий архива.<br><em>Извади картите.</em></h1><p>Пет виртуални сектора, три маршрута и общ профил с DyrakArmy Arena и Latency Strike. Наградите са само козметични и не дават достъп до защитено съдържание.</p></div>
+      <div class="hero-stats"><article><small>Общ XP</small><strong id="sharedXp">0</strong></article><article><small>Ранг</small><strong id="sharedRank">Recruit</strong></article><article><small>Колекция</small><strong id="collectionCount">0/21</strong></article></div>
+    </section>
+
+    <nav class="raid-tabs">
+      <button class="active" data-tab="raid" type="button">Рейд</button>
+      <button data-tab="collection" type="button">Колекция</button>
+      <button data-tab="leaderboard" type="button">Класация</button>
+      <button data-tab="profile" type="button">Профил</button>
+    </nav>
+
+    <section class="panel active" data-panel="raid">
+      <div class="raid-intro" id="raidIntro">
+        <div><span class="vault-icon">🗃</span><h2>Дневен архивен сектор</h2><p>Scan е безопасен, Extract е балансиран, Breach носи най-висок шанс за редки карти, но и най-голям риск.</p></div>
+        <div class="raid-actions"><button class="primary" id="startRaidBtn" type="button">Започни ranked рейд</button><button class="secondary" id="practiceRaidBtn" type="button">Practice</button><button class="crate" id="dailyCrateBtn" type="button">🎁 Дневен crate</button></div>
+      </div>
+      <div class="sector-track" id="sectorTrack" hidden></div>
+      <div class="route-picker" id="routePicker" hidden>
+        <span id="sectorLabel">Сектор 1/5</span><h2>Избери маршрут</h2>
+        <div class="route-grid">
+          <button data-route="scan" type="button"><b>SCAN</b><small>Нисък риск · стандартна награда</small></button>
+          <button data-route="extract" type="button"><b>EXTRACT</b><small>Среден риск · по-добър drop</small></button>
+          <button data-route="breach" type="button"><b>BREACH</b><small>Висок риск · rarity bonus</small></button>
+        </div>
+      </div>
+      <div class="raid-result" id="raidResult" hidden></div>
+    </section>
+
+    <section class="panel" data-panel="collection">
+      <div class="panel-heading"><div><span>COLLECTIBLE ARCHIVE</span><h2>Твоята колекция</h2><p>Жанрове, waveform дизайни, bot skins, server cores, badges, артистични архетипи и profile effects.</p></div><select id="rarityFilter"><option value="all">Всички редкости</option><option>Common</option><option>Rare</option><option>Epic</option><option>Legendary</option><option>Army Exclusive</option></select></div>
+      <div class="card-grid" id="collectionGrid"></div>
+    </section>
+
+    <section class="panel" data-panel="leaderboard">
+      <div class="panel-heading"><div><span>WEEKLY RAIDERS</span><h2>Седмична класация</h2><p>Точките идват само от ranked рейдове.</p></div><button class="secondary" id="reloadLeaderboardBtn" type="button">Обнови</button></div>
+      <div class="leaderboard" id="leaderboard"></div>
+    </section>
+
+    <section class="panel" data-panel="profile">
+      <div class="profile-card"><span class="profile-icon" id="profileIcon">◉</span><div><small>SHARED DYRAKARMY PROFILE</small><h2 id="profileName">Practice Raider</h2><p id="profileMeta">Отвори през Telegram за ranked прогрес.</p></div></div>
+      <div class="profile-grid"><article><small>XP</small><strong id="profileXp">0</strong></article><article><small>Игри</small><strong id="profileGames">0</strong></article><article><small>Опити днес</small><strong id="profileAttempts">0/4</strong></article><article><small>Карти общо</small><strong id="profileCards">0</strong></article></div>
+      <div class="safety-note"><b>🔒 Safe collectible boundary</b><p>Archive Raid не извлича, декриптира или отключва защитена медия. Колекционерските карти са виртуални записи и козметични профилни ефекти.</p></div>
+    </section>
+  </main>
+
+  <dialog id="dropDialog"><div class="drop-content"><span id="dropIcon">🃏</span><small id="dropRarity">COMMON</small><h2 id="dropTitle">New card</h2><p id="dropDescription"></p><button class="primary" id="closeDropBtn" type="button">Прибери картата</button></div></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
