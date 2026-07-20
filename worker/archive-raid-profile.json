@@ -1,0 +1,11 @@
+{
+  "game": "archive-raid",
+  "version": "1.0.0",
+  "shared_profile": true,
+  "shared_xp": true,
+  "collectible_categories": 7,
+  "rarities": 5,
+  "daily_crate": true,
+  "remote_feature_flag": true,
+  "protected_content_access": false
+}
