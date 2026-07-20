@@ -39,15 +39,16 @@ describe('DyrakArmy Arena', () => {
     expect(result.team_points).toBe(result.score);
   });
 
-  it('does not trust duplicate or unknown answer identifiers', () => {
+  it('accepts only the first answer for each known question', () => {
     const questions = arenaQuestionsForDay('2026-07-20');
     const result = calculateArenaScore(questions, [
       { question_id: questions[0].id, option_index: questions[0].correct, response_ms: 300 },
       { question_id: 'unknown-question', option_index: 0, response_ms: 1 },
       { question_id: questions[0].id, option_index: 99, response_ms: 1 },
     ]);
-    expect(result.correct).toBe(0);
-    expect(result.accuracy).toBe(0);
+    expect(result.correct).toBe(1);
+    expect(result.accuracy).toBe(13);
+    expect(result.best_combo).toBe(1);
     expect(result.score).toBeGreaterThanOrEqual(0);
     expect(result.xp).toBeGreaterThanOrEqual(35);
   });
