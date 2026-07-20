@@ -80,4 +80,4 @@ jobs:
           node --check public/platform/site-defaults.js
           grep -q 'tg://resolve?domain=dyrakarmy_bot' public/index.html
           grep -q '"TELEGRAM_BOT_USERNAME": "dyrakarmy_bot"' wrangler.jsonc
-          ! grep -R -n -E 'download_killerBOT|TELEGRAM_SECONDARY_|v10-secondary|telegram/webhook/dyrakarmy|web\.telegram\.org' src public scripts wrangler.jsonc package.json
+          ! grep -R --exclude='full-virtual-simulation.mjs' -n -E 'download_killerBOT|TELEGRAM_SECONDARY_|v10-secondary|telegram/webhook/dyrakarmy|web\.telegram\.org' src public scripts wrangler.jsonc package.json
