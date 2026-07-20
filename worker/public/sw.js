@@ -36,8 +36,16 @@ const APP_SHELL = [
   '/icons/apple-touch-icon.png',
 ];
 
+async function installAppShell() {
+  const cache = await caches.open(CACHE_NAME);
+  await Promise.allSettled(APP_SHELL.map(async (url) => {
+    const response = await fetch(url, { cache: 'reload' });
+    if (response.ok) await cache.put(url, response.clone());
+  }));
+}
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+  event.waitUntil(installAppShell());
   self.skipWaiting();
 });
 
