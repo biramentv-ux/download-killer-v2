@@ -1,15 +1,15 @@
 import type { Env } from './types';
 import { getLatencyStrikeBotSummary } from './latency_strike';
+import {
+  createLatencyStrikeNativeLaunch,
+  type NativeGameTelegramUser,
+} from './latency_strike_native';
 
 type ExtendedEnv = Env & {
   TELEGRAM_BOT_API_BASE?: string;
 };
 
-interface TelegramUser {
-  id: number;
-  first_name?: string;
-  language_code?: string;
-}
+interface TelegramUser extends NativeGameTelegramUser {}
 
 interface TelegramMessage {
   message_id: number;
@@ -22,13 +22,24 @@ interface TelegramCallbackQuery {
   id: string;
   from: TelegramUser;
   message?: TelegramMessage;
+  inline_message_id?: string;
+  chat_instance?: string;
   data?: string;
+  game_short_name?: string;
+}
+
+interface TelegramInlineQuery {
+  id: string;
+  from: TelegramUser;
+  query: string;
+  offset?: string;
 }
 
 interface TelegramUpdate {
   update_id: number;
   message?: TelegramMessage;
   callback_query?: TelegramCallbackQuery;
+  inline_query?: TelegramInlineQuery;
 }
 
 interface WebhookRequestLike {
@@ -36,12 +47,14 @@ interface WebhookRequestLike {
   json(): Promise<unknown>;
 }
 
-interface TelegramMethodResult {
+interface TelegramMethodResult<T = unknown> {
   ok: boolean;
+  result?: T;
   description?: string;
 }
 
-const COMMAND_MARKER = 'tg:latency-strike:commands:v1';
+const COMMAND_MARKER = 'tg:latency-strike:commands:v2';
+const GAME_SHORT_NAME = 'latency_strike';
 
 export async function handleLatencyStrikeTelegramWebhook(
   request: WebhookRequestLike,
@@ -55,18 +68,14 @@ export async function handleLatencyStrikeTelegramWebhook(
   const update = await request.json().catch(() => null) as TelegramUpdate | null;
   if (!update) return null;
 
-  if (update.callback_query?.data === 'latency:rewards') {
-    const query = update.callback_query;
-    await telegramRequest('answerCallbackQuery', { callback_query_id: query.id }, env);
-    const chatId = query.message?.chat.id || query.from.id;
-    const language = languageFor(query.from);
-    const summary = await getLatencyStrikeBotSummary(query.from.id, env, language);
-    await sendMessage(chatId, summary, env, rewardKeyboard(language, env));
-    return Response.json({ ok: true });
-  }
+  const inlineResponse = await handleGameInlineQuery(update.inline_query, env);
+  if (inlineResponse) return inlineResponse;
+
+  const callbackResponse = await handleGameCallback(update.callback_query, env);
+  if (callbackResponse) return callbackResponse;
 
   const message = update.message;
-  if (!message || message.chat.type !== 'private') return null;
+  if (!message) return null;
   const text = String(message.text || '').trim();
   if (!text) return null;
   const command = text.split(/\s+/)[0]?.split('@')[0]?.toLowerCase() || '';
@@ -84,6 +93,85 @@ export async function handleLatencyStrikeTelegramWebhook(
     return Response.json({ ok: true });
   }
 
+  const nativeGame = await telegramRequest<{ message_id: number }>('sendGame', {
+    chat_id: message.chat.id,
+    game_short_name: GAME_SHORT_NAME,
+    disable_notification: false,
+  }, env);
+  if (nativeGame.ok) {
+    return Response.json({ ok: true, mode: 'native_game' });
+  }
+
+  await sendWebAppFallback(message.chat.id, language, env, nativeGame.description);
+  return Response.json({ ok: true, mode: 'web_app_fallback' });
+}
+
+async function handleGameCallback(
+  query: TelegramCallbackQuery | undefined,
+  env: ExtendedEnv,
+): Promise<Response | null> {
+  if (!query) return null;
+
+  if (query.game_short_name === GAME_SHORT_NAME) {
+    const launchUrl = await createLatencyStrikeNativeLaunch({
+      user: query.from,
+      chat_id: query.message?.chat.id,
+      message_id: query.message?.message_id,
+      inline_message_id: query.inline_message_id,
+      chat_instance: query.chat_instance,
+    }, env);
+    const answered = await telegramRequest('answerCallbackQuery', {
+      callback_query_id: query.id,
+      url: launchUrl,
+      cache_time: 0,
+    }, env);
+    if (!answered.ok) {
+      throw new Error(answered.description || 'Unable to launch native Telegram game');
+    }
+    return Response.json({ ok: true, mode: 'native_game_launch' });
+  }
+
+  if (query.data === 'latency:rewards') {
+    await telegramRequest('answerCallbackQuery', { callback_query_id: query.id }, env);
+    const chatId = query.message?.chat.id || query.from.id;
+    const language = languageFor(query.from);
+    const summary = await getLatencyStrikeBotSummary(query.from.id, env, language);
+    await sendMessage(chatId, summary, env, rewardKeyboard(language, env));
+    return Response.json({ ok: true });
+  }
+
+  return null;
+}
+
+async function handleGameInlineQuery(
+  inlineQuery: TelegramInlineQuery | undefined,
+  env: ExtendedEnv,
+): Promise<Response | null> {
+  if (!inlineQuery) return null;
+  const query = String(inlineQuery.query || '').trim().toLowerCase();
+  if (query && !query.includes('game') && !query.includes('latency') && !query.includes('игра')) {
+    return null;
+  }
+
+  const answered = await telegramRequest('answerInlineQuery', {
+    inline_query_id: inlineQuery.id,
+    results: [{
+      type: 'game',
+      id: 'latency-strike-v1',
+      game_short_name: GAME_SHORT_NAME,
+    }],
+    cache_time: 5,
+    is_personal: true,
+  }, env);
+  return answered.ok ? Response.json({ ok: true, mode: 'inline_game' }) : null;
+}
+
+async function sendWebAppFallback(
+  chatId: number,
+  language: 'bg' | 'en',
+  env: ExtendedEnv,
+  nativeError?: string,
+): Promise<void> {
   const gameUrl = latencyStrikeUrl(env);
   const copy = language === 'bg'
     ? [
@@ -93,7 +181,8 @@ export async function handleLatencyStrikeTelegramWebhook(
         'Пет рунда определят резултата, XP, ранга и седмичното ти място.',
         '',
         'Награди: профилни рамки, иконки, animated badges, waveforms, теми и титлата Queue Master.',
-      ].join('\n')
+        nativeError ? '\nℹ️ Native Games профилът още не е активиран в BotFather. Отварям Mini App режима.' : '',
+      ].filter(Boolean).join('\n')
     : [
         '🎮 Latency Strike v1',
         '',
@@ -101,9 +190,10 @@ export async function handleLatencyStrikeTelegramWebhook(
         'Five rounds determine your score, XP, rank and weekly position.',
         '',
         'Rewards: profile frames, icons, animated badges, waveforms, themes and the Queue Master title.',
-      ].join('\n');
+        nativeError ? '\nℹ️ The native Games profile is not active in BotFather yet. Opening Web App mode.' : '',
+      ].filter(Boolean).join('\n');
 
-  await sendMessage(message.chat.id, copy, env, {
+  await sendMessage(chatId, copy, env, {
     reply_markup: {
       inline_keyboard: [
         [{ text: language === 'bg' ? '⚡ Играй Latency Strike' : '⚡ Play Latency Strike', web_app: { url: gameUrl } }],
@@ -111,7 +201,6 @@ export async function handleLatencyStrikeTelegramWebhook(
       ],
     },
   });
-  return Response.json({ ok: true });
 }
 
 export async function ensureLatencyStrikeBotCommands(env: ExtendedEnv): Promise<void> {
@@ -197,24 +286,19 @@ async function sendMessage(
   if (!result.ok) throw new Error(result.description || 'Telegram sendMessage failed');
 }
 
-async function telegramRequest(
+async function telegramRequest<T = unknown>(
   method: string,
   payload: Record<string, unknown>,
   env: ExtendedEnv,
-): Promise<TelegramMethodResult> {
+): Promise<TelegramMethodResult<T>> {
   const base = String(env.TELEGRAM_BOT_API_BASE || 'https://api.telegram.org').replace(/\/+$/, '');
   const response = await fetch(`${base}/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  const parsed = await response.json().catch(() => null) as Partial<TelegramMethodResult> | null;
-  return {
-    ok: parsed?.ok === true,
-    description: typeof parsed?.description === 'string'
-      ? parsed.description
-      : response.ok ? undefined : `HTTP ${response.status}`,
-  };
+  const parsed = await response.json().catch(() => null) as TelegramMethodResult<T> | null;
+  return parsed || { ok: false, description: `HTTP ${response.status}` };
 }
 
 function constantTimeEqual(left: string, right: string): boolean {
