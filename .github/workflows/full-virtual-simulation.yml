@@ -59,8 +59,6 @@ jobs:
         run: npm test
 
       - name: Run deterministic virtual browser and PWA simulations
-        id: virtual_simulation
-        continue-on-error: true
         run: npm run simulate:all
 
       - name: Print virtual simulation report
@@ -83,10 +81,6 @@ jobs:
           name: worker-virtual-simulation-report
           path: ${{ github.workspace }}/worker/full-virtual-simulation-report.json
           if-no-files-found: warn
-
-      - name: Fail on virtual simulation failure
-        if: steps.virtual_simulation.outcome != 'success'
-        run: exit 1
 
   downloader-safety-and-api:
     name: Downloader API and safety boundary
@@ -112,8 +106,6 @@ jobs:
         run: python -m compileall -q app
 
       - name: Run all downloader tests
-        id: downloader_tests
-        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
@@ -152,12 +144,6 @@ jobs:
           path: ${{ github.workspace }}/downloader/pytest-report.txt
           if-no-files-found: warn
 
-      - name: Fail on downloader unit test failure
-        if: steps.downloader_tests.outcome != 'success'
-        run: |
-          cat pytest-report.txt
-          exit 1
-
   desktop-client-simulation:
     name: Desktop clients and external-engine adapters
     runs-on: ubuntu-latest
@@ -178,8 +164,6 @@ jobs:
           python -m compileall -q external_engines
 
       - name: Run all external-engine unit tests
-        id: desktop_tests
-        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
@@ -208,12 +192,6 @@ jobs:
           name: desktop-unittest-report
           path: ${{ github.workspace }}/desktop_launcher/unittest-report.txt
           if-no-files-found: warn
-
-      - name: Fail on desktop unit test failure
-        if: steps.desktop_tests.outcome != 'success'
-        run: |
-          cat unittest-report.txt
-          exit 1
 
   mobile-expo-simulation:
     name: Expo web, iOS and Android bundles
