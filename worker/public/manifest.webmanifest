@@ -1,5 +1,5 @@
 {
-  "name": "Download Killer Unified Platform v14",
+  "name": "Download Killer Unified Platform v15",
   "short_name": "Download Killer",
   "id": "/",
   "start_url": "/",
@@ -9,7 +9,7 @@
   "orientation": "any",
   "background_color": "#070a18",
   "theme_color": "#070a18",
-  "description": "Unified Download Killer platform with Telegram, DyrakArmy Arena, Latency Strike, shared profiles, remote Control Center and public content registry.",
+  "description": "Unified Download Killer platform with Telegram, DyrakArmy Arena, Latency Strike, Archive Raid, shared profiles, remote Control Center and public content registry.",
   "categories": ["music", "utilities", "productivity", "games"],
   "lang": "bg",
   "dir": "ltr",
@@ -30,6 +30,13 @@
       "short_name": "Reaction",
       "description": "Play the Telegram reaction game and unlock profile rewards.",
       "url": "/games/latency-strike/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Archive Raid",
+      "short_name": "Raid",
+      "description": "Raid virtual archive sectors and collect cosmetic cards.",
+      "url": "/games/archive-raid/",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {

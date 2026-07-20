@@ -49,6 +49,7 @@ jobs:
           node --check public/platform/games-v14.js
           node --check public/platform/platform-public.js
           node --check public/games/dyrakarmy-arena/arena.js
+          node --check public/games/archive-raid/raid.js
           node --check public/control/control.js
           node --check public/games/latency-strike/game.js
           node --check public/sw.js
@@ -59,6 +60,8 @@ jobs:
           grep -q "handlePlatformControlApi" src/platform_v2.ts
           grep -q "handlePlatformControlTelegramWebhook" src/platform_v2.ts
           grep -q "handleDyrakArmyArenaApi" src/platform_v2.ts
+          grep -q "handleArchiveRaidApi" src/platform_v2.ts
+          grep -q "handleArchiveRaidTelegramWebhook" src/platform_v2.ts
           grep -q "isPlatformModuleEnabled" src/platform_v2.ts
           grep -q "TELEGRAM_ADMIN_IDS" src/types.ts
           grep -q "TELEGRAM_ADMIN_IDS" src/platform_control.ts
@@ -71,30 +74,43 @@ jobs:
           grep -q "DyrakArmy Control Center" public/control/index.html
           grep -q "DyrakArmy Arena" public/games/dyrakarmy-arena/index.html
           grep -q "/api/games/dyrakarmy-arena" public/games/dyrakarmy-arena/arena.js
+          grep -q "Archive Raid" public/games/archive-raid/index.html
+          grep -q "/api/games/archive-raid" public/games/archive-raid/raid.js
+          grep -q "Army Exclusive" src/archive_raid.ts
+          grep -q "protected_content_access: false" src/archive_raid.ts
           grep -q "/api/platform/control" public/control/control.js
           grep -q "/api/platform/public" public/platform/platform-public.js
-          grep -q "download-killer-static-v14-unified" public/sw.js
+          grep -q "download-killer-static-v15-archive-raid" public/sw.js
           grep -q "/games/dyrakarmy-arena/arena.js?v=1.0.0" public/sw.js
+          grep -q "/games/archive-raid/raid.js?v=1.0.0" public/sw.js
           grep -q "/control/control.js?v=1.0.0" public/sw.js
           grep -q "CREATE TABLE IF NOT EXISTS arena_teams" migrations/0013_dyrakarmy_arena_v1.sql
           grep -q "CREATE TABLE IF NOT EXISTS platform_modules" migrations/0014_platform_control_center_v1.sql
           grep -q "CREATE TABLE IF NOT EXISTS platform_audit" migrations/0014_platform_control_center_v1.sql
+          grep -q "CREATE TABLE IF NOT EXISTS archive_raid_inventory" migrations/0015_archive_raid_v1.sql
+          grep -q "protected_content_access" migrations/0015_archive_raid_v1.sql
           grep -q "command: 'arena'" scripts/setup-telegram-platform.mjs
+          grep -q "command: 'raid'" scripts/setup-telegram-platform.mjs
+          grep -q "command: 'collection'" scripts/setup-telegram-platform.mjs
           grep -q "command: 'control'" scripts/setup-telegram-platform.mjs
           grep -q "command: 'id'" scripts/setup-telegram-platform.mjs
 
-      - name: Enforce safe remote-management boundary
+      - name: Enforce safe remote-management and collectible boundary
         run: |
-          if grep -R -n -E 'eval\(|new Function\(' src/platform_control.ts public/control; then
-            echo 'Executable code construction is forbidden in remote management.'
+          if grep -R -n -E 'eval\(|new Function\(' src/platform_control.ts public/control public/games/archive-raid; then
+            echo 'Executable code construction is forbidden.'
             exit 1
           fi
-          if grep -R -n -E 'javascript:|data:text/html' public/control src/platform_control.ts; then
+          if grep -R -n -E 'javascript:|data:text/html' public/control public/games/archive-raid src/platform_control.ts; then
             echo 'Unsafe URL schemes are forbidden.'
             exit 1
           fi
           if grep -R -n -E 'bot[0-9]{5,}:[A-Za-z0-9_-]{20,}' public src migrations; then
             echo 'A Telegram token-like value was found in source.'
+            exit 1
+          fi
+          if grep -R -n -E 'widevine|playplay|decrypt|decryption_key|content_key|license_challenge' src/archive_raid.ts public/games/archive-raid migrations/0015_archive_raid_v1.sql; then
+            echo 'Archive Raid must remain a virtual collectible system only.'
             exit 1
           fi
 

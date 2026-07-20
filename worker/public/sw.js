@@ -1,5 +1,5 @@
-const CACHE_NAME = 'download-killer-static-v14-unified';
-const LEGACY_CACHE_NAME = 'download-killer-static-v13-responsive';
+const CACHE_NAME = 'download-killer-static-v15-archive-raid';
+const LEGACY_CACHE_NAME = 'download-killer-static-v14-unified';
 const LEGACY_V12_CACHE_NAME = 'download-killer-static-v12.2.0';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
 const APP_SHELL = [
@@ -28,6 +28,10 @@ const APP_SHELL = [
   '/games/dyrakarmy-arena/index.html',
   '/games/dyrakarmy-arena/arena.css?v=1.0.0',
   '/games/dyrakarmy-arena/arena.js?v=1.0.0',
+  '/games/archive-raid/',
+  '/games/archive-raid/index.html',
+  '/games/archive-raid/raid.css?v=1.0.0',
+  '/games/archive-raid/raid.js?v=1.0.0',
   '/control/',
   '/control/index.html',
   '/control/control.css?v=1.0.0',
@@ -99,6 +103,7 @@ self.addEventListener('message', (event) => {
           return pathname.startsWith('/telegram/')
             || pathname.startsWith('/games/latency-strike/')
             || pathname.startsWith('/games/dyrakarmy-arena/')
+            || pathname.startsWith('/games/archive-raid/')
             || pathname.startsWith('/control/');
         })
         .map((request) => cache.delete(request)));
@@ -115,12 +120,14 @@ self.addEventListener('fetch', (event) => {
   const isTelegramAsset = url.pathname.startsWith('/telegram/');
   const isLatencyStrikeAsset = url.pathname.startsWith('/games/latency-strike/');
   const isArenaAsset = url.pathname.startsWith('/games/dyrakarmy-arena/');
+  const isArchiveRaidAsset = url.pathname.startsWith('/games/archive-raid/');
   const isControlAsset = url.pathname.startsWith('/control/');
 
-  if (isTelegramAsset || isLatencyStrikeAsset || isArenaAsset || isControlAsset) {
+  if (isTelegramAsset || isLatencyStrikeAsset || isArenaAsset || isArchiveRaidAsset || isControlAsset) {
     let offlineMessage = 'Telegram Mini App is temporarily offline. Reopen it from the bot.';
     if (isLatencyStrikeAsset) offlineMessage = 'Latency Strike is temporarily offline. Reopen the game from @dyrakarmy_bot.';
     if (isArenaAsset) offlineMessage = 'DyrakArmy Arena is temporarily offline. Reopen it from @dyrakarmy_bot.';
+    if (isArchiveRaidAsset) offlineMessage = 'Archive Raid is temporarily offline. Reopen it from @dyrakarmy_bot.';
     if (isControlAsset) offlineMessage = 'Control Center needs a network connection and a valid Telegram administrator session.';
     event.respondWith(networkFirstApp(request, offlineMessage));
     return;

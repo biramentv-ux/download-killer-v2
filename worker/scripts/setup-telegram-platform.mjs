@@ -9,6 +9,7 @@ const miniAppVersion = String(process.env.TELEGRAM_MINIAPP_VERSION || '12.2.0').
 const miniAppUrl = `${publicBase}/telegram/?v=${encodeURIComponent(miniAppVersion)}`;
 const latencyStrikeUrl = `${publicBase}/games/latency-strike/?v=1.0.0`;
 const arenaUrl = `${publicBase}/games/dyrakarmy-arena/?v=1.0.0`;
+const archiveRaidUrl = `${publicBase}/games/archive-raid/?v=1.0.0`;
 const controlUrl = `${publicBase}/control/?v=1.0.0`;
 
 if (!token) {
@@ -39,6 +40,9 @@ const commands = [
   { command: 'arena', description: 'Играй DyrakArmy Arena' },
   { command: 'team', description: 'Моят Arena отбор и ранг' },
   { command: 'game', description: 'Играй Latency Strike' },
+  { command: 'raid', description: 'Играй Archive Raid' },
+  { command: 'collection', description: 'Моята collectible колекция' },
+  { command: 'crate', description: 'Отвори дневния Archive crate' },
   { command: 'rewards', description: 'Ранг и игрови награди' },
   { command: 'control', description: 'Мобилен Control Center' },
   { command: 'id', description: 'Покажи моя Telegram ID' },
@@ -49,7 +53,7 @@ const commands = [
   { command: 'queue', description: 'Активна опашка' },
   { command: 'history', description: 'Последни задачи' },
   { command: 'formats', description: 'Формати и качество' },
-  { command: 'archive', description: 'Търсене в архива' },
+  { command: 'archive', description: 'Търсене в медийния архив' },
   { command: 'site', description: 'Отвори Mini App' },
   { command: 'language', description: 'Смяна на езика' },
   { command: 'storage', description: 'Статистика за архива' },
@@ -66,7 +70,7 @@ try {
     throw new Error(`Token belongs to @${actualUsername}, expected @${expectedUsername}. Refusing to bind the wrong Mini App session key.`);
   }
   if (!me.supports_inline_queries) {
-    console.warn('Inline sharing is disabled. In @BotFather run /setinline for this bot and set a placeholder such as "Сподели песен или Arena".');
+    console.warn('Inline sharing is disabled. In @BotFather run /setinline and set a placeholder such as "Сподели песен, Arena или Raid".');
   }
 
   await call('setMyCommands', { commands, language_code: 'bg' });
@@ -79,11 +83,11 @@ try {
     },
   });
   await call('setMyDescription', {
-    description: 'Download Killer: DyrakArmy Arena, Latency Strike, Control Center, обща опашка, Telegram архив и споделяне.',
+    description: 'Download Killer: DyrakArmy Arena, Latency Strike, Archive Raid, Control Center, обща опашка и Telegram архив.',
     language_code: 'bg',
   });
   await call('setMyShortDescription', {
-    short_description: 'Arena, игри, Control Center, архив и споделяне.',
+    short_description: 'Arena, Raid, игри, Control Center и общ профил.',
     language_code: 'bg',
   });
 
@@ -105,10 +109,11 @@ try {
   console.log(`Mini App v${miniAppVersion}: ${miniAppUrl}`);
   console.log(`DyrakArmy Arena v1: ${arenaUrl}`);
   console.log(`Latency Strike v1: ${latencyStrikeUrl}`);
+  console.log(`Archive Raid v1: ${archiveRaidUrl}`);
   console.log(`Control Center v1: ${controlUrl}`);
   console.log(`Health: ${publicBase}/api/telegram/v12/health`);
   console.log('Admin bootstrap: send /id to the bot, then add that numeric ID to the Cloudflare secret TELEGRAM_ADMIN_IDS.');
-  console.log('Optional native Games catalog: in @BotFather create latency_strike. Arena runs as a team Mini App.');
+  console.log('Archive Raid collectibles are cosmetic game metadata and never unlock protected media.');
   console.log('Next: close the existing Telegram WebView completely and open the Menu button again.');
   console.log('Add the bot as an administrator to a private storage channel with permission to post messages.');
 } catch (error) {
