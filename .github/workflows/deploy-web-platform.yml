@@ -54,13 +54,25 @@ jobs:
           node --check public/platform/platform.js
           node --check public/platform/status-backoff.js
           node --check public/platform/site-defaults.js
+          node --check public/platform/landing-v13.js
           node --check public/media-lab/media-lab.js
           node --check public/sw.js
           grep -q '<title>Download Killer Platform</title>' public/index.html
-          grep -q 'Platform v12.2.0' public/index.html
+          grep -q 'Responsive Design v13' public/index.html
+          grep -q '/platform/landing-v13.css' public/index.html
+          grep -q '/platform/landing-v13.js' public/index.html
+          grep -q 'id="mobileNavToggle"' public/index.html
+          grep -q 'id="downloadForm"' public/index.html
+          grep -q 'id="jobFeed"' public/index.html
+          grep -q 'id="historyList"' public/index.html
           grep -q 'tg://resolve?domain=dyrakarmy_bot' public/index.html
           grep -q '@dyrakarmy_bot' public/index.html
           grep -q '/media-lab/media-lab.js' public/index.html
+          grep -q '@media (max-width: 600px)' public/platform/landing-v13.css
+          grep -q '@media (prefers-reduced-motion: reduce)' public/platform/landing-v13.css
+          grep -q "download-killer-static-v13-responsive" public/sw.js
+          grep -q '/platform/landing-v13.css' public/sw.js
+          grep -q '/platform/landing-v13.js' public/sw.js
           ! grep -R -n -E 'download_killerBOT|TELEGRAM_SECONDARY_|v10-secondary|telegram/webhook/dyrakarmy|web\.telegram\.org' src public scripts wrangler.jsonc package.json
 
   deploy:
@@ -99,6 +111,8 @@ jobs:
             echo "Checking $base"
             home="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/")"
             grep -q 'Download Killer Platform' <<<"$home"
+            grep -q 'Responsive Design v13' <<<"$home"
+            grep -q '/platform/landing-v13.css' <<<"$home"
             grep -q '@dyrakarmy_bot' <<<"$home"
             grep -q 'tg://resolve?domain=dyrakarmy_bot' <<<"$home"
             ! grep -q 'download_killerBOT' <<<"$home"
