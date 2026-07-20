@@ -1,6 +1,7 @@
 (() => {
   'use strict';
 
+  const GAME_NAMES = ['DyrakArmy Arena', 'Latency Strike'];
   const copy = {
     bg: {
       nav: 'Игри', tag: 'TELEGRAM GAMES', title: 'DyrakArmy Games',
@@ -28,6 +29,7 @@
     section.className = 'games-section reveal';
     section.id = 'games';
     section.dataset.platformModule = 'games';
+    section.setAttribute('aria-label', GAME_NAMES.join(' and '));
     section.innerHTML = `
       <div class="games-heading"><div><span class="kicker" data-games-i18n="tag">TELEGRAM GAMES</span><h2 data-games-i18n="title">DyrakArmy Games</h2></div><p data-games-i18n="intro">Две свързани игри използват един профил, общ XP, рангове, награди и седмични класации.</p></div>
       <div class="games-grid">
