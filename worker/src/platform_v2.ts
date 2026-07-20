@@ -1,5 +1,7 @@
 import legacyHandler from './index';
 import type { DownloadJob, Env, JobHistoryEvent } from './types';
+import { handleDyrakArmyArenaApi } from './dyrakarmy_arena';
+import { handleDyrakArmyArenaTelegramWebhook } from './dyrakarmy_arena_bot';
 import {
   ensureLatencyStrikeBotCommands,
   handleLatencyStrikeTelegramWebhook,
@@ -93,6 +95,13 @@ async function enforceNativeTelegramApi(
         path: '/games/latency-strike/',
         native_deep_link: `tg://resolve?domain=${links.username}&game=latency_strike`,
       },
+      dyrakarmy_arena: {
+        enabled: true,
+        version: '1.0.0',
+        path: '/games/dyrakarmy-arena/',
+        miniapp_deep_link: `tg://resolve?domain=${links.username}&startapp=arena`,
+        modes: ['daily-arena', 'team-league', 'practice'],
+      },
     },
   });
 }
@@ -136,11 +145,15 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
       /<script src="\.\/telegram\.js(?:\?[^\"]*)?" defer><\/script>/,
       `<script src="/platform/status-backoff.js?v=${TELEGRAM_MINIAPP_VERSION}"></script>\n  <script src="./telegram.js?v=${TELEGRAM_MINIAPP_VERSION}" defer></script>`,
     );
+    const archiveCard = '<button class="command-card" type="button" data-open-tab="archive"><i>☁</i><b>Архив</b><small>Telegram file_id и повторна употреба</small></button>';
+    const cards: string[] = [archiveCard];
     if (!html.includes('data-game="latency-strike"')) {
-      const archiveCard = '<button class="command-card" type="button" data-open-tab="archive"><i>☁</i><b>Архив</b><small>Telegram file_id и повторна употреба</small></button>';
-      const gameCard = '<a class="command-card" data-game="latency-strike" href="tg://resolve?domain=dyrakarmy_bot&game=latency_strike" style="text-decoration:none"><i>⚡</i><b>Latency Strike</b><small>Native Game, XP, награди и седмична класация</small></a>';
-      html = html.replace(archiveCard, `${archiveCard}\n        ${gameCard}`);
+      cards.push('<a class="command-card" data-game="latency-strike" href="tg://resolve?domain=dyrakarmy_bot&game=latency_strike" style="text-decoration:none"><i>⚡</i><b>Latency Strike</b><small>Native Game, XP, награди и седмична класация</small></a>');
     }
+    if (!html.includes('data-game="dyrakarmy-arena"')) {
+      cards.push('<a class="command-card" data-game="dyrakarmy-arena" href="tg://resolve?domain=dyrakarmy_bot&startapp=arena" style="text-decoration:none"><i>⚔️</i><b>DyrakArmy Arena</b><small>Отбори, дневни мисии, сезони и класации</small></a>');
+    }
+    if (cards.length > 1) html = html.replace(archiveCard, cards.join('\n        '));
   }
 
   const headers = new Headers(response.headers);
@@ -158,6 +171,9 @@ export default {
     const telegramHealthResponse = handleTelegramMiniAppHealth(request, env);
     if (telegramHealthResponse) return telegramHealthResponse;
 
+    const arenaResponse = await handleDyrakArmyArenaApi(request, env);
+    if (arenaResponse) return arenaResponse;
+
     const gameResponse = await handleLatencyStrikeGameApi(request, env);
     if (gameResponse) return gameResponse;
 
@@ -168,6 +184,8 @@ export default {
     if (mediaLabResponse) return mediaLabResponse;
 
     if (url.pathname === '/telegram/webhook') {
+      const arenaWebhookResponse = await handleDyrakArmyArenaTelegramWebhook(request.clone(), env);
+      if (arenaWebhookResponse) return arenaWebhookResponse;
       const gameWebhookResponse = await handleLatencyStrikeTelegramWebhook(request.clone(), env);
       if (gameWebhookResponse) return gameWebhookResponse;
       return handleTelegramMasterWebhook(request, env);
