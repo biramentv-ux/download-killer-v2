@@ -142,11 +142,7 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
 
   if (isRoot) {
     html = html.replace(/<link rel="canonical" href="[^"]+">/, '<link rel="canonical" href="https://dyrakarmy.eu/">');
-    const styles = [
-      '/platform/games-v14.css',
-      '/platform/platform-public.css',
-    ];
-    for (const href of styles) {
+    for (const href of ['/platform/games-v14.css', '/platform/platform-public.css']) {
       if (!html.includes(href)) html = html.replace('</head>', `  <link rel="stylesheet" href="${href}">\n</head>`);
     }
     if (!html.includes('/platform/status-backoff.js')) {
@@ -158,8 +154,7 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
     }
     if (!html.includes('/media-lab/media-lab.css')) html = html.replace('</head>', '  <link rel="stylesheet" href="/media-lab/media-lab.css">\n</head>');
     if (!html.includes('/media-lab/media-lab.js')) html = html.replace('</body>', '  <script src="/media-lab/media-lab.js" defer></script>\n</body>');
-    const scripts = ['/platform/games-v14.js', '/platform/platform-public.js'];
-    for (const src of scripts) {
+    for (const src of ['/platform/games-v14.js', '/platform/platform-public.js']) {
       if (!html.includes(src)) html = html.replace('</body>', `  <script src="${src}" defer></script>\n</body>`);
     }
   } else {
@@ -234,12 +229,17 @@ export default {
     if (mediaLabResponse) return mediaLabResponse;
 
     if (url.pathname === '/telegram/webhook') {
+      await ensureDyrakArmyArenaCommands(env);
       const controlWebhookResponse = await handlePlatformControlTelegramWebhook(request.clone(), env);
       if (controlWebhookResponse) return controlWebhookResponse;
-      const arenaWebhookResponse = await handleDyrakArmyArenaTelegramWebhook(request.clone(), env);
-      if (arenaWebhookResponse) return arenaWebhookResponse;
-      const gameWebhookResponse = await handleLatencyStrikeTelegramWebhook(request.clone(), env);
-      if (gameWebhookResponse) return gameWebhookResponse;
+      if (await isPlatformModuleEnabled(env, 'dyrakarmy-arena')) {
+        const arenaWebhookResponse = await handleDyrakArmyArenaTelegramWebhook(request.clone(), env);
+        if (arenaWebhookResponse) return arenaWebhookResponse;
+      }
+      if (await isPlatformModuleEnabled(env, 'latency-strike')) {
+        const gameWebhookResponse = await handleLatencyStrikeTelegramWebhook(request.clone(), env);
+        if (gameWebhookResponse) return gameWebhookResponse;
+      }
       return handleTelegramMasterWebhook(request, env);
     }
 
@@ -268,6 +268,7 @@ export default {
   ): Promise<void> {
     await legacyHandler.scheduled(controller, env);
     context.waitUntil((async () => {
+      await ensureDyrakArmyArenaCommands(env);
       await ensureTelegramV10Commands(env);
       await ensureTelegramMasterCommands(env);
       await ensureLatencyStrikeBotCommands(env);
