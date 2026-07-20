@@ -17,6 +17,7 @@ const APP_SHELL = [
   '/games/latency-strike/',
   '/games/latency-strike/index.html',
   '/games/latency-strike/game.css?v=1.0.0',
+  '/games/latency-strike/native-bridge.js?v=1.0.0',
   '/games/latency-strike/game.js?v=1.0.0',
   '/icons/icon-192.png',
   '/icons/icon-512.png',

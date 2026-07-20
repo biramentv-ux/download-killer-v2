@@ -6,6 +6,8 @@ on:
       - worker/src/latency_strike.ts
       - worker/src/latency_strike.test.ts
       - worker/src/latency_strike_bot.ts
+      - worker/src/latency_strike_native.ts
+      - worker/src/latency_strike_native.test.ts
       - worker/src/platform_v2.ts
       - worker/public/games/latency-strike/**
       - worker/public/sw.js
@@ -20,6 +22,8 @@ on:
       - worker/src/latency_strike.ts
       - worker/src/latency_strike.test.ts
       - worker/src/latency_strike_bot.ts
+      - worker/src/latency_strike_native.ts
+      - worker/src/latency_strike_native.test.ts
       - worker/src/platform_v2.ts
       - worker/public/games/latency-strike/**
       - worker/public/sw.js
@@ -53,11 +57,14 @@ jobs:
       - name: Validate game JavaScript
         run: |
           node --check public/games/latency-strike/game.js
+          node --check public/games/latency-strike/native-bridge.js
           node --check public/sw.js
           node --check scripts/setup-telegram-platform.mjs
       - name: Validate complete integration contract
         run: |
           grep -q 'Latency Strike v1' public/games/latency-strike/index.html
+          grep -q 'https://telegram.org/js/games.js' public/games/latency-strike/index.html
+          grep -q 'native-bridge.js?v=1.0.0' public/games/latency-strike/index.html
           grep -q '@media(max-width:480px)' public/games/latency-strike/game.css
           grep -q '/api/games/latency-strike/session' src/latency_strike.ts
           grep -q '/api/games/latency-strike/score' src/latency_strike.ts
@@ -71,11 +78,18 @@ jobs:
           grep -q 'title_queue_master' src/latency_strike.ts
           grep -q "command: 'game'" src/latency_strike_bot.ts
           grep -q "command: 'rewards'" src/latency_strike_bot.ts
-          grep -q 'handleLatencyStrikeApi' src/platform_v2.ts
+          grep -q "telegramRequest.*'sendGame'\|'sendGame'" src/latency_strike_bot.ts
+          grep -q 'game_short_name' src/latency_strike_bot.ts
+          grep -q 'answerInlineQuery' src/latency_strike_bot.ts
+          grep -q 'createLatencyStrikeNativeLaunch' src/latency_strike_bot.ts
+          grep -q 'setGameScore' src/latency_strike_native.ts
+          grep -q 'createSyntheticTelegramInitData' src/latency_strike_native.ts
+          grep -q 'handleLatencyStrikeGameApi' src/platform_v2.ts
           grep -q 'handleLatencyStrikeTelegramWebhook' src/platform_v2.ts
+          grep -q 'tg://resolve?domain=${links.username}&game=latency_strike' src/platform_v2.ts
           grep -q 'CREATE TABLE IF NOT EXISTS game_profiles' migrations/0012_latency_strike_v1.sql
           grep -q 'CREATE TABLE IF NOT EXISTS game_runs' migrations/0012_latency_strike_v1.sql
           grep -q 'CREATE TABLE IF NOT EXISTS game_unlocks' migrations/0012_latency_strike_v1.sql
           grep -q '/games/latency-strike/' public/manifest.webmanifest
-          grep -q '/games/latency-strike/game.js?v=1.0.0' public/sw.js
+          grep -q '/games/latency-strike/native-bridge.js?v=1.0.0' public/sw.js
           grep -q 'd1 migrations apply sounddrop-db --remote' ../.github/workflows/deploy-web-platform.yml
