@@ -1,0 +1,15 @@
+{
+  "profile": "full-v13.1",
+  "mode": "deterministic-virtual-simulation",
+  "external_network": false,
+  "covers": [
+    "worker",
+    "web-responsive-ui",
+    "telegram-miniapp",
+    "pwa",
+    "downloader",
+    "desktop",
+    "mobile-web-ios-android",
+    "chrome-firefox-extensions"
+  ]
+}
