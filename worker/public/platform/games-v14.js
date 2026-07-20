@@ -1,19 +1,21 @@
 (() => {
   'use strict';
 
-  const GAME_NAMES = ['DyrakArmy Arena', 'Latency Strike'];
+  const GAME_NAMES = ['DyrakArmy Arena', 'Latency Strike', 'Archive Raid'];
   const copy = {
     bg: {
       nav: 'Игри', tag: 'TELEGRAM GAMES', title: 'DyrakArmy Games',
-      intro: 'Две свързани игри използват един профил, общ XP, рангове, награди и седмични класации.',
+      intro: 'Три свързани игри използват един профил, общ XP, рангове, награди и седмични класации.',
       arenaText: 'Създай отбор, изпълнявай осем дневни мисии и се състезавай в седмични лиги и месечни сезони.',
+      raidText: 'Проникни в пет виртуални архивни сектора и печели collectible карти, crates и козметични профилни ефекти.',
       playWeb: 'Играй в браузъра', playTelegram: 'Отвори в Telegram', latencyText: 'Пет бързи рунда измерват реакцията ти и отключват профилни награди.',
       teams: 'активни отбора', week: 'седмица', season: 'сезон', top: 'Топ отбори тази седмица',
     },
     en: {
       nav: 'Games', tag: 'TELEGRAM GAMES', title: 'DyrakArmy Games',
-      intro: 'Two connected games share one profile, XP, ranks, rewards and weekly leaderboards.',
+      intro: 'Three connected games share one profile, XP, ranks, rewards and weekly leaderboards.',
       arenaText: 'Build a team, complete eight daily missions and compete in weekly leagues and monthly seasons.',
+      raidText: 'Enter five virtual archive sectors and earn collectible cards, crates and cosmetic profile effects.',
       playWeb: 'Play in browser', playTelegram: 'Open in Telegram', latencyText: 'Five fast rounds measure your reaction and unlock profile rewards.',
       teams: 'active teams', week: 'week', season: 'season', top: 'Top teams this week',
     },
@@ -29,12 +31,12 @@
     section.className = 'games-section reveal';
     section.id = 'games';
     section.dataset.platformModule = 'games';
-    section.setAttribute('aria-label', GAME_NAMES.join(' and '));
+    section.setAttribute('aria-label', GAME_NAMES.join(', '));
     section.innerHTML = `
-      <div class="games-heading"><div><span class="kicker" data-games-i18n="tag">TELEGRAM GAMES</span><h2 data-games-i18n="title">DyrakArmy Games</h2></div><p data-games-i18n="intro">Две свързани игри използват един профил, общ XP, рангове, награди и седмични класации.</p></div>
+      <div class="games-heading"><div><span class="kicker" data-games-i18n="tag">TELEGRAM GAMES</span><h2 data-games-i18n="title">DyrakArmy Games</h2></div><p data-games-i18n="intro">Три свързани игри използват един профил, общ XP, рангове, награди и седмични класации.</p></div>
       <div class="games-grid">
         <article class="game-showcase" data-platform-module="dyrakarmy-arena">
-          <span class="game-label">⚔ TEAM ARENA · NEW</span>
+          <span class="game-label">⚔ TEAM ARENA</span>
           <h3>DyrakArmy <em>Arena</em></h3>
           <p data-games-i18n="arenaText">Създай отбор, изпълнявай осем дневни мисии и се състезавай в седмични лиги и месечни сезони.</p>
           <div class="game-feature-row"><span>8 дневни мисии</span><span>3 ranked опита</span><span>Отборни кодове</span><span>Общ XP профил</span></div>
@@ -44,6 +46,10 @@
         <article class="secondary-game" data-platform-module="latency-strike">
           <div><div class="latency-orb">⚡</div><h3>Latency Strike</h3><p data-games-i18n="latencyText">Пет бързи рунда измерват реакцията ти и отключват профилни награди.</p></div>
           <div class="game-buttons"><a class="primary-button" href="/games/latency-strike/"><span data-games-i18n="playWeb">Играй в браузъра</span><b>→</b></a><a class="secondary-button" href="tg://resolve?domain=dyrakarmy_bot&game=latency_strike" rel="external"><span data-games-i18n="playTelegram">Отвори в Telegram</span></a></div>
+        </article>
+        <article class="secondary-game" data-platform-module="archive-raid">
+          <div><div class="latency-orb">🗃</div><h3>Archive Raid</h3><p data-games-i18n="raidText">Проникни в пет виртуални архивни сектора и печели collectible карти, crates и козметични профилни ефекти.</p><div class="game-feature-row"><span>5 raid сектора</span><span>21 collectible карти</span><span>5 редкости</span><span>Safe cosmetics only</span></div></div>
+          <div class="game-buttons"><a class="primary-button" href="/games/archive-raid/"><span data-games-i18n="playWeb">Играй в браузъра</span><b>→</b></a><a class="secondary-button" href="tg://resolve?domain=dyrakarmy_bot&startapp=archive_raid" rel="external"><span data-games-i18n="playTelegram">Отвори в Telegram</span><b>🗃</b></a></div>
         </article>
       </div>
       <div class="game-live-strip">
