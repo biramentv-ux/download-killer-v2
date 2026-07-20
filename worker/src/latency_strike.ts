@@ -241,7 +241,7 @@ export async function handleLatencyStrikeApi(request: Request, env: ExtendedEnv)
   const auth = await validateTelegramInitData(
     initData,
     String(env.TELEGRAM_BOT_TOKEN || ''),
-    readEnvInt(env.TELEGRAM_MINIAPP_AUTH_MAX_AGE_SECONDS, 900, 60, 3600),
+    Math.min(3600, Math.max(60, readEnvInt(env.TELEGRAM_MINIAPP_AUTH_MAX_AGE_SECONDS, 900))),
   );
   if (!auth.ok || !auth.user) {
     return json(request, { error: { code: 'TELEGRAM_AUTH_FAILED', message: auth.error || 'Unauthorized' } }, 401);
