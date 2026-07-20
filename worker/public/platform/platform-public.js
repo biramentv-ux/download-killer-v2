@@ -23,9 +23,10 @@
       const response = await fetch('/api/platform/public', { cache: 'no-store', headers: { Accept: 'application/json' } });
       const registry = await response.json();
       if (!response.ok || !registry?.ok) throw new Error(registry?.error?.message || `HTTP ${response.status}`);
-      applySettings(registry.settings || {});
+      const settings = registry.settings || {};
+      applySettings(settings);
       applyModules(registry.modules || []);
-      applyContent(registry.content || []);
+      applyContent(registry.content || [], settings);
       document.dispatchEvent(new CustomEvent('platform-registry-ready', { detail: registry }));
       document.documentElement.classList.add('platform-public-ready');
     } catch (error) {
@@ -46,13 +47,17 @@
     if (siteTitle) {
       document.title = `${siteTitle} Platform`;
       $$('.brand span:last-child, .footer-brand span:last-child').forEach((node) => {
-        if (node.querySelector('strong')) node.innerHTML = `<strong>${escapeHtml(siteTitle.split(' ')[0] || siteTitle)}</strong>${escapeHtml(siteTitle.split(' ').slice(1).join(' '))}`;
+        if (!node.querySelector('strong')) return;
+        const words = siteTitle.split(/\s+/);
+        node.innerHTML = `<strong>${escapeHtml(words[0] || siteTitle)}</strong>${escapeHtml(words.slice(1).join(' '))}`;
       });
     }
     const footerText = String(settings['site.footer'] || '').trim();
     const footerParagraph = $('footer [data-i18n="footer_text"]');
     if (footerText && footerParagraph) footerParagraph.textContent = footerText;
     document.body.style.backgroundColor = settings['theme.background'] || '';
+    const season = String(settings['games.season_label'] || '').trim();
+    if (season) document.querySelectorAll('[data-season-label]').forEach((node) => { node.textContent = season; });
   }
 
   function applyModules(modules) {
@@ -89,9 +94,9 @@
     renderManagedModules(modules.filter((module) => module.enabled && !module.system && !MODULE_TARGETS[module.id]));
   }
 
-  function applyContent(content) {
+  function applyContent(content, settings) {
     const grouped = Object.groupBy ? Object.groupBy(content, (item) => item.slot) : groupContent(content);
-    renderAnnouncement(grouped.announcement || []);
+    renderAnnouncement(settings['announcement.enabled'] === false ? [] : grouped.announcement || []);
     renderManagedContent(grouped.updates || [], 'updates');
     renderManagedContent(grouped.home || [], 'home');
     renderManagedContent(grouped.games || [], 'games');
