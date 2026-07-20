@@ -67,7 +67,7 @@
       if (!module) return;
       $$(selector).forEach((node) => {
         node.dataset.platformModule = id;
-        node.dataset.platformHidden = module.enabled ? 'false' : 'true';
+        node.setAttribute('data-platform-hidden', module.enabled ? 'false' : 'true');
       });
     });
 
