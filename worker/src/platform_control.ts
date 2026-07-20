@@ -398,7 +398,13 @@ async function invalidatePublicRegistry(env: ExtendedEnv): Promise<void> {
 async function moduleById(id: string, env: ExtendedEnv) {
   const row = await env.DB.prepare('SELECT * FROM platform_modules WHERE id = ? LIMIT 1').bind(id).first<Record<string, unknown>>();
   if (!row) return null;
-  return { ...row, metadata: parseJson(String(row.metadata_json || '{}'), {}), metadata_json: undefined };
+  return {
+    ...row,
+    system: Number(row.system || 0),
+    enabled: Number(row.enabled || 0),
+    metadata: parseJson(String(row.metadata_json || '{}'), {}),
+    metadata_json: undefined,
+  };
 }
 
 async function contentById(id: string, env: ExtendedEnv) {

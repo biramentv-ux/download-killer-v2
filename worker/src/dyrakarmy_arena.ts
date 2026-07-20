@@ -101,7 +101,8 @@ export function arenaQuestionsForDay(dayKey: string): ArenaQuestion[] {
   const pool = QUESTION_BANK.slice();
   while (selected.length < ARENA_ROUNDS && pool.length) {
     state = xorshift32(state);
-    selected.push(pool.splice(Math.abs(state) % pool.length, 1)[0]);
+    const question = pool.splice(Math.abs(state) % pool.length, 1)[0];
+    if (question) selected.push(question);
   }
   return selected;
 }
@@ -289,7 +290,7 @@ async function handleArenaScore(
     `).bind(result.xp, result.score, user.id),
   ]);
   await env.CACHE.delete(sessionKey);
-  return json(request, { ok: true, practice: false, recorded: true, run_id: runId, result, team, ...(await buildArenaProfile(user.id, env)) });
+  return json(request, { ok: true, practice: false, recorded: true, run_id: runId, result, ...(await buildArenaProfile(user.id, env)) });
 }
 
 async function handleTeamAction(
@@ -450,7 +451,11 @@ async function playerWeeklyPosition(userId: number, env: ExtendedEnv): Promise<n
   return index >= 0 ? index + 1 : null;
 }
 
-async function playerLeaderboard(env: ExtendedEnv, period: 'week' | 'season', limit: number) {
+async function playerLeaderboard(
+  env: ExtendedEnv,
+  period: 'week' | 'season',
+  limit: number,
+): Promise<Array<Record<string, unknown> & { position: number }>> {
   const column = period === 'week' ? 'r.week_key' : 'r.season_key';
   const value = period === 'week' ? latencyStrikeWeekKey() : arenaSeasonKey();
   const result = await env.DB.prepare(`
@@ -461,7 +466,8 @@ async function playerLeaderboard(env: ExtendedEnv, period: 'week' | 'season', li
     WHERE ${column} = ? GROUP BY p.telegram_user_id
     ORDER BY points DESC, best_score DESC, games ASC LIMIT ?
   `).bind(value, limit).all<Record<string, unknown>>();
-  return (result.results || []).map((row, index) => ({ position: index + 1, ...row }));
+  return (result.results || []).map((row, index) => ({ ...row, position: index + 1 }))
+    as Array<Record<string, unknown> & { position: number }>;
 }
 
 async function teamLeaderboard(env: ExtendedEnv, period: 'week' | 'season', limit: number) {

@@ -41,10 +41,13 @@ describe('DyrakArmy Arena', () => {
 
   it('accepts only the first answer for each known question', () => {
     const questions = arenaQuestionsForDay('2026-07-20');
+    const firstQuestion = questions[0];
+    expect(firstQuestion).toBeDefined();
+    if (!firstQuestion) return;
     const result = calculateArenaScore(questions, [
-      { question_id: questions[0].id, option_index: questions[0].correct, response_ms: 300 },
+      { question_id: firstQuestion.id, option_index: firstQuestion.correct, response_ms: 300 },
       { question_id: 'unknown-question', option_index: 0, response_ms: 1 },
-      { question_id: questions[0].id, option_index: 99, response_ms: 1 },
+      { question_id: firstQuestion.id, option_index: 99, response_ms: 1 },
     ]);
     expect(result.correct).toBe(1);
     expect(result.accuracy).toBe(13);
