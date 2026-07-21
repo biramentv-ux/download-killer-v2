@@ -1,23 +1,29 @@
 (() => {
   'use strict';
 
-  const GAME_NAMES = ['DyrakArmy Arena', 'Latency Strike', 'Archive Raid'];
+  const GAMES = [
+    { number: 1, slug: 'queue-commander', title: 'Queue Commander', icon: '📡', description: 'Priority queue, retry, dedupe и idempotency.', command: 'queuegame' },
+    { number: 2, slug: 'beat-hunter', title: 'Beat Hunter', icon: '🥁', description: 'Ритми, beatgrid, фразиране и DJ структура.', command: 'beat' },
+    { number: 3, slug: 'dyrakarmy-arena', title: 'DyrakArmy Arena', icon: '⚔️', description: 'Отбори, дневни мисии, седмични лиги и сезони.', command: 'arena' },
+    { number: 4, slug: 'format-forge', title: 'Format Forge', icon: '⚒', description: 'Формати, bitrate, lossless и device compatibility.', command: 'formatgame' },
+    { number: 5, slug: 'server-defender', title: 'Server Defender', icon: '🛡', description: 'SSRF, secrets, webhook, CORS и rate limiting.', command: 'defender' },
+    { number: 6, slug: 'metadata-detective', title: 'Metadata Detective', icon: '🕵', description: 'Artist, title, album, year, cover и ISRC разследвания.', command: 'detective' },
+    { number: 7, slug: 'link-runner', title: 'Link Runner', icon: '🔗', description: 'Безопасни URL схеми, redirects и DNS защита.', command: 'linkrunner' },
+    { number: 8, slug: 'archive-raid', title: 'Archive Raid', icon: '🗃', description: 'Collectible карти, crates и профилни ефекти.', command: 'raid' },
+    { number: 9, slug: 'latency-strike', title: 'Latency Strike', icon: '⚡', description: 'Пет реакционни рунда, XP и седмична класация.', command: 'game' },
+    { number: 10, slug: 'bot-vs-human', title: 'Bot vs Human', icon: '🤖', description: 'Privacy-aware разпознаване на автоматизация.', command: 'botvhuman' },
+  ];
+
   const copy = {
     bg: {
-      nav: 'Игри', tag: 'TELEGRAM GAMES', title: 'DyrakArmy Games',
-      intro: 'Три свързани игри използват един профил, общ XP, рангове, награди и седмични класации.',
-      arenaText: 'Създай отбор, изпълнявай осем дневни мисии и се състезавай в седмични лиги и месечни сезони.',
-      raidText: 'Проникни в пет виртуални архивни сектора и печели collectible карти, crates и козметични профилни ефекти.',
-      playWeb: 'Играй в браузъра', playTelegram: 'Отвори в Telegram', latencyText: 'Пет бързи рунда измерват реакцията ти и отключват профилни награди.',
-      teams: 'активни отбора', week: 'седмица', season: 'сезон', top: 'Топ отбори тази седмица',
+      nav: 'Игри', tag: 'DYRAKARMY GAMES 1–10', title: 'Една система. Десет игри.',
+      intro: 'Всички игри използват един Telegram профил, общ XP, рангове, козметични награди и седмични класации.',
+      play: 'Играй', telegram: 'Telegram', profile: 'общ профил', modules: 'игрови модула', rankings: 'класации',
     },
     en: {
-      nav: 'Games', tag: 'TELEGRAM GAMES', title: 'DyrakArmy Games',
-      intro: 'Three connected games share one profile, XP, ranks, rewards and weekly leaderboards.',
-      arenaText: 'Build a team, complete eight daily missions and compete in weekly leagues and monthly seasons.',
-      raidText: 'Enter five virtual archive sectors and earn collectible cards, crates and cosmetic profile effects.',
-      playWeb: 'Play in browser', playTelegram: 'Open in Telegram', latencyText: 'Five fast rounds measure your reaction and unlock profile rewards.',
-      teams: 'active teams', week: 'week', season: 'season', top: 'Top teams this week',
+      nav: 'Games', tag: 'DYRAKARMY GAMES 1–10', title: 'One system. Ten games.',
+      intro: 'Every game shares one Telegram profile, XP, ranks, cosmetic rewards and weekly leaderboards.',
+      play: 'Play', telegram: 'Telegram', profile: 'shared profile', modules: 'game modules', rankings: 'leaderboards',
     },
   };
 
@@ -31,33 +37,20 @@
     section.className = 'games-section reveal';
     section.id = 'games';
     section.dataset.platformModule = 'games';
-    section.setAttribute('aria-label', GAME_NAMES.join(', '));
+    section.setAttribute('aria-label', GAMES.map((game) => game.title).join(', '));
     section.innerHTML = `
-      <div class="games-heading"><div><span class="kicker" data-games-i18n="tag">TELEGRAM GAMES</span><h2 data-games-i18n="title">DyrakArmy Games</h2></div><p data-games-i18n="intro">Три свързани игри използват един профил, общ XP, рангове, награди и седмични класации.</p></div>
-      <div class="games-grid">
-        <article class="game-showcase" data-platform-module="dyrakarmy-arena">
-          <span class="game-label">⚔ TEAM ARENA</span>
-          <h3>DyrakArmy <em>Arena</em></h3>
-          <p data-games-i18n="arenaText">Създай отбор, изпълнявай осем дневни мисии и се състезавай в седмични лиги и месечни сезони.</p>
-          <div class="game-feature-row"><span>8 дневни мисии</span><span>3 ranked опита</span><span>Отборни кодове</span><span>Общ XP профил</span></div>
-          <div class="game-buttons"><a class="primary-button" href="/games/dyrakarmy-arena/"><span data-games-i18n="playWeb">Играй в браузъра</span><b>→</b></a><a class="secondary-button" href="tg://resolve?domain=dyrakarmy_bot&startapp=arena" rel="external"><span data-games-i18n="playTelegram">Отвори в Telegram</span><b>⚔</b></a></div>
-          <div class="arena-emblem"><b>DA</b></div>
-        </article>
-        <article class="secondary-game" data-platform-module="latency-strike">
-          <div><div class="latency-orb">⚡</div><h3>Latency Strike</h3><p data-games-i18n="latencyText">Пет бързи рунда измерват реакцията ти и отключват профилни награди.</p></div>
-          <div class="game-buttons"><a class="primary-button" href="/games/latency-strike/"><span data-games-i18n="playWeb">Играй в браузъра</span><b>→</b></a><a class="secondary-button" href="tg://resolve?domain=dyrakarmy_bot&game=latency_strike" rel="external"><span data-games-i18n="playTelegram">Отвори в Telegram</span></a></div>
-        </article>
-        <article class="secondary-game" data-platform-module="archive-raid">
-          <div><div class="latency-orb">🗃</div><h3>Archive Raid</h3><p data-games-i18n="raidText">Проникни в пет виртуални архивни сектора и печели collectible карти, crates и козметични профилни ефекти.</p><div class="game-feature-row"><span>5 raid сектора</span><span>21 collectible карти</span><span>5 редкости</span><span>Safe cosmetics only</span></div></div>
-          <div class="game-buttons"><a class="primary-button" href="/games/archive-raid/"><span data-games-i18n="playWeb">Играй в браузъра</span><b>→</b></a><a class="secondary-button" href="tg://resolve?domain=dyrakarmy_bot&startapp=archive_raid" rel="external"><span data-games-i18n="playTelegram">Отвори в Telegram</span><b>🗃</b></a></div>
-        </article>
+      <div class="games-heading">
+        <div><span class="kicker" data-games-i18n="tag">DYRAKARMY GAMES 1–10</span><h2 data-games-i18n="title">Една система. Десет игри.</h2></div>
+        <p data-games-i18n="intro">Всички игри използват един Telegram профил, общ XP, рангове, козметични награди и седмични класации.</p>
       </div>
-      <div class="game-live-strip">
-        <article class="game-live-card"><span data-games-i18n="week">седмица</span><strong id="arenaWeekKey">—</strong><small>Weekly League</small></article>
-        <article class="game-live-card"><span data-games-i18n="season">сезон</span><strong id="arenaSeasonKey">—</strong><small>Monthly Arena</small></article>
-        <article class="game-live-card"><span data-games-i18n="teams">активни отбора</span><strong id="arenaTeamCount">0</strong><small data-games-i18n="top">Топ отбори тази седмица</small></article>
+      <div class="games-overview">
+        <article><strong>10</strong><span data-games-i18n="modules">игрови модула</span></article>
+        <article><strong>1</strong><span data-games-i18n="profile">общ профил</span></article>
+        <article><strong>10</strong><span data-games-i18n="rankings">класации</span></article>
       </div>
-      <div class="arena-top-teams" id="arenaTopTeams"><div class="games-skeleton"></div><div class="games-skeleton"></div><div class="games-skeleton"></div></div>`;
+      <div class="game-library-grid">${GAMES.map(gameMarkup).join('')}</div>
+      <div class="games-system-note"><b>COMMON PROFILE CORE</b><span>XP · Rank · Frame · Icon · Animated Badge · Waveform · Theme · Title · Weekly Position</span></div>`;
+
     const engines = $('#engines');
     const consoleSection = $('#console');
     const parent = engines?.parentNode || consoleSection?.parentNode || document.querySelector('main');
@@ -75,6 +68,19 @@
     }
   }
 
+  function gameMarkup(game) {
+    const webPath = `/games/${game.slug}/`;
+    const telegramPath = game.slug === 'latency-strike'
+      ? 'tg://resolve?domain=dyrakarmy_bot&game=latency_strike'
+      : `tg://resolve?domain=dyrakarmy_bot&startapp=${game.slug.replaceAll('-', '_')}`;
+    return `<article class="game-tile" data-platform-module="${game.slug}">
+      <div class="game-tile-top"><span class="game-number">${String(game.number).padStart(2, '0')}</span><i>${game.icon}</i></div>
+      <h3>${game.title}</h3><p>${game.description}</p>
+      <div class="game-command">/${game.command}</div>
+      <div class="game-tile-actions"><a href="${webPath}"><span data-games-i18n="play">Играй</span> →</a><a href="${telegramPath}" rel="external"><span data-games-i18n="telegram">Telegram</span></a></div>
+    </article>`;
+  }
+
   function applyCopy() {
     const strings = copy[language()];
     $$('[data-games-i18n]').forEach((node) => {
@@ -83,36 +89,9 @@
     });
   }
 
-  async function loadArenaData() {
-    const list = $('#arenaTopTeams');
-    if (!list) return;
-    try {
-      const [configResponse, leaderboardResponse] = await Promise.all([
-        fetch('/api/games/dyrakarmy-arena/config', { cache: 'no-store' }),
-        fetch('/api/games/dyrakarmy-arena/leaderboard?scope=teams&period=week&limit=5', { cache: 'no-store' }),
-      ]);
-      const config = await configResponse.json();
-      const leaderboard = await leaderboardResponse.json();
-      if (!configResponse.ok || !leaderboardResponse.ok) throw new Error(config?.error?.message || leaderboard?.error?.message || 'Arena unavailable');
-      $('#arenaWeekKey').textContent = config.week_key || '—';
-      $('#arenaSeasonKey').textContent = config.season_key || '—';
-      const entries = leaderboard.entries || [];
-      $('#arenaTeamCount').textContent = String(entries.length);
-      list.innerHTML = entries.length ? entries.map((entry) => `
-        <div class="arena-team-row"><strong>#${entry.position}</strong><div><b>${escapeHtml(entry.name || 'Arena Team')}</b><small>${Number(entry.members || 0)} members · ${Number(entry.games || 0)} games</small></div><em>${Number(entry.points || 0).toLocaleString()}</em></div>`).join('') : '<div class="arena-team-row"><strong>—</strong><div><b>Няма класирани отбори</b><small>Създай първия отбор в Arena.</small></div><em>0</em></div>';
-    } catch (error) {
-      list.innerHTML = `<div class="arena-team-row"><strong>!</strong><div><b class="games-error">Arena data unavailable</b><small>${escapeHtml(error.message || String(error))}</small></div><em>—</em></div>`;
-    }
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[character]));
-  }
-
   document.addEventListener('DOMContentLoaded', () => {
     ensureGamesSection();
     applyCopy();
-    void loadArenaData();
     new MutationObserver(applyCopy).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
   });
 })();

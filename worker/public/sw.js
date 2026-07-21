@@ -1,7 +1,9 @@
-const CACHE_NAME = 'download-killer-static-v15-archive-raid';
-const LEGACY_CACHE_NAME = 'download-killer-static-v14-unified';
-const LEGACY_V12_CACHE_NAME = 'download-killer-static-v12.2.0';
+const CACHE_NAME = 'download-killer-static-v15-games-1-10';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
+const CHALLENGE_GAME_SLUGS = [
+  'queue-commander', 'beat-hunter', 'format-forge', 'server-defender',
+  'metadata-detective', 'link-runner', 'bot-vs-human',
+];
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -19,6 +21,9 @@ const APP_SHELL = [
   '/platform/platform-public.js',
   '/media-lab/media-lab.css',
   '/media-lab/media-lab.js',
+  '/games/challenge/index.html',
+  '/games/challenge/challenge.css?v=1.0.0',
+  '/games/challenge/challenge.js?v=1.0.0',
   '/games/latency-strike/',
   '/games/latency-strike/index.html',
   '/games/latency-strike/game.css?v=1.0.0',
@@ -75,14 +80,16 @@ async function warmRecentCache(urls) {
   }));
 }
 
-async function networkFirstApp(request, offlineMessage) {
+async function networkFirstApp(request, offlineMessage, fallbackUrl = '') {
   const cache = await caches.open(CACHE_NAME);
   try {
     const response = await fetch(request, { cache: 'no-store' });
     if (response.ok) await cache.put(request, response.clone());
     return response;
   } catch {
-    const cached = await cache.match(request, { ignoreSearch: false }) || await caches.match(request);
+    const cached = await cache.match(request, { ignoreSearch: false })
+      || await caches.match(request)
+      || (fallbackUrl ? await caches.match(fallbackUrl) : null);
     if (cached) return cached;
     return new Response(offlineMessage, {
       status: 503,
@@ -100,11 +107,7 @@ self.addEventListener('message', (event) => {
       await Promise.all(keys
         .filter((request) => {
           const pathname = new URL(request.url).pathname;
-          return pathname.startsWith('/telegram/')
-            || pathname.startsWith('/games/latency-strike/')
-            || pathname.startsWith('/games/dyrakarmy-arena/')
-            || pathname.startsWith('/games/archive-raid/')
-            || pathname.startsWith('/control/');
+          return pathname.startsWith('/telegram/') || pathname.startsWith('/games/') || pathname.startsWith('/control/');
         })
         .map((request) => cache.delete(request)));
     }));
@@ -118,18 +121,18 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   const isWarmableApi = url.pathname.startsWith('/api/file/') || url.pathname.startsWith('/api/archive/file/');
   const isTelegramAsset = url.pathname.startsWith('/telegram/');
-  const isLatencyStrikeAsset = url.pathname.startsWith('/games/latency-strike/');
-  const isArenaAsset = url.pathname.startsWith('/games/dyrakarmy-arena/');
-  const isArchiveRaidAsset = url.pathname.startsWith('/games/archive-raid/');
+  const isGameAsset = url.pathname.startsWith('/games/');
   const isControlAsset = url.pathname.startsWith('/control/');
+  const gameSlug = url.pathname.split('/').filter(Boolean)[1] || '';
+  const isChallengeRoute = CHALLENGE_GAME_SLUGS.includes(gameSlug);
 
-  if (isTelegramAsset || isLatencyStrikeAsset || isArenaAsset || isArchiveRaidAsset || isControlAsset) {
+  if (isTelegramAsset || isGameAsset || isControlAsset) {
     let offlineMessage = 'Telegram Mini App is temporarily offline. Reopen it from the bot.';
-    if (isLatencyStrikeAsset) offlineMessage = 'Latency Strike is temporarily offline. Reopen the game from @dyrakarmy_bot.';
-    if (isArenaAsset) offlineMessage = 'DyrakArmy Arena is temporarily offline. Reopen it from @dyrakarmy_bot.';
-    if (isArchiveRaidAsset) offlineMessage = 'Archive Raid is temporarily offline. Reopen it from @dyrakarmy_bot.';
+    let fallbackUrl = '';
+    if (isGameAsset) offlineMessage = 'DyrakArmy Game is temporarily offline. Reopen it from @dyrakarmy_bot.';
+    if (isChallengeRoute) fallbackUrl = '/games/challenge/index.html';
     if (isControlAsset) offlineMessage = 'Control Center needs a network connection and a valid Telegram administrator session.';
-    event.respondWith(networkFirstApp(request, offlineMessage));
+    event.respondWith(networkFirstApp(request, offlineMessage, fallbackUrl));
     return;
   }
   if (url.pathname.startsWith('/api/') && !isWarmableApi) {
