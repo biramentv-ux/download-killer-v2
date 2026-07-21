@@ -51,6 +51,8 @@ jobs:
           node --check public/games/dyrakarmy-arena/arena.js
           node --check public/games/archive-raid/raid.js
           node --check public/control/control.js
+          node --check public/control-v2/control-v2.js
+          node --check public/control-v2/sw.js
           node --check public/games/latency-strike/game.js
           node --check public/sw.js
           node --check scripts/setup-telegram-platform.mjs
@@ -63,6 +65,10 @@ jobs:
           grep -q "handleArchiveRaidApi" src/platform_v2.ts
           grep -q "handleArchiveRaidTelegramWebhook" src/platform_v2.ts
           grep -q "isPlatformModuleEnabled" src/platform_v2.ts
+          grep -q "handlePlatformGovernanceApi" src/platform_v3.ts
+          grep -q "handlePlatformGovernanceTelegramWebhook" src/platform_v3.ts
+          grep -q "return platformV2.fetch" src/platform_v3.ts
+          grep -q '"main": "src/platform_v3.ts"' wrangler.jsonc
           grep -q "TELEGRAM_ADMIN_IDS" src/types.ts
           grep -q "TELEGRAM_ADMIN_IDS" src/platform_control.ts
           grep -q "control-center" src/platform_control.ts
@@ -71,7 +77,13 @@ jobs:
           grep -q "content.upsert" src/platform_control.ts
           grep -q "setting.set" src/platform_control.ts
           grep -q "platform_audit" src/platform_control.ts
+          grep -q "type PlatformRole = 'owner' | 'admin' | 'editor' | 'moderator' | 'user'" src/platform_governance.ts
+          grep -q "version.rollback" src/platform_governance.ts
+          grep -q "identity.link.start" src/platform_governance.ts
+          grep -q "text/event-stream" src/platform_governance.ts
           grep -q "DyrakArmy Control Center" public/control/index.html
+          grep -q "DyrakArmy Control Center v2" public/control-v2/index.html
+          grep -q "/api/platform/governance" public/control-v2/control-v2.js
           grep -q "DyrakArmy Arena" public/games/dyrakarmy-arena/index.html
           grep -q "/api/games/dyrakarmy-arena" public/games/dyrakarmy-arena/arena.js
           grep -q "Archive Raid" public/games/archive-raid/index.html
@@ -80,7 +92,7 @@ jobs:
           grep -q "protected_content_access: false" src/archive_raid.ts
           grep -q "/api/platform/control" public/control/control.js
           grep -q "/api/platform/public" public/platform/platform-public.js
-          grep -q "download-killer-static-v15-archive-raid" public/sw.js
+          grep -q "download-killer-static-v15-games-1-10" public/sw.js
           grep -q "/games/dyrakarmy-arena/arena.js?v=1.0.0" public/sw.js
           grep -q "/games/archive-raid/raid.js?v=1.0.0" public/sw.js
           grep -q "/control/control.js?v=1.0.0" public/sw.js
@@ -89,6 +101,9 @@ jobs:
           grep -q "CREATE TABLE IF NOT EXISTS platform_audit" migrations/0014_platform_control_center_v1.sql
           grep -q "CREATE TABLE IF NOT EXISTS archive_raid_inventory" migrations/0015_archive_raid_v1.sql
           grep -q "protected_content_access" migrations/0015_archive_raid_v1.sql
+          grep -q "CREATE TABLE IF NOT EXISTS platform_users" migrations/0017_platform_governance_v2.sql
+          grep -q "CREATE TABLE IF NOT EXISTS platform_versions" migrations/0017_platform_governance_v2.sql
+          grep -q "CREATE TABLE IF NOT EXISTS platform_sessions" migrations/0017_platform_governance_v2.sql
           grep -q "command: 'arena'" scripts/setup-telegram-platform.mjs
           grep -q "command: 'raid'" scripts/setup-telegram-platform.mjs
           grep -q "command: 'collection'" scripts/setup-telegram-platform.mjs
@@ -97,11 +112,11 @@ jobs:
 
       - name: Enforce safe remote-management and collectible boundary
         run: |
-          if grep -R -n -E 'eval\(|new Function\(' src/platform_control.ts public/control public/games/archive-raid; then
+          if grep -R -n -E 'eval\(|new Function\(' src/platform_control.ts src/platform_governance.ts public/control public/control-v2 public/games/archive-raid; then
             echo 'Executable code construction is forbidden.'
             exit 1
           fi
-          if grep -R -n -E 'javascript:|data:text/html' public/control public/games/archive-raid src/platform_control.ts; then
+          if grep -R -n -E 'javascript:|data:text/html' public/control public/control-v2 public/games/archive-raid src/platform_control.ts src/platform_governance.ts; then
             echo 'Unsafe URL schemes are forbidden.'
             exit 1
           fi

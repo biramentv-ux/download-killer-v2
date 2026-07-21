@@ -62,6 +62,8 @@ jobs:
           node --check public/games/dyrakarmy-arena/arena.js
           node --check public/games/archive-raid/raid.js
           node --check public/control/control.js
+          node --check public/control-v2/control-v2.js
+          node --check public/control-v2/sw.js
           node --check public/sw.js
           node --check scripts/setup-telegram-platform.mjs
           grep -q '<title>Download Killer Platform</title>' public/index.html
@@ -79,13 +81,20 @@ jobs:
           grep -q 'protected content' public/games/archive-raid/index.html
           grep -q 'DyrakArmy Control Center' public/control/index.html
           grep -q '/api/platform/control' public/control/control.js
+          grep -q 'DyrakArmy Control Center v2' public/control-v2/index.html
+          grep -q '/api/platform/governance' public/control-v2/control-v2.js
           grep -q '/api/platform/public' public/platform/platform-public.js
+          grep -q 'handlePlatformGovernanceApi' src/platform_v3.ts
+          grep -q 'handlePlatformGovernanceTelegramWebhook' src/platform_v3.ts
+          grep -q '"main": "src/platform_v3.ts"' wrangler.jsonc
           grep -q 'CREATE TABLE IF NOT EXISTS game_profiles' migrations/0012_latency_strike_v1.sql
           grep -q 'CREATE TABLE IF NOT EXISTS arena_teams' migrations/0013_dyrakarmy_arena_v1.sql
           grep -q 'CREATE TABLE IF NOT EXISTS platform_modules' migrations/0014_platform_control_center_v1.sql
           grep -q 'CREATE TABLE IF NOT EXISTS archive_raid_inventory' migrations/0015_archive_raid_v1.sql
           grep -q 'protected_content_access' migrations/0015_archive_raid_v1.sql
-          grep -q 'download-killer-static-v15-archive-raid' public/sw.js
+          grep -q 'CREATE TABLE IF NOT EXISTS platform_users' migrations/0017_platform_governance_v2.sql
+          grep -q 'CREATE TABLE IF NOT EXISTS platform_versions' migrations/0017_platform_governance_v2.sql
+          grep -q 'download-killer-static-v15-games-1-10' public/sw.js
           grep -q '/platform/games-v14.js' public/sw.js
           grep -q '/platform/platform-public.js' public/sw.js
           grep -q '/games/dyrakarmy-arena/arena.js?v=1.0.0' public/sw.js
@@ -99,10 +108,9 @@ jobs:
           ! grep -R --exclude='full-virtual-simulation.mjs' -n -E 'download_killerBOT|TELEGRAM_SECONDARY_|v10-secondary|telegram/webhook/dyrakarmy|web\.telegram\.org' src public scripts wrangler.jsonc package.json
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
-    environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -165,10 +173,11 @@ jobs:
             grep -q 'id="collectionGrid"' <<<"$raid"
             grep -q 'не дават достъп до защитено съдържание' <<<"$raid"
 
-            control="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/control/?v=1.0.0")"
-            grep -q 'DyrakArmy Control Center' <<<"$control"
+            control="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/control-v2/?v=2.0.0")"
+            grep -q 'DyrakArmy Control Center v2' <<<"$control"
             grep -q 'id="moduleList"' <<<"$control"
-            grep -q 'id="contentList"' <<<"$control"
+            grep -q 'id="roleList"' <<<"$control"
+            grep -q 'id="versionList"' <<<"$control"
           done
 
           registry="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/platform/public)"
@@ -176,6 +185,10 @@ jobs:
           grep -q '"dyrakarmy-arena"' <<<"$registry"
           grep -q '"archive-raid"' <<<"$registry"
           grep -q '"control-center"' <<<"$registry"
+
+          governance="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/platform/governance/health)"
+          grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$governance"
+          grep -q '"version":"2.0.0"' <<<"$governance"
 
           arena_config="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/games/dyrakarmy-arena/config)"
           grep -q '"game":"dyrakarmy-arena"' <<<"$arena_config"
