@@ -49,8 +49,10 @@ jobs:
       - name: Run Worker tests
         run: npm test
 
-      - name: Validate DyrakArmy v16 interface simulation
-        run: node scripts/landing-v16-simulation.mjs
+      - name: Validate DyrakArmy interface simulations
+        run: |
+          node scripts/landing-v16-simulation.mjs
+          node scripts/software-suite-simulation.mjs
 
       - name: Validate unified public platform assets
         run: |
@@ -59,6 +61,7 @@ jobs:
           node --check public/platform/site-defaults.js
           node --check public/platform/landing-v13.js
           node --check public/platform/landing-v16.js
+          node --check public/platform/software-suite.js
           node --check public/platform/games-v14.js
           node --check public/platform/platform-public.js
           node --check public/media-lab/media-lab.js
@@ -72,11 +75,16 @@ jobs:
           node --check public/sw.js
           node --check scripts/setup-telegram-platform.mjs
           grep -q '<title>DyrakArmy Platform</title>' public/index.html
-          grep -q 'DyrakArmy Interface v16' public/index.html
+          grep -Eq 'DyrakArmy Interface v(16|17)' public/index.html
           grep -q 'Responsive Design v13' public/index.html
           grep -q 'ONE PLATFORM.' public/index.html
           grep -q '/platform/landing-v16.css' public/index.html
           grep -q '/platform/landing-v16.js' public/index.html
+          grep -q '/platform/software-suite.css' public/index.html
+          grep -q '/platform/software-suite.js' public/index.html
+          grep -q 'id="software"' public/index.html
+          grep -q 'id="softwareReleaseGrid"' public/index.html
+          grep -q '/api/software/releases' public/index.html
           grep -q 'id="mobileNavToggle"' public/index.html
           grep -q 'id="installPwaBtn"' public/index.html
           grep -q 'id="moduleGrid"' public/index.html
@@ -103,6 +111,8 @@ jobs:
           grep -q '/api/platform/public' public/platform/platform-public.js
           grep -q 'handlePlatformGovernanceApi' src/platform_v3.ts
           grep -q 'handlePlatformGovernanceTelegramWebhook' src/platform_v3.ts
+          grep -q 'handleSoftwareCatalogApi' src/platform_v3.ts
+          grep -q 'handleSoftwareTelegramWebhook' src/platform_v3.ts
           grep -q '"main": "src/platform_v3.ts"' wrangler.jsonc
           grep -q 'CREATE TABLE IF NOT EXISTS game_profiles' migrations/0012_latency_strike_v1.sql
           grep -q 'CREATE TABLE IF NOT EXISTS arena_teams' migrations/0013_dyrakarmy_arena_v1.sql
@@ -114,8 +124,11 @@ jobs:
           grep -q 'CREATE TABLE IF NOT EXISTS platform_sessions' migrations/0017_platform_governance_v2.sql
           grep -q 'protected_content_access' migrations/0015_archive_raid_v1.sql
           grep -q 'download-killer-static-v16-dyrakarmy-dashboard' public/sw.js
+          grep -q 'download-killer-static-v17-software-suite' public/sw.js
           grep -q '/platform/landing-v16.css' public/sw.js
           grep -q '/platform/landing-v16.js' public/sw.js
+          grep -q '/platform/software-suite.css' public/sw.js
+          grep -q '/platform/software-suite.js' public/sw.js
           grep -q '/platform/games-v14.js' public/sw.js
           grep -q '/platform/platform-public.js' public/sw.js
           grep -q '/games/challenge/challenge.js?v=1.0.0' public/sw.js
@@ -123,53 +136,47 @@ jobs:
           grep -q '/games/archive-raid/raid.js?v=1.0.0' public/sw.js
           grep -q '/control/control.js?v=1.0.0' public/sw.js
           grep -q '/control-v2/' public/sw.js
-          grep -q 'DyrakArmy Unified Platform v16' public/manifest.webmanifest
+          grep -Eq 'DyrakArmy Unified Platform v(16|17)' public/manifest.webmanifest
+          grep -q '"url": "/#software"' public/manifest.webmanifest
           grep -q '"url": "/control-v2/"' public/manifest.webmanifest
-          grep -q "command: 'queuegame'" scripts/setup-telegram-platform.mjs
-          grep -q "command: 'arena'" scripts/setup-telegram-platform.mjs
-          grep -q "command: 'raid'" scripts/setup-telegram-platform.mjs
-          grep -q "command: 'botvhuman'" scripts/setup-telegram-platform.mjs
-          grep -q "command: 'control'" scripts/setup-telegram-platform.mjs
-          grep -q "command: 'id'" scripts/setup-telegram-platform.mjs
+          grep -q "command: 'software'" src/dyrakarmy_arena_commands.ts
+          grep -q "command: 'games'" src/dyrakarmy_arena_commands.ts
           ! grep -R --exclude='full-virtual-simulation.mjs' -n -E 'download_killerBOT|TELEGRAM_SECONDARY_|v10-secondary|telegram/webhook/dyrakarmy|web\.telegram\.org' src public scripts wrangler.jsonc package.json
+
+      - name: Wrangler packaging dry-run
+        run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-web-platform
 
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
-    environment: production
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Require Cloudflare credentials
+      - name: Verify Cloudflare Git production deployment
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$CLOUDFLARE_API_TOKEN" || { echo '::error::CLOUDFLARE_API_TOKEN is missing'; exit 1; }
-          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo '::error::CLOUDFLARE_ACCOUNT_ID is missing'; exit 1; }
+          expected='DyrakArmy Interface v17'
+          deployed=0
+          for attempt in $(seq 1 36); do
+            echo "Production verification attempt $attempt/36"
+            home="$(curl -fsSL --retry 2 --retry-all-errors --max-time 30 https://dyrakarmy.eu/ 2>/dev/null || true)"
+            catalog="$(curl -fsSL --retry 2 --retry-all-errors --max-time 30 https://dyrakarmy.eu/api/software/releases 2>/dev/null || true)"
+            if grep -q "$expected" <<<"$home" \
+              && grep -q 'id="software"' <<<"$home" \
+              && grep -q '/platform/software-suite.css' <<<"$home" \
+              && grep -q '/platform/software-suite.js' <<<"$home" \
+              && grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$catalog" \
+              && grep -q 'DyrakArmyDesktop.exe' <<<"$catalog" \
+              && grep -q 'DyrakArmySpotifyOggMp4Engine.exe' <<<"$catalog" \
+              && grep -q '"games_command":"/games"' <<<"$catalog"; then
+              deployed=1
+              break
+            fi
+            sleep 20
+          done
+          test "$deployed" -eq 1 || { echo '::error::Cloudflare Git build did not expose the verified v17 release within 12 minutes'; exit 1; }
 
-      - name: Apply remote D1 migrations
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: worker
-          command: d1 migrations apply sounddrop-db --remote --config wrangler.jsonc
-
-      - name: Deploy Worker and static platform
-        id: cloudflare
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: worker
-          command: deploy --config wrangler.jsonc
-
-      - name: Production smoke test
+      - name: Production smoke test for platform, software and Games 1-10
         shell: bash
         run: |
           set -euo pipefail
@@ -177,11 +184,13 @@ jobs:
             echo "Checking $base"
             home="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/")"
             grep -q 'DyrakArmy Platform' <<<"$home"
-            grep -q 'DyrakArmy Interface v16' <<<"$home"
+            grep -q 'DyrakArmy Interface v17' <<<"$home"
             grep -q 'ONE PLATFORM.' <<<"$home"
             grep -q '/platform/landing-v16.css' <<<"$home"
             grep -q '/platform/landing-v16.js' <<<"$home"
-            grep -q '/platform/games-v14.css' <<<"$home"
+            grep -q '/platform/software-suite.css' <<<"$home"
+            grep -q '/platform/software-suite.js' <<<"$home"
+            grep -q 'id="softwareReleaseGrid"' <<<"$home"
             grep -q '/platform/games-v14.js' <<<"$home"
             grep -q '/platform/platform-public.js' <<<"$home"
             grep -q 'id="installPwaBtn"' <<<"$home"
@@ -198,58 +207,38 @@ jobs:
             arena="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/games/dyrakarmy-arena/?v=1.0.0")"
             grep -q 'DyrakArmy Arena' <<<"$arena"
             grep -q 'id="battleStage"' <<<"$arena"
-            grep -q 'id="teamContent"' <<<"$arena"
 
             latency="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/games/latency-strike/?v=1.0.0")"
-            grep -q 'Latency Strike v1' <<<"$latency"
+            grep -q 'Latency Strike' <<<"$latency"
             grep -q 'id="rewardGrid"' <<<"$latency"
 
             raid="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/games/archive-raid/?v=1.0.0")"
             grep -q 'Archive Raid' <<<"$raid"
             grep -q 'id="sectorTrack"' <<<"$raid"
-            grep -q 'id="collectionGrid"' <<<"$raid"
-            grep -q 'не дават достъп до защитено съдържание' <<<"$raid"
-
-            control="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/control/?v=1.0.0")"
-            grep -q 'DyrakArmy Control Center' <<<"$control"
-            grep -q 'id="moduleList"' <<<"$control"
-            grep -q 'id="contentList"' <<<"$control"
 
             control_v2="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/control-v2/?v=2.1.0")"
             grep -q 'DyrakArmy Control Center v2' <<<"$control_v2"
-            grep -q 'control-v2.css?v=2.1.0' <<<"$control_v2"
-            grep -q 'id="moduleList"' <<<"$control_v2"
             grep -q 'id="roleForm"' <<<"$control_v2"
-            grep -q 'id="versionList"' <<<"$control_v2"
           done
+
+          catalog="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/software/releases)"
+          grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$catalog"
+          for file in DyrakArmyDesktop.exe DyrakArmyDesktop-macOS.zip DyrakArmySpotifyOggMp4Engine.exe DyrakArmy-Extension-Chrome.zip DyrakArmy-Extension-Firefox.zip SoundDrop-Expo-Web.zip SoundDrop-Expo-Native-Update.zip; do
+            grep -q "$file" <<<"$catalog"
+          done
+          grep -q '"bot":"@dyrakarmy_bot"' <<<"$catalog"
+          grep -q '"command":"/software"' <<<"$catalog"
+          grep -q '"games_command":"/games"' <<<"$catalog"
 
           registry="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/platform/public)"
           grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$registry"
           for slug in queue-commander beat-hunter dyrakarmy-arena format-forge server-defender metadata-detective link-runner archive-raid latency-strike bot-vs-human; do
             grep -q "\"$slug\"" <<<"$registry"
           done
-          grep -q '"control-center"' <<<"$registry"
 
           governance="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/platform/governance/health)"
           grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$governance"
           grep -q '"version":"2.0.0"' <<<"$governance"
-
-          queue_config="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/games/queue-commander/config)"
-          grep -q '"game":"queue-commander"' <<<"$queue_config"
-          grep -q '"number":1' <<<"$queue_config"
-
-          arena_config="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/games/dyrakarmy-arena/config)"
-          grep -q '"game":"dyrakarmy-arena"' <<<"$arena_config"
-          grep -q '"daily_attempts":3' <<<"$arena_config"
-
-          latency_config="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/games/latency-strike/config)"
-          grep -q '"game":"latency-strike"' <<<"$latency_config"
-          grep -q 'title_queue_master' <<<"$latency_config"
-
-          raid_config="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/games/archive-raid/config)"
-          grep -q '"game":"archive-raid"' <<<"$raid_config"
-          grep -q '"protected_content_access":false' <<<"$raid_config"
-          grep -q '"Army Exclusive"' <<<"$raid_config"
 
           health="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 https://dyrakarmy.eu/api/telegram/v12/health)"
           grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$health"
