@@ -92,4 +92,5 @@ jobs:
           grep -q 'CREATE TABLE IF NOT EXISTS game_unlocks' migrations/0012_latency_strike_v1.sql
           grep -q '/games/latency-strike/' public/manifest.webmanifest
           grep -q '/games/latency-strike/native-bridge.js?v=1.0.0' public/sw.js
-          grep -q 'd1 migrations apply sounddrop-db --remote' ../.github/workflows/deploy-web-platform.yml
+          grep -q 'Verify Cloudflare Git production deployment' ../.github/workflows/deploy-web-platform.yml
+          grep -q 'Production smoke test for platform, software and Games 1-10' ../.github/workflows/deploy-web-platform.yml

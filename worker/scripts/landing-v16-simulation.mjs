@@ -25,7 +25,7 @@ const requiredIds = [
 for (const id of requiredIds) assert.match(html, new RegExp(`id=["']${id}["']`), `missing #${id}`);
 
 assert.match(html, /<title>DyrakArmy Platform<\/title>/);
-assert.match(html, /DyrakArmy Interface v16/);
+assert.match(html, /DyrakArmy Interface v(?:16|17)/);
 assert.match(html, /ONE PLATFORM\./);
 assert.match(html, /EVERY <span>DYRAKARMY<\/span>/);
 assert.match(html, /\/platform\/landing-v16\.css/);
@@ -62,11 +62,17 @@ for (const asset of ['/platform/landing-v16.css', '/platform/landing-v16.js', '/
 }
 
 const parsedManifest = JSON.parse(manifest);
-assert.equal(parsedManifest.name, 'DyrakArmy Unified Platform v16');
+assert.match(parsedManifest.name, /^DyrakArmy Unified Platform v(?:16|17)$/);
 assert.equal(parsedManifest.theme_color, '#050914');
 assert.ok(parsedManifest.shortcuts.some((shortcut) => shortcut.url === '/control-v2/'));
 assert.ok(parsedManifest.shortcuts.some((shortcut) => shortcut.url === '/control/'));
 assert.ok(parsedManifest.shortcuts.some((shortcut) => shortcut.url === '/#games'));
+if (parsedManifest.name.endsWith('v17')) {
+  assert.ok(parsedManifest.shortcuts.some((shortcut) => shortcut.url === '/#software'));
+  assert.match(html, /id=["']software["']/);
+  assert.match(html, /\/platform\/software-suite\.css/);
+  assert.match(html, /\/platform\/software-suite\.js/);
+}
 
 assert.match(controlHtml, /DyrakArmy Control Center v2/);
 assert.match(controlHtml, /brand-logo/);
@@ -78,7 +84,8 @@ assert.match(controlSw, /dyrakarmy-control-v2-2\.1\.0-cyber/);
 
 console.log(JSON.stringify({
   ok: true,
-  interface: 'DyrakArmy v16 cyber dashboard',
+  interface: parsedManifest.name,
+  compatible_base: 'DyrakArmy v16 cyber dashboard',
   responsive_breakpoints: [1180, 920, 620],
   functional_contract_ids: requiredIds.length,
   pwa: true,

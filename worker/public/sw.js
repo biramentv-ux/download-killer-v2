@@ -1,5 +1,6 @@
 const CACHE_NAME = 'download-killer-static-v15-games-1-10';
 const INTERFACE_CACHE_VERSION = 'download-killer-static-v16-dyrakarmy-dashboard';
+const SOFTWARE_SUITE_VERSION = 'download-killer-static-v17-software-suite';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
 const CHALLENGE_GAME_SLUGS = [
   'queue-commander', 'beat-hunter', 'format-forge', 'server-defender',
@@ -13,12 +14,14 @@ const APP_SHELL = [
   '/platform/platform.css',
   '/platform/landing-v13.css',
   '/platform/landing-v16.css',
+  '/platform/software-suite.css',
   '/platform/games-v14.css',
   '/platform/platform-public.css',
   '/platform/status-backoff.js',
   '/platform/site-defaults.js',
   '/platform/landing-v13.js',
   '/platform/landing-v16.js',
+  '/platform/software-suite.js',
   '/platform/platform.js',
   '/platform/games-v14.js',
   '/platform/platform-public.js',

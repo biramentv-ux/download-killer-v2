@@ -44,12 +44,15 @@ jobs:
       - name: Run all Worker and game tests
         run: npm test
 
-      - name: Run DyrakArmy v16 interface simulation
-        run: node scripts/landing-v16-simulation.mjs
+      - name: Run DyrakArmy interface simulations
+        run: |
+          node scripts/landing-v16-simulation.mjs
+          node scripts/software-suite-simulation.mjs
 
       - name: Validate browser assets
         run: |
           node --check public/platform/landing-v16.js
+          node --check public/platform/software-suite.js
           node --check public/platform/games-v14.js
           node --check public/platform/platform-public.js
           node --check public/games/challenge/challenge.js
@@ -75,6 +78,8 @@ jobs:
           grep -q "isPlatformModuleEnabled" src/platform_v2.ts
           grep -q "handlePlatformGovernanceApi" src/platform_v3.ts
           grep -q "handlePlatformGovernanceTelegramWebhook" src/platform_v3.ts
+          grep -q "handleSoftwareCatalogApi" src/platform_v3.ts
+          grep -q "handleSoftwareTelegramWebhook" src/platform_v3.ts
           grep -q "return platformV2.fetch" src/platform_v3.ts
           grep -q '"main": "src/platform_v3.ts"' wrangler.jsonc
           grep -q "TELEGRAM_ADMIN_IDS" src/types.ts
@@ -91,10 +96,15 @@ jobs:
           grep -q "text/event-stream" src/platform_governance.ts
           grep -q "await sha256(token)" src/platform_governance.ts
           grep -q "DyrakArmy Platform" public/index.html
-          grep -q "DyrakArmy Interface v16" public/index.html
+          grep -Eq "DyrakArmy Interface v(16|17)" public/index.html
           grep -q "ONE PLATFORM." public/index.html
           grep -q "/platform/landing-v16.css" public/index.html
           grep -q "/platform/landing-v16.js" public/index.html
+          grep -q "/platform/software-suite.css" public/index.html
+          grep -q "/platform/software-suite.js" public/index.html
+          grep -q 'id="software"' public/index.html
+          grep -q 'id="softwareReleaseGrid"' public/index.html
+          grep -q '/api/software/releases' public/index.html
           grep -q 'id="installPwaBtn"' public/index.html
           grep -q 'id="profileName"' public/index.html
           grep -q 'id="previewModuleList"' public/index.html
@@ -114,14 +124,18 @@ jobs:
           grep -q "/api/platform/control" public/control/control.js
           grep -q "/api/platform/public" public/platform/platform-public.js
           grep -q "download-killer-static-v16-dyrakarmy-dashboard" public/sw.js
+          grep -q "download-killer-static-v17-software-suite" public/sw.js
           grep -q "/platform/landing-v16.css" public/sw.js
           grep -q "/platform/landing-v16.js" public/sw.js
+          grep -q "/platform/software-suite.css" public/sw.js
+          grep -q "/platform/software-suite.js" public/sw.js
           grep -q "/games/challenge/challenge.js?v=1.0.0" public/sw.js
           grep -q "/games/dyrakarmy-arena/arena.js?v=1.0.0" public/sw.js
           grep -q "/games/archive-raid/raid.js?v=1.0.0" public/sw.js
           grep -q "/control/control.js?v=1.0.0" public/sw.js
           grep -q "/control-v2/" public/sw.js
-          grep -q "DyrakArmy Unified Platform v16" public/manifest.webmanifest
+          grep -Eq "DyrakArmy Unified Platform v(16|17)" public/manifest.webmanifest
+          grep -q '"url": "/#software"' public/manifest.webmanifest
           grep -q '"url": "/control-v2/"' public/manifest.webmanifest
           grep -q "dyrakarmy-control-v2-2.1.0-cyber" public/control-v2/sw.js
           grep -q "CREATE TABLE IF NOT EXISTS arena_teams" migrations/0013_dyrakarmy_arena_v1.sql
@@ -138,14 +152,16 @@ jobs:
           grep -q "command: 'botvhuman'" scripts/setup-telegram-platform.mjs
           grep -q "command: 'control'" scripts/setup-telegram-platform.mjs
           grep -q "command: 'id'" scripts/setup-telegram-platform.mjs
+          grep -q "{ command: 'software'" src/dyrakarmy_arena_commands.ts
+          grep -q "{ command: 'games'" src/dyrakarmy_arena_commands.ts
 
       - name: Enforce safe remote-management and collectible boundary
         run: |
-          if grep -R -n -E 'eval\(|new Function\(' src/platform_control.ts src/platform_governance.ts src/challenge_games.ts public/control public/control-v2 public/platform/landing-v16.js public/games/challenge public/games/archive-raid; then
+          if grep -R -n -E 'eval\(|new Function\(' src/platform_control.ts src/platform_governance.ts src/software_catalog.ts src/software_telegram.ts src/challenge_games.ts public/control public/control-v2 public/platform/landing-v16.js public/platform/software-suite.js public/games/challenge public/games/archive-raid; then
             echo 'Executable code construction is forbidden.'
             exit 1
           fi
-          if grep -R -n -E 'javascript:|data:text/html' public/control public/control-v2 public/platform/landing-v16.js public/games/challenge public/games/archive-raid src/platform_control.ts src/platform_governance.ts; then
+          if grep -R -n -E 'javascript:|data:text/html' public/control public/control-v2 public/platform/landing-v16.js public/platform/software-suite.js public/games/challenge public/games/archive-raid src/platform_control.ts src/platform_governance.ts src/software_catalog.ts src/software_telegram.ts; then
             echo 'Unsafe URL schemes are forbidden.'
             exit 1
           fi

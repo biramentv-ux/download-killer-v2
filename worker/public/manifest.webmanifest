@@ -1,5 +1,5 @@
 {
-  "name": "DyrakArmy Unified Platform v16",
+  "name": "DyrakArmy Unified Platform v17",
   "short_name": "DyrakArmy",
   "id": "/",
   "start_url": "/",
@@ -9,7 +9,7 @@
   "orientation": "any",
   "background_color": "#050914",
   "theme_color": "#050914",
-  "description": "Unified DyrakArmy platform for Telegram, Games 1-10, rewards, downloads, shared profiles, Governance v2 and the remote Control Center.",
+  "description": "Unified DyrakArmy platform for software releases, Telegram, Games 1-10, rewards, downloads, shared profiles, Governance v2 and the remote Control Center.",
   "categories": ["music", "utilities", "productivity", "games", "social"],
   "lang": "bg",
   "dir": "ltr",
@@ -18,6 +18,13 @@
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "shortcuts": [
+    {
+      "name": "DyrakArmy Software & Mixing Toolkit",
+      "short_name": "Software",
+      "description": "Direct access to the latest desktop, mixing toolkit, browser, mobile and PWA releases.",
+      "url": "/#software",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
     {
       "name": "DyrakArmy Control Center v2",
       "short_name": "Control v2",
@@ -61,16 +68,16 @@
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Download Center",
+      "name": "Media Download Center",
       "short_name": "Downloads",
-      "description": "Open the working DyrakArmy download console.",
+      "description": "Open the working DyrakArmy media download console.",
       "url": "/#console",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Telegram Mini App",
       "short_name": "Telegram",
-      "description": "Open the shared Telegram queue, games, history and archive.",
+      "description": "Open the shared Telegram software, queue, games, history and archive.",
       "url": "/telegram/",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
