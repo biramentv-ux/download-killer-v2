@@ -45,8 +45,21 @@ jobs:
           cache-dependency-path: worker/package-lock.json
       - name: Install Worker dependencies
         run: npm ci
-      - name: Strict TypeScript
-        run: npm run typecheck
+      - name: Capture strict TypeScript result
+        id: typecheck
+        shell: bash
+        run: |
+          set +e
+          npm run typecheck > typecheck.log 2>&1
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload TypeScript diagnostics
+        if: steps.typecheck.outputs.exit_code != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: software-suite-typecheck-diagnostics
+          path: worker/typecheck.log
       - name: Run complete Worker test suite
         run: npm test
       - name: Run deterministic software suite simulation
@@ -67,6 +80,12 @@ jobs:
           grep -q "{ command: 'games'" src/dyrakarmy_arena_commands.ts
       - name: Wrangler packaging dry-run
         run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-software-v17
+      - name: Require strict TypeScript success
+        if: steps.typecheck.outputs.exit_code != '0'
+        shell: bash
+        run: |
+          cat typecheck.log
+          exit 1
 
   release-asset-contracts:
     runs-on: ubuntu-latest
