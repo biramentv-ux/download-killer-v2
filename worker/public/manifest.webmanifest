@@ -20,9 +20,16 @@
   "shortcuts": [
     {
       "name": "DyrakArmy Control Center v2",
-      "short_name": "Control",
+      "short_name": "Control v2",
       "description": "Roles, permissions, modules, versions, rollback and shared profiles.",
       "url": "/control-v2/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "DyrakArmy Control Center Legacy",
+      "short_name": "Control",
+      "description": "Compatibility shortcut for the original Control Center.",
+      "url": "/control/",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
