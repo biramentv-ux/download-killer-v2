@@ -1,0 +1,8 @@
+{
+  "release": "dyrakarmy-games-1-10-governance-v2",
+  "version": "2.0.0",
+  "deployment": "automatic-direct-production",
+  "source_commit": "74b3717a4444a9d9f8fd835cf61e02652d93de25",
+  "validation_required": true,
+  "remote_d1_migrations": ["0016_dyrakarmy_games_1_10.sql", "0017_platform_governance_v2.sql"]
+}
