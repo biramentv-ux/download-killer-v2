@@ -1,0 +1,6 @@
+
+> sounddrop-worker@12.2.0 typecheck
+> tsc --noEmit
+
+src/platform_governance.ts(110,18): error TS2532: Object is possibly 'undefined'.
+src/platform_governance.ts(701,41): error TS2532: Object is possibly 'undefined'.
