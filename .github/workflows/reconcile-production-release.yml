@@ -1,12 +1,12 @@
-# activation: reconcile validated release with current main
 name: Reconcile Production Release
 
 on:
-  push:
+  pull_request_target:
     branches:
       - main
-    paths:
-      - '.github/workflows/reconcile-production-release.yml'
+    types:
+      - reopened
+      - opened
   workflow_dispatch:
 
 permissions:
@@ -18,6 +18,7 @@ concurrency:
 
 jobs:
   reconcile:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.number == 28
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -132,6 +133,13 @@ jobs:
           fi
 
           rm -f .github/workflows/reconcile-main-production.yml
+          rm -f .github/workflows/reconcile-production-release.yml
+          rm -f .github/workflows/trigger-reconcile-pr28.yml
+          rm -f .release/reconcile-trigger
           git add -A
+          if git diff --cached --quiet; then
+            echo 'Release branch is already reconciled.'
+            exit 0
+          fi
           git commit -m 'Merge latest main into validated production release'
           git push origin HEAD:feature/dyrakarmy-games-1-10-v2
