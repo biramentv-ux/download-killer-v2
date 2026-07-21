@@ -35,30 +35,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: worker/package-lock.json
-
       - name: Install dependencies
         run: npm ci
-
       - name: Typecheck Worker
         run: npm run typecheck
-
       - name: Run Worker tests
         run: npm test
-
       - name: Validate Mini App scripts
         run: |
           node --check public/telegram/telegram.js
           node --check public/telegram/telegram-runtime-v12.js
           node --check public/sw.js
           node --check scripts/setup-telegram-platform.mjs
-
       - name: Validate Mini App v12 boundaries
         run: |
           node - <<'NODE'
@@ -106,8 +100,8 @@ jobs:
           if (!entry.includes('no-store, max-age=0, must-revalidate')) throw new Error('Telegram HTML is not delivered with no-store');
           if (!setup.includes('/telegram/?v=')) throw new Error('Bot menu URL is not cache-busted');
           if (!setup.includes('Refusing to bind the wrong Mini App session key')) throw new Error('Setup does not reject a wrong bot token');
-          if (!sw.includes("download-killer-static-v12.2.0")) throw new Error('Service Worker cache is not v12.2.0');
+          if (!sw.includes("download-killer-static-v15-games-1-10")) throw new Error('Service Worker does not use the unified Games 1-10 cache');
           if (!sw.includes("url.pathname.startsWith('/telegram/')")) throw new Error('Telegram assets are not network-first');
           if (pkg.version !== '12.2.0') throw new Error('Worker package version is not 12.2.0');
-          console.log('Telegram Mini App v12.2 design, diagnostics, cache recovery and health API validated.');
+          console.log('Telegram Mini App v12.2 design, diagnostics, unified cache recovery and health API validated.');
           NODE
