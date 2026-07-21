@@ -1,0 +1,23 @@
+name: Games 1-10 Simulation Diagnostics
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - worker/**
+      - .github/workflows/games-1-10-simulation-diagnostics.yml
+
+permissions:
+  contents: read
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run focused deterministic simulation
+        run: node scripts/games-1-10-simulation.mjs
