@@ -2,7 +2,7 @@ import type { Env } from './types';
 
 type ExtendedEnv = Env & { TELEGRAM_BOT_API_BASE?: string };
 
-const COMMAND_MARKER = 'tg:dyrakarmy:commands:v6';
+const COMMAND_MARKER = 'tg:dyrakarmy:commands:v7-games-10';
 const LATENCY_MARKER = 'tg:latency-strike:commands:v2';
 const V10_MARKER = 'tg:commands:bg:v10';
 const LEGACY_MARKER = 'tg:commands:bg:v4';
@@ -16,7 +16,14 @@ const BG_COMMANDS = [
   { command: 'raid', description: 'Играй Archive Raid' },
   { command: 'collection', description: 'Моята collectible колекция' },
   { command: 'crate', description: 'Отвори дневния Archive crate' },
-  { command: 'rewards', description: 'Ранг и игрови награди' },
+  { command: 'queuegame', description: 'Играй Queue Commander' },
+  { command: 'beathunter', description: 'Играй Beat Hunter' },
+  { command: 'formatforge', description: 'Играй Format Forge' },
+  { command: 'serverdefender', description: 'Играй Server Defender' },
+  { command: 'metadata', description: 'Играй Metadata Detective' },
+  { command: 'linkrunner', description: 'Играй Link Runner' },
+  { command: 'botvshuman', description: 'Играй срещу DK Core' },
+  { command: 'rewards', description: 'Общ ранг и игрови награди' },
   { command: 'control', description: 'Мобилен Control Center' },
   { command: 'id', description: 'Покажи моя Telegram ID' },
   { command: 'search', description: 'Търсене по име' },
@@ -44,7 +51,14 @@ const EN_COMMANDS = [
   { command: 'raid', description: 'Play Archive Raid' },
   { command: 'collection', description: 'My collectible collection' },
   { command: 'crate', description: 'Open the daily Archive crate' },
-  { command: 'rewards', description: 'Game rank and rewards' },
+  { command: 'queuegame', description: 'Play Queue Commander' },
+  { command: 'beathunter', description: 'Play Beat Hunter' },
+  { command: 'formatforge', description: 'Play Format Forge' },
+  { command: 'serverdefender', description: 'Play Server Defender' },
+  { command: 'metadata', description: 'Play Metadata Detective' },
+  { command: 'linkrunner', description: 'Play Link Runner' },
+  { command: 'botvshuman', description: 'Play against DK Core' },
+  { command: 'rewards', description: 'Shared rank and game rewards' },
   { command: 'control', description: 'Mobile Control Center' },
   { command: 'id', description: 'Show my Telegram ID' },
   { command: 'search', description: 'Search by name' },
@@ -71,32 +85,21 @@ export async function ensureDyrakArmyArenaCommands(env: ExtendedEnv): Promise<vo
     telegramRequest('setMyCommands', { commands: BG_COMMANDS, language_code: 'bg' }, env),
     telegramRequest('setMyCommands', { commands: EN_COMMANDS, language_code: 'en' }, env),
     telegramRequest('setMyDescription', {
-      description: 'Download Killer: DyrakArmy Arena, Latency Strike, Archive Raid, общ профил, Control Center, опашка и Telegram архив.',
+      description: 'Download Killer: 10 DyrakArmy игри, общ XP и профил, Control Center, опашка и Telegram архив.',
       language_code: 'bg',
     }, env),
     telegramRequest('setMyShortDescription', {
-      short_description: 'Arena, Raid, игри, Control Center и общ профил.',
+      short_description: '10 игри, общ XP, награди, Control Center и архив.',
       language_code: 'bg',
     }, env),
   ]);
   if (!results.every((result) => result.ok)) return;
-
   const username = String(env.TELEGRAM_BOT_USERNAME || 'dyrakarmy_bot').replace(/^@+/, '').toLowerCase();
-  const markers = [
-    COMMAND_MARKER,
-    LATENCY_MARKER,
-    V10_MARKER,
-    LEGACY_MARKER,
-    `tg:master:commands:v1:${username}`,
-  ];
+  const markers = [COMMAND_MARKER, LATENCY_MARKER, V10_MARKER, LEGACY_MARKER, `tg:master:commands:v1:${username}`];
   await Promise.all(markers.map((marker) => env.CACHE.put(marker, '1', { expirationTtl: 86400 })));
 }
 
-async function telegramRequest(
-  method: string,
-  payload: Record<string, unknown>,
-  env: ExtendedEnv,
-): Promise<{ ok: boolean; description?: string }> {
+async function telegramRequest(method: string, payload: Record<string, unknown>, env: ExtendedEnv): Promise<{ ok: boolean; description?: string }> {
   const base = String(env.TELEGRAM_BOT_API_BASE || 'https://api.telegram.org').replace(/\/+$/, '');
   const response = await fetch(`${base}/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
     method: 'POST',

@@ -1,0 +1,137 @@
+name: DyrakArmy 10 Games Matrix
+
+on:
+  pull_request:
+    paths:
+      - worker/**
+      - .github/workflows/games-10-check.yml
+  push:
+    branches:
+      - main
+    paths:
+      - worker/**
+      - .github/workflows/games-10-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: games-10-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  worker-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - run: npm ci
+      - name: Typecheck all game handlers
+        run: npm run typecheck
+      - name: Run all server-side game tests
+        run: npm test
+      - name: Wrangler packaging dry-run
+        run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-games-10
+
+  game-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        game:
+          - queue-commander
+          - beat-hunter
+          - dyrakarmy-arena
+          - format-forge
+          - server-defender
+          - metadata-detective
+          - link-runner
+          - archive-raid
+          - latency-strike
+          - bot-vs-human
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate route and public catalog contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          game='${{ matrix.game }}'
+          grep -q "$game" worker/public/platform/games-v14.js
+          case "$game" in
+            dyrakarmy-arena|archive-raid|latency-strike)
+              grep -q "$game" worker/src/platform_v2.ts
+              grep -q "$game" worker/public/sw.js
+              ;;
+            *)
+              grep -q "$game" worker/src/game_pack.ts
+              grep -q 'handleGamePackPage' worker/src/platform_v2.ts
+              grep -q 'PACK_GAME_IDS' worker/src/platform_v2.ts
+              grep -q 'PACK_GAME_IDS' worker/public/sw.js
+              ;;
+          esac
+      - name: Validate game client syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          case '${{ matrix.game }}' in
+            dyrakarmy-arena) node --check worker/public/games/dyrakarmy-arena/arena.js ;;
+            archive-raid) node --check worker/public/games/archive-raid/raid.js ;;
+            latency-strike) node --check worker/public/games/latency-strike/game.js ;;
+            *)
+              grep -q '${{ matrix.game }}' worker/src/game_pack.ts
+              node --check worker/public/games/shared/game-pack.js
+              ;;
+          esac
+
+  integration-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate shared profile and migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/public/platform/games-v14.js
+          node --check worker/public/platform/platform-public.js
+          node --check worker/public/games/shared/game-pack.js
+          node --check worker/public/games/archive-raid/raid.js
+          node --check worker/public/sw.js
+          grep -q "total_games: 10" worker/src/game_pack.ts
+          grep -q "handleGamePackApi" worker/src/platform_v2.ts
+          grep -q "handleGamePackTelegramWebhook" worker/src/platform_v2.ts
+          grep -q "handleArchiveRaidApi" worker/src/platform_v2.ts
+          grep -q "game_system" worker/src/platform_v2.ts
+          grep -q "download-killer-static-v15-games-10" worker/public/sw.js
+          grep -q "CREATE TABLE IF NOT EXISTS game_pack_runs" worker/migrations/0016_dyrakarmy_game_pack_v1.sql
+          grep -q "CREATE TABLE IF NOT EXISTS archive_raid_runs" worker/migrations/0015_archive_raid_v1.sql
+          grep -q "FROM game_pack_runs r JOIN game_profiles" worker/src/game_pack.ts
+          grep -q "UPDATE game_profiles SET total_xp" worker/src/game_pack.ts
+      - name: Validate all Telegram game commands
+        shell: bash
+        run: |
+          set -euo pipefail
+          for command in arena game raid queuegame beathunter formatforge serverdefender metadata linkrunner botvshuman; do
+            grep -q "command: '$command'" worker/src/dyrakarmy_arena_commands.ts
+          done
+      - name: Validate safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "protected_content_access: false" worker/src/archive_raid.ts
+          grep -q "copyright_safe" worker/migrations/0016_dyrakarmy_game_pack_v1.sql
+          grep -q "safe_urls_only" worker/migrations/0016_dyrakarmy_game_pack_v1.sql
+          if grep -R -n -E 'eval\(|new Function\(|javascript:|data:text/html' worker/src/game_pack.ts worker/src/archive_raid.ts worker/public/games/shared worker/public/games/archive-raid; then
+            echo 'Unsafe executable content found in game system.'
+            exit 1
+          fi
