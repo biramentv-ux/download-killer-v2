@@ -7,6 +7,12 @@ on:
     paths:
       - worker/**
       - .github/workflows/games-1-10-preupload.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - worker/**
+      - .github/workflows/games-1-10-preupload.yml
   workflow_dispatch:
 
 permissions:
