@@ -49,12 +49,16 @@ jobs:
       - name: Run Worker tests
         run: npm test
 
+      - name: Validate DyrakArmy v16 interface simulation
+        run: node scripts/landing-v16-simulation.mjs
+
       - name: Validate unified public platform assets
         run: |
           node --check public/platform/platform.js
           node --check public/platform/status-backoff.js
           node --check public/platform/site-defaults.js
           node --check public/platform/landing-v13.js
+          node --check public/platform/landing-v16.js
           node --check public/platform/games-v14.js
           node --check public/platform/platform-public.js
           node --check public/media-lab/media-lab.js
@@ -67,14 +71,23 @@ jobs:
           node --check public/control-v2/sw.js
           node --check public/sw.js
           node --check scripts/setup-telegram-platform.mjs
-          grep -q '<title>Download Killer Platform</title>' public/index.html
+          grep -q '<title>DyrakArmy Platform</title>' public/index.html
+          grep -q 'DyrakArmy Interface v16' public/index.html
           grep -q 'Responsive Design v13' public/index.html
+          grep -q 'ONE PLATFORM.' public/index.html
+          grep -q '/platform/landing-v16.css' public/index.html
+          grep -q '/platform/landing-v16.js' public/index.html
           grep -q 'id="mobileNavToggle"' public/index.html
+          grep -q 'id="installPwaBtn"' public/index.html
+          grep -q 'id="moduleGrid"' public/index.html
+          grep -q 'id="profileName"' public/index.html
+          grep -q 'id="previewModuleList"' public/index.html
           grep -q 'id="downloadForm"' public/index.html
           grep -q 'id="jobFeed"' public/index.html
           grep -q 'id="historyList"' public/index.html
           grep -q 'tg://resolve?domain=dyrakarmy_bot' public/index.html
           grep -q '@dyrakarmy_bot' public/index.html
+          ! grep -qi 'SECONDARY BOT' public/index.html
           grep -q 'SHARED GAME ENGINE' public/games/challenge/index.html
           grep -q '/api/games/${slug}/' public/games/challenge/challenge.js
           grep -q 'DyrakArmy Arena' public/games/dyrakarmy-arena/index.html
@@ -85,6 +98,7 @@ jobs:
           grep -q 'DyrakArmy Control Center' public/control/index.html
           grep -q '/api/platform/control' public/control/control.js
           grep -q 'DyrakArmy Control Center v2' public/control-v2/index.html
+          grep -q 'control-v2.css?v=2.1.0' public/control-v2/index.html
           grep -q '/api/platform/governance' public/control-v2/control-v2.js
           grep -q '/api/platform/public' public/platform/platform-public.js
           grep -q 'handlePlatformGovernanceApi' src/platform_v3.ts
@@ -99,13 +113,18 @@ jobs:
           grep -q 'CREATE TABLE IF NOT EXISTS platform_versions' migrations/0017_platform_governance_v2.sql
           grep -q 'CREATE TABLE IF NOT EXISTS platform_sessions' migrations/0017_platform_governance_v2.sql
           grep -q 'protected_content_access' migrations/0015_archive_raid_v1.sql
-          grep -q 'download-killer-static-v15-games-1-10' public/sw.js
+          grep -q 'download-killer-static-v16-dyrakarmy-dashboard' public/sw.js
+          grep -q '/platform/landing-v16.css' public/sw.js
+          grep -q '/platform/landing-v16.js' public/sw.js
           grep -q '/platform/games-v14.js' public/sw.js
           grep -q '/platform/platform-public.js' public/sw.js
           grep -q '/games/challenge/challenge.js?v=1.0.0' public/sw.js
           grep -q '/games/dyrakarmy-arena/arena.js?v=1.0.0' public/sw.js
           grep -q '/games/archive-raid/raid.js?v=1.0.0' public/sw.js
           grep -q '/control/control.js?v=1.0.0' public/sw.js
+          grep -q '/control-v2/' public/sw.js
+          grep -q 'DyrakArmy Unified Platform v16' public/manifest.webmanifest
+          grep -q '"url": "/control-v2/"' public/manifest.webmanifest
           grep -q "command: 'queuegame'" scripts/setup-telegram-platform.mjs
           grep -q "command: 'arena'" scripts/setup-telegram-platform.mjs
           grep -q "command: 'raid'" scripts/setup-telegram-platform.mjs
@@ -157,12 +176,18 @@ jobs:
           for base in https://dyrakarmy.eu https://sounddrop.biramentv.workers.dev; do
             echo "Checking $base"
             home="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/")"
-            grep -q 'Download Killer Platform' <<<"$home"
-            grep -q 'Responsive Design v13' <<<"$home"
+            grep -q 'DyrakArmy Platform' <<<"$home"
+            grep -q 'DyrakArmy Interface v16' <<<"$home"
+            grep -q 'ONE PLATFORM.' <<<"$home"
+            grep -q '/platform/landing-v16.css' <<<"$home"
+            grep -q '/platform/landing-v16.js' <<<"$home"
             grep -q '/platform/games-v14.css' <<<"$home"
             grep -q '/platform/games-v14.js' <<<"$home"
             grep -q '/platform/platform-public.js' <<<"$home"
+            grep -q 'id="installPwaBtn"' <<<"$home"
+            grep -q 'id="profileName"' <<<"$home"
             grep -q '@dyrakarmy_bot' <<<"$home"
+            ! grep -qi 'SECONDARY BOT' <<<"$home"
             ! grep -q 'download_killerBOT' <<<"$home"
             ! grep -q 'web.telegram.org' <<<"$home"
 
@@ -190,10 +215,11 @@ jobs:
             grep -q 'id="moduleList"' <<<"$control"
             grep -q 'id="contentList"' <<<"$control"
 
-            control_v2="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/control-v2/?v=2.0.0")"
+            control_v2="$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --max-time 45 "$base/control-v2/?v=2.1.0")"
             grep -q 'DyrakArmy Control Center v2' <<<"$control_v2"
+            grep -q 'control-v2.css?v=2.1.0' <<<"$control_v2"
             grep -q 'id="moduleList"' <<<"$control_v2"
-            grep -q 'id="roleList"' <<<"$control_v2"
+            grep -q 'id="roleForm"' <<<"$control_v2"
             grep -q 'id="versionList"' <<<"$control_v2"
           done
 
