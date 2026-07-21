@@ -59,7 +59,6 @@ jobs:
           mkdir -p worker/public/control-v2
           cp -a /tmp/governance-v2/control-v2/. worker/public/control-v2/
           install -D /tmp/governance-v2/platform-governance-simulation.mjs worker/scripts/platform-governance-simulation.mjs
-          install -D /tmp/governance-v2/platform-governance-v2.yml .github/workflows/platform-governance-v2.yml
           install -D /tmp/governance-v2/PLATFORM_GOVERNANCE_V2.md PLATFORM_GOVERNANCE_V2.md
           install -D /tmp/governance-v2/wrangler.jsonc worker/wrangler.jsonc
           python - <<'PYFIX'
