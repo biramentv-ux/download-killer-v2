@@ -5,6 +5,7 @@ import {
   getChallengeGameBotSummary,
   type ChallengeGameSlug,
 } from './challenge_games';
+import { isPlatformModuleEnabled } from './platform_control';
 
 type ExtendedEnv = Env & { TELEGRAM_BOT_API_BASE?: string };
 
@@ -65,6 +66,7 @@ export async function handleChallengeGamesTelegramWebhook(
   if (callback?.data?.startsWith('challenge:profile:')) {
     const slug = callback.data.slice('challenge:profile:'.length) as ChallengeGameSlug;
     if (!CHALLENGE_GAMES[slug]) return null;
+    if (!await isPlatformModuleEnabled(env, slug)) return Response.json({ ok: true, mode: 'game_disabled' });
     await telegramRequest('answerCallbackQuery', { callback_query_id: callback.id }, env);
     const language = languageFor(callback.from);
     const summary = await getChallengeGameBotSummary(slug, callback.from.id, env, language);
@@ -78,6 +80,10 @@ export async function handleChallengeGamesTelegramWebhook(
   const command = raw.split(/\s+/)[0]?.split('@')[0]?.toLowerCase() || '';
   const slug = COMMAND_TO_GAME.get(command);
   if (!slug) return null;
+  if (!await isPlatformModuleEnabled(env, slug)) {
+    await sendMessage(message.chat.id, 'Тази игра е временно изключена от Control Center.', env, {});
+    return Response.json({ ok: true, mode: 'game_disabled' });
+  }
   const game = CHALLENGE_GAMES[slug];
   const language = languageFor(message.from);
   const text = language === 'bg'
@@ -87,8 +93,8 @@ export async function handleChallengeGamesTelegramWebhook(
         game.description,
         '',
         `🎯 ${game.rounds} рунда на игра`,
-        `⚡ Общ XP и ранг с останалите DyrakArmy Games`,
-        `🏆 Седмична класация`,
+        '⚡ Общ XP и ранг с останалите DyrakArmy Games',
+        '🏆 Седмична класация',
         `🎁 Perfect-run награда: ${game.reward_label}`,
       ].join('\n')
     : [
