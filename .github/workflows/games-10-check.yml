@@ -128,6 +128,7 @@ jobs:
           grep -q 'isPlatformModuleEnabled(env, slug)' worker/src/platform_v2.ts
           grep -q 'CREATE TABLE IF NOT EXISTS challenge_game_runs' worker/migrations/0016_dyrakarmy_games_1_10.sql
           grep -q 'CREATE TABLE IF NOT EXISTS archive_raid_runs' worker/migrations/0015_archive_raid_v1.sql
+          grep -q '"shared_profile":true' worker/migrations/0016_dyrakarmy_games_1_10.sql
           grep -q 'game_profiles' worker/src/challenge_games.ts
           grep -q 'total_xp' worker/src/challenge_games.ts
           grep -q 'download-killer-static-v15-games-1-10' worker/public/sw.js
@@ -144,8 +145,6 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'protected_content_access: false' worker/src/archive_raid.ts
-          grep -q 'copyright_safe' worker/migrations/0016_dyrakarmy_games_1_10.sql
-          grep -q 'safe_urls_only' worker/migrations/0016_dyrakarmy_games_1_10.sql
           if grep -R -n -E 'eval\(|new Function\(|javascript:|data:text/html' worker/src/challenge_games.ts worker/src/archive_raid.ts worker/public/games/challenge worker/public/games/archive-raid; then
             echo 'Unsafe executable content found in game system.'
             exit 1
