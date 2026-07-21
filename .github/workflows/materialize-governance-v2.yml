@@ -7,6 +7,12 @@ on:
     paths:
       - '.bootstrap/governance-v2.part*'
       - '.github/workflows/materialize-governance-v2.yml'
+  pull_request:
+    branches:
+      - feature/dyrakarmy-games-1-10-v2
+    paths:
+      - '.bootstrap/governance-v2.part*'
+      - '.github/workflows/materialize-governance-v2.yml'
   workflow_dispatch:
 
 permissions:
@@ -18,7 +24,7 @@ concurrency:
 
 jobs:
   materialize-and-validate:
-    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[governance-materialized]')
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || !contains(github.event.head_commit.message, '[governance-materialized]')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
