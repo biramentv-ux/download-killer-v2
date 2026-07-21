@@ -52,8 +52,12 @@ jobs:
           for slug in queue-commander beat-hunter dyrakarmy-arena format-forge server-defender metadata-detective link-runner archive-raid latency-strike bot-vs-human; do
             grep -q "$slug" public/platform/games-v14.js
             grep -q "$slug" public/platform/platform-public.js
-            grep -q "$slug" src/platform_v2.ts
           done
+          grep -q "CHALLENGE_SLUGS.map" src/platform_v2.ts
+          grep -q "isPlatformModuleEnabled(env, slug)" src/platform_v2.ts
+          grep -q "handleDyrakArmyArenaApi" src/platform_v2.ts
+          grep -q "handleArchiveRaidApi" src/platform_v2.ts
+          grep -q "handleLatencyStrikeGameApi" src/platform_v2.ts
           grep -q "CREATE TABLE IF NOT EXISTS challenge_game_runs" migrations/0016_dyrakarmy_games_1_10.sql
           grep -q "CREATE TABLE IF NOT EXISTS archive_raid_inventory" migrations/0015_archive_raid_v1.sql
           grep -q "protected_content_access: false" src/archive_raid.ts
