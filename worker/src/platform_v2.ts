@@ -2,11 +2,11 @@ import legacyHandler from './index';
 import type { DownloadJob, Env, JobHistoryEvent } from './types';
 import { handleArchiveRaidApi } from './archive_raid';
 import { handleArchiveRaidTelegramWebhook } from './archive_raid_bot';
+import { CHALLENGE_GAMES, challengeGameSlugs, handleChallengeGamesApi } from './challenge_games';
+import { handleChallengeGamesTelegramWebhook } from './challenge_games_bot';
 import { handleDyrakArmyArenaApi } from './dyrakarmy_arena';
 import { handleDyrakArmyArenaTelegramWebhook } from './dyrakarmy_arena_bot';
 import { ensureDyrakArmyArenaCommands } from './dyrakarmy_arena_commands';
-import { GAME_PACK, handleGamePackApi, type GamePackId } from './game_pack';
-import { handleGamePackTelegramWebhook } from './game_pack_bot';
 import { handlePlatformControlApi, isPlatformModuleEnabled } from './platform_control';
 import { handlePlatformControlTelegramWebhook } from './platform_control_bot';
 import {
@@ -35,7 +35,7 @@ type ExtendedEnv = Env & {
   TELEGRAM_BOT_API_BASE?: string;
 };
 
-const PACK_GAME_IDS = Object.keys(GAME_PACK) as GamePackId[];
+const CHALLENGE_SLUGS = challengeGameSlugs();
 
 function nativeTelegramLinks(env: ExtendedEnv): {
   username: string;
@@ -64,10 +64,15 @@ function jsonWithExistingHeaders(response: Response, payload: unknown): Response
   });
 }
 
-async function enforceNativeTelegramApi(request: Request, response: Response, env: ExtendedEnv): Promise<Response> {
+async function enforceNativeTelegramApi(
+  request: Request,
+  response: Response,
+  env: ExtendedEnv,
+): Promise<Response> {
   if (request.method !== 'GET' || !response.ok) return response;
   const path = new URL(request.url).pathname;
   const links = nativeTelegramLinks(env);
+
   if (path === '/api/telegram/info') {
     return jsonWithExistingHeaders(response, {
       ok: true,
@@ -79,23 +84,23 @@ async function enforceNativeTelegramApi(request: Request, response: Response, en
       native_only: true,
     });
   }
-  if (path !== '/api/runtime-config') return response;
 
-  const [latencyEnabled, arenaEnabled, raidEnabled, downloadsEnabled, mediaLabEnabled, ...packFlags] = await Promise.all([
+  if (path !== '/api/runtime-config') return response;
+  const [latencyEnabled, arenaEnabled, raidEnabled, downloadsEnabled, mediaLabEnabled, challengePairs] = await Promise.all([
     isPlatformModuleEnabled(env, 'latency-strike'),
     isPlatformModuleEnabled(env, 'dyrakarmy-arena'),
     isPlatformModuleEnabled(env, 'archive-raid'),
     isPlatformModuleEnabled(env, 'downloads'),
     isPlatformModuleEnabled(env, 'media-lab'),
-    ...PACK_GAME_IDS.map((id) => isPlatformModuleEnabled(env, id)),
+    Promise.all(CHALLENGE_SLUGS.map(async (slug) => [slug.replaceAll('-', '_'), {
+      enabled: await isPlatformModuleEnabled(env, slug),
+      version: '1.0.0',
+      number: CHALLENGE_GAMES[slug].number,
+      path: `/games/${slug}/`,
+      miniapp_deep_link: `tg://resolve?domain=${links.username}&startapp=${slug.replaceAll('-', '_')}`,
+      modes: ['ranked', 'practice', 'weekly-leaderboard'],
+    }] as const)),
   ]);
-  const packGames = Object.fromEntries(PACK_GAME_IDS.map((id, index) => [id.replaceAll('-', '_'), {
-    enabled: packFlags[index] ?? true,
-    version: '1.0.0',
-    path: `/games/${id}/`,
-    miniapp_deep_link: `tg://resolve?domain=${links.username}&startapp=${id.replaceAll('-', '_')}`,
-    shared_profile: true,
-  }]));
   const payload = await response.json() as Record<string, unknown>;
   return jsonWithExistingHeaders(response, {
     ...payload,
@@ -118,16 +123,11 @@ async function enforceNativeTelegramApi(request: Request, response: Response, en
       native_only: true,
     },
     games: {
-      latency_strike: {
-        enabled: latencyEnabled,
-        version: '1.0.0',
-        short_name: 'latency_strike',
-        path: '/games/latency-strike/',
-        native_deep_link: `tg://resolve?domain=${links.username}&game=latency_strike`,
-      },
+      ...Object.fromEntries(challengePairs),
       dyrakarmy_arena: {
         enabled: arenaEnabled,
         version: '1.0.0',
+        number: 3,
         path: '/games/dyrakarmy-arena/',
         miniapp_deep_link: `tg://resolve?domain=${links.username}&startapp=arena`,
         modes: ['daily-arena', 'team-league', 'practice'],
@@ -135,40 +135,42 @@ async function enforceNativeTelegramApi(request: Request, response: Response, en
       archive_raid: {
         enabled: raidEnabled,
         version: '1.0.0',
+        number: 8,
         path: '/games/archive-raid/',
         miniapp_deep_link: `tg://resolve?domain=${links.username}&startapp=archive_raid`,
         modes: ['ranked-raid', 'practice', 'daily-crate', 'collection'],
         protected_content_access: false,
       },
-      ...packGames,
-    },
-    game_system: {
-      total_games: 10,
-      shared_profile: true,
-      shared_xp: true,
-      shared_rewards: true,
-      catalog: '/api/games/game-pack/catalog',
+      latency_strike: {
+        enabled: latencyEnabled,
+        version: '1.0.0',
+        number: 9,
+        short_name: 'latency_strike',
+        path: '/games/latency-strike/',
+        native_deep_link: `tg://resolve?domain=${links.username}&game=latency_strike`,
+      },
     },
   });
 }
 
-async function handleGamePackPage(request: Request, env: ExtendedEnv): Promise<Response | null> {
+function challengeSlugFromPublicPath(pathname: string): string | null {
+  const match = pathname.match(/^\/games\/([a-z0-9-]+)\/?(?:index\.html)?$/);
+  const slug = match?.[1] || '';
+  return CHALLENGE_SLUGS.includes(slug as (typeof CHALLENGE_SLUGS)[number]) ? slug : null;
+}
+
+async function serveChallengeGamePage(request: Request, env: ExtendedEnv): Promise<Response | null> {
   if (request.method !== 'GET') return null;
   const url = new URL(request.url);
-  const match = url.pathname.match(/^\/games\/([a-z0-9-]+)\/(?:index\.html)?$/);
-  if (!match) return null;
-  const gameId = match[1] as GamePackId;
-  if (!GAME_PACK[gameId]) return null;
-  const assetUrl = new URL('/games/shared/index.html', request.url);
-  const assetResponse = await legacyHandler.fetch(new Request(assetUrl.toString(), request), env);
-  if (!assetResponse.ok) return assetResponse;
-  const html = (await assetResponse.text()).replaceAll('__GAME_ID__', gameId);
-  const headers = new Headers(assetResponse.headers);
-  headers.delete('Content-Length');
-  headers.set('Content-Type', 'text/html; charset=utf-8');
-  headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
-  headers.set('X-DyrakArmy-Game', gameId);
-  return new Response(html, { status: 200, headers });
+  if (!challengeSlugFromPublicPath(url.pathname)) return null;
+  const assetUrl = new URL(request.url);
+  assetUrl.pathname = '/games/challenge/index.html';
+  assetUrl.search = '';
+  const response = await env.ASSETS.fetch(new Request(assetUrl.toString(), { method: 'GET', headers: request.headers }));
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', 'no-cache');
+  headers.set('X-DyrakArmy-Game-Engine', 'challenge-v1');
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 async function injectPlatformAssets(request: Request, response: Response): Promise<Response> {
@@ -177,6 +179,7 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
   const isRoot = url.pathname === '/' || url.pathname === '/index.html';
   const isTelegram = url.pathname === '/telegram/' || url.pathname === '/telegram/index.html';
   if (!isRoot && !isTelegram) return response;
+
   const contentType = response.headers.get('Content-Type') ?? '';
   if (!contentType.toLowerCase().includes('text/html')) return response;
 
@@ -186,7 +189,7 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
 
   if (isRoot) {
     html = html.replace(/<link rel="canonical" href="[^"]+">/, '<link rel="canonical" href="https://dyrakarmy.eu/">');
-    for (const href of ['/platform/games-v14.css', '/platform/games-pack.css', '/platform/platform-public.css']) {
+    for (const href of ['/platform/games-v14.css', '/platform/platform-public.css']) {
       if (!html.includes(href)) html = html.replace('</head>', `  <link rel="stylesheet" href="${href}">\n</head>`);
     }
     if (!html.includes('/platform/status-backoff.js')) {
@@ -208,21 +211,21 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
     );
     const archiveCard = '<button class="command-card" type="button" data-open-tab="archive"><i>☁</i><b>Архив</b><small>Telegram file_id и повторна употреба</small></button>';
     const cards: string[] = [archiveCard];
-    const fixedGames = [
-      ['latency-strike', '⚡', 'Latency Strike', 'Native реакция, XP и седмична класация', 'tg://resolve?domain=dyrakarmy_bot&game=latency_strike'],
-      ['dyrakarmy-arena', '⚔️', 'DyrakArmy Arena', 'Отбори, дневни мисии, сезони и класации', 'tg://resolve?domain=dyrakarmy_bot&startapp=arena'],
-      ['archive-raid', '🗃', 'Archive Raid', 'Collectible карти, crates и профилни ефекти', 'tg://resolve?domain=dyrakarmy_bot&startapp=archive_raid'],
-    ];
-    for (const [id, icon, title, description, href] of fixedGames) {
-      if (!html.includes(`data-game="${id}"`)) cards.push(`<a class="command-card" data-game="${id}" href="${href}" style="text-decoration:none"><i>${icon}</i><b>${title}</b><small>${description}</small></a>`);
+    if (!html.includes('data-games-hub')) {
+      cards.push('<a class="command-card" data-games-hub href="/#games" style="text-decoration:none"><i>🎮</i><b>DyrakArmy Games 1-10</b><small>Общ XP, рангове, награди и класации</small></a>');
     }
-    for (const id of PACK_GAME_IDS) {
-      const game = GAME_PACK[id];
-      if (!html.includes(`data-game="${id}"`)) {
-        cards.push(`<a class="command-card" data-game="${id}" href="tg://resolve?domain=dyrakarmy_bot&startapp=${id.replaceAll('-', '_')}" style="text-decoration:none"><i>${game.icon}</i><b>${game.title}</b><small>${game.description}</small></a>`);
-      }
+    if (!html.includes('data-game="latency-strike"')) {
+      cards.push('<a class="command-card" data-game="latency-strike" href="tg://resolve?domain=dyrakarmy_bot&game=latency_strike" style="text-decoration:none"><i>⚡</i><b>Latency Strike</b><small>Native Game, XP, награди и седмична класация</small></a>');
     }
-    if (!html.includes('data-control-center')) cards.push('<a class="command-card" data-control-center href="/control/" style="text-decoration:none"><i>⚙</i><b>Control Center</b><small>Защитено дистанционно управление</small></a>');
+    if (!html.includes('data-game="dyrakarmy-arena"')) {
+      cards.push('<a class="command-card" data-game="dyrakarmy-arena" href="tg://resolve?domain=dyrakarmy_bot&startapp=arena" style="text-decoration:none"><i>⚔️</i><b>DyrakArmy Arena</b><small>Отбори, дневни мисии, сезони и класации</small></a>');
+    }
+    if (!html.includes('data-game="archive-raid"')) {
+      cards.push('<a class="command-card" data-game="archive-raid" href="tg://resolve?domain=dyrakarmy_bot&startapp=archive_raid" style="text-decoration:none"><i>🗃</i><b>Archive Raid</b><small>Collectible карти, crates, общ XP и профилни ефекти</small></a>');
+    }
+    if (!html.includes('data-control-center')) {
+      cards.push('<a class="command-card" data-control-center href="/control/" style="text-decoration:none"><i>⚙</i><b>Control Center</b><small>Защитено дистанционно управление за администратори</small></a>');
+    }
     if (cards.length > 1) html = html.replace(archiveCard, cards.join('\n        '));
   }
 
@@ -230,18 +233,14 @@ async function injectPlatformAssets(request: Request, response: Response): Promi
   headers.delete('Content-Length');
   headers.set('Cache-Control', isTelegram ? 'no-store, max-age=0, must-revalidate' : 'no-cache');
   headers.set('Pragma', isTelegram ? 'no-cache' : headers.get('Pragma') ?? '');
-  headers.set('X-Download-Killer-Version', isTelegram ? TELEGRAM_MINIAPP_VERSION : 'platform-v15-games-10');
+  headers.set('X-Download-Killer-Version', isTelegram ? TELEGRAM_MINIAPP_VERSION : 'platform-v14-games-1-10');
   return new Response(html, { status: response.status, statusText: response.statusText, headers });
 }
 
 async function disabledModuleResponse(request: Request, env: ExtendedEnv): Promise<Response | null> {
   const url = new URL(request.url);
-  const packChecks: Array<[string, boolean]> = PACK_GAME_IDS.map((id) => [
-    id,
-    url.pathname.startsWith(`/api/games/${id}/`) || url.pathname.startsWith(`/games/${id}/`),
-  ]);
   const checks: Array<[string, boolean]> = [
-    ...packChecks,
+    ...CHALLENGE_SLUGS.map((slug) => [slug, url.pathname.startsWith(`/api/games/${slug}/`) || url.pathname.startsWith(`/games/${slug}/`)] as [string, boolean]),
     ['archive-raid', url.pathname.startsWith('/api/games/archive-raid/') || url.pathname.startsWith('/games/archive-raid/')],
     ['dyrakarmy-arena', url.pathname.startsWith('/api/games/dyrakarmy-arena/') || url.pathname.startsWith('/games/dyrakarmy-arena/')],
     ['latency-strike', url.pathname.startsWith('/api/games/latency-strike/') || url.pathname.startsWith('/games/latency-strike/')],
@@ -262,24 +261,34 @@ async function disabledModuleResponse(request: Request, env: ExtendedEnv): Promi
 export default {
   async fetch(request: Request, env: ExtendedEnv, _context: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
     const controlResponse = await handlePlatformControlApi(request, env);
     if (controlResponse) return controlResponse;
+
     const disabledResponse = await disabledModuleResponse(request, env);
     if (disabledResponse) return disabledResponse;
+
+    const challengePage = await serveChallengeGamePage(request, env);
+    if (challengePage) return challengePage;
+
     const telegramHealthResponse = handleTelegramMiniAppHealth(request, env);
     if (telegramHealthResponse) return telegramHealthResponse;
-    const packResponse = await handleGamePackApi(request, env);
-    if (packResponse) return packResponse;
-    const packPageResponse = await handleGamePackPage(request, env);
-    if (packPageResponse) return packPageResponse;
+
+    const challengeResponse = await handleChallengeGamesApi(request, env);
+    if (challengeResponse) return challengeResponse;
+
     const raidResponse = await handleArchiveRaidApi(request, env);
     if (raidResponse) return raidResponse;
+
     const arenaResponse = await handleDyrakArmyArenaApi(request, env);
     if (arenaResponse) return arenaResponse;
+
     const gameResponse = await handleLatencyStrikeGameApi(request, env);
     if (gameResponse) return gameResponse;
+
     const jobStatusResponse = await handleJobStatusBridge(request, env);
     if (jobStatusResponse) return jobStatusResponse;
+
     const mediaLabResponse = await handleMediaLabApi(request, env);
     if (mediaLabResponse) return mediaLabResponse;
 
@@ -287,8 +296,8 @@ export default {
       await ensureDyrakArmyArenaCommands(env);
       const controlWebhookResponse = await handlePlatformControlTelegramWebhook(request.clone(), env);
       if (controlWebhookResponse) return controlWebhookResponse;
-      const packWebhookResponse = await handleGamePackTelegramWebhook(request.clone(), env);
-      if (packWebhookResponse) return packWebhookResponse;
+      const challengeWebhookResponse = await handleChallengeGamesTelegramWebhook(request.clone(), env);
+      if (challengeWebhookResponse) return challengeWebhookResponse;
       if (await isPlatformModuleEnabled(env, 'archive-raid')) {
         const raidWebhookResponse = await handleArchiveRaidTelegramWebhook(request.clone(), env);
         if (raidWebhookResponse) return raidWebhookResponse;
@@ -306,18 +315,27 @@ export default {
 
     const telegramApiResponse = await handleTelegramPlatformApi(request, env);
     if (telegramApiResponse) return telegramApiResponse;
+
     const legacyResponse = await legacyHandler.fetch(request, env);
     const nativeResponse = await enforceNativeTelegramApi(request, legacyResponse, env);
     return injectPlatformAssets(request, nativeResponse);
   },
 
-  async queue(batch: MessageBatch<DownloadJob | JobHistoryEvent>, env: ExtendedEnv, context: ExecutionContext): Promise<void> {
+  async queue(
+    batch: MessageBatch<DownloadJob | JobHistoryEvent>,
+    env: ExtendedEnv,
+    context: ExecutionContext,
+  ): Promise<void> {
     const legacyEnv = Object.assign(Object.create(env), { TELEGRAM_CHANNEL_PUBLISH_ENABLED: '0' }) as ExtendedEnv;
     await legacyHandler.queue(batch, legacyEnv);
     context.waitUntil(syncTelegramStorageBatch(batch, env));
   },
 
-  async scheduled(controller: ScheduledController, env: ExtendedEnv, context: ExecutionContext): Promise<void> {
+  async scheduled(
+    controller: ScheduledController,
+    env: ExtendedEnv,
+    context: ExecutionContext,
+  ): Promise<void> {
     await legacyHandler.scheduled(controller, env);
     context.waitUntil((async () => {
       await ensureDyrakArmyArenaCommands(env);

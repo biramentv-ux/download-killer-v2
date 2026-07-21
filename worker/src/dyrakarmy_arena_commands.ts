@@ -2,7 +2,7 @@ import type { Env } from './types';
 
 type ExtendedEnv = Env & { TELEGRAM_BOT_API_BASE?: string };
 
-const COMMAND_MARKER = 'tg:dyrakarmy:commands:v7-games-10';
+const COMMAND_MARKER = 'tg:dyrakarmy:commands:v7-games-1-10';
 const LATENCY_MARKER = 'tg:latency-strike:commands:v2';
 const V10_MARKER = 'tg:commands:bg:v10';
 const LEGACY_MARKER = 'tg:commands:bg:v4';
@@ -10,19 +10,19 @@ const LEGACY_MARKER = 'tg:commands:bg:v4';
 const BG_COMMANDS = [
   { command: 'start', description: 'Старт и главно меню' },
   { command: 'menu', description: 'Главно меню' },
-  { command: 'arena', description: 'Играй DyrakArmy Arena' },
+  { command: 'queuegame', description: '1. Queue Commander' },
+  { command: 'beat', description: '2. Beat Hunter' },
+  { command: 'arena', description: '3. DyrakArmy Arena' },
   { command: 'team', description: 'Моят Arena отбор и ранг' },
-  { command: 'game', description: 'Играй Latency Strike' },
-  { command: 'raid', description: 'Играй Archive Raid' },
-  { command: 'collection', description: 'Моята collectible колекция' },
-  { command: 'crate', description: 'Отвори дневния Archive crate' },
-  { command: 'queuegame', description: 'Играй Queue Commander' },
-  { command: 'beathunter', description: 'Играй Beat Hunter' },
-  { command: 'formatforge', description: 'Играй Format Forge' },
-  { command: 'serverdefender', description: 'Играй Server Defender' },
-  { command: 'metadata', description: 'Играй Metadata Detective' },
-  { command: 'linkrunner', description: 'Играй Link Runner' },
-  { command: 'botvshuman', description: 'Играй срещу DK Core' },
+  { command: 'formatgame', description: '4. Format Forge' },
+  { command: 'defender', description: '5. Server Defender' },
+  { command: 'detective', description: '6. Metadata Detective' },
+  { command: 'linkrunner', description: '7. Link Runner' },
+  { command: 'raid', description: '8. Archive Raid' },
+  { command: 'collection', description: 'Archive Raid колекция' },
+  { command: 'crate', description: 'Archive Raid дневен crate' },
+  { command: 'game', description: '9. Latency Strike' },
+  { command: 'botvhuman', description: '10. Bot vs Human' },
   { command: 'rewards', description: 'Общ ранг и игрови награди' },
   { command: 'control', description: 'Мобилен Control Center' },
   { command: 'id', description: 'Покажи моя Telegram ID' },
@@ -45,19 +45,19 @@ const BG_COMMANDS = [
 const EN_COMMANDS = [
   { command: 'start', description: 'Start and main menu' },
   { command: 'menu', description: 'Main menu' },
-  { command: 'arena', description: 'Play DyrakArmy Arena' },
+  { command: 'queuegame', description: '1. Queue Commander' },
+  { command: 'beat', description: '2. Beat Hunter' },
+  { command: 'arena', description: '3. DyrakArmy Arena' },
   { command: 'team', description: 'My Arena team and rank' },
-  { command: 'game', description: 'Play Latency Strike' },
-  { command: 'raid', description: 'Play Archive Raid' },
-  { command: 'collection', description: 'My collectible collection' },
-  { command: 'crate', description: 'Open the daily Archive crate' },
-  { command: 'queuegame', description: 'Play Queue Commander' },
-  { command: 'beathunter', description: 'Play Beat Hunter' },
-  { command: 'formatforge', description: 'Play Format Forge' },
-  { command: 'serverdefender', description: 'Play Server Defender' },
-  { command: 'metadata', description: 'Play Metadata Detective' },
-  { command: 'linkrunner', description: 'Play Link Runner' },
-  { command: 'botvshuman', description: 'Play against DK Core' },
+  { command: 'formatgame', description: '4. Format Forge' },
+  { command: 'defender', description: '5. Server Defender' },
+  { command: 'detective', description: '6. Metadata Detective' },
+  { command: 'linkrunner', description: '7. Link Runner' },
+  { command: 'raid', description: '8. Archive Raid' },
+  { command: 'collection', description: 'Archive Raid collection' },
+  { command: 'crate', description: 'Archive Raid daily crate' },
+  { command: 'game', description: '9. Latency Strike' },
+  { command: 'botvhuman', description: '10. Bot vs Human' },
   { command: 'rewards', description: 'Shared rank and game rewards' },
   { command: 'control', description: 'Mobile Control Center' },
   { command: 'id', description: 'Show my Telegram ID' },
@@ -85,21 +85,32 @@ export async function ensureDyrakArmyArenaCommands(env: ExtendedEnv): Promise<vo
     telegramRequest('setMyCommands', { commands: BG_COMMANDS, language_code: 'bg' }, env),
     telegramRequest('setMyCommands', { commands: EN_COMMANDS, language_code: 'en' }, env),
     telegramRequest('setMyDescription', {
-      description: 'Download Killer: 10 DyrakArmy игри, общ XP и профил, Control Center, опашка и Telegram архив.',
+      description: 'Download Killer: 10 DyrakArmy Games, общ XP профил, Control Center, опашка и Telegram архив.',
       language_code: 'bg',
     }, env),
     telegramRequest('setMyShortDescription', {
-      short_description: '10 игри, общ XP, награди, Control Center и архив.',
+      short_description: '10 игри, общ XP, рангове, награди и Control Center.',
       language_code: 'bg',
     }, env),
   ]);
   if (!results.every((result) => result.ok)) return;
+
   const username = String(env.TELEGRAM_BOT_USERNAME || 'dyrakarmy_bot').replace(/^@+/, '').toLowerCase();
-  const markers = [COMMAND_MARKER, LATENCY_MARKER, V10_MARKER, LEGACY_MARKER, `tg:master:commands:v1:${username}`];
+  const markers = [
+    COMMAND_MARKER,
+    LATENCY_MARKER,
+    V10_MARKER,
+    LEGACY_MARKER,
+    `tg:master:commands:v1:${username}`,
+  ];
   await Promise.all(markers.map((marker) => env.CACHE.put(marker, '1', { expirationTtl: 86400 })));
 }
 
-async function telegramRequest(method: string, payload: Record<string, unknown>, env: ExtendedEnv): Promise<{ ok: boolean; description?: string }> {
+async function telegramRequest(
+  method: string,
+  payload: Record<string, unknown>,
+  env: ExtendedEnv,
+): Promise<{ ok: boolean; description?: string }> {
   const base = String(env.TELEGRAM_BOT_API_BASE || 'https://api.telegram.org').replace(/\/+$/, '');
   const response = await fetch(`${base}/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
     method: 'POST',

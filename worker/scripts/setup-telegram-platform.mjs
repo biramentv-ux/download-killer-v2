@@ -7,19 +7,19 @@ const expectedUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'dyrakarmy_
 const dropPending = String(process.env.TELEGRAM_DROP_PENDING_UPDATES || '0') === '1';
 const miniAppVersion = String(process.env.TELEGRAM_MINIAPP_VERSION || '12.2.0').trim();
 const miniAppUrl = `${publicBase}/telegram/?v=${encodeURIComponent(miniAppVersion)}`;
-const gameUrls = {
-  'DyrakArmy Arena': `${publicBase}/games/dyrakarmy-arena/?v=1.0.0`,
-  'Latency Strike': `${publicBase}/games/latency-strike/?v=1.0.0`,
-  'Archive Raid': `${publicBase}/games/archive-raid/?v=1.0.0`,
-  'Queue Commander': `${publicBase}/games/queue-commander/?v=1.0.0`,
-  'Beat Hunter': `${publicBase}/games/beat-hunter/?v=1.0.0`,
-  'Format Forge': `${publicBase}/games/format-forge/?v=1.0.0`,
-  'Server Defender': `${publicBase}/games/server-defender/?v=1.0.0`,
-  'Metadata Detective': `${publicBase}/games/metadata-detective/?v=1.0.0`,
-  'Link Runner': `${publicBase}/games/link-runner/?v=1.0.0`,
-  'Bot vs Human': `${publicBase}/games/bot-vs-human/?v=1.0.0`,
-};
 const controlUrl = `${publicBase}/control/?v=1.0.0`;
+const gameUrls = {
+  queue_commander: `${publicBase}/games/queue-commander/?v=1.0.0`,
+  beat_hunter: `${publicBase}/games/beat-hunter/?v=1.0.0`,
+  dyrakarmy_arena: `${publicBase}/games/dyrakarmy-arena/?v=1.0.0`,
+  format_forge: `${publicBase}/games/format-forge/?v=1.0.0`,
+  server_defender: `${publicBase}/games/server-defender/?v=1.0.0`,
+  metadata_detective: `${publicBase}/games/metadata-detective/?v=1.0.0`,
+  link_runner: `${publicBase}/games/link-runner/?v=1.0.0`,
+  archive_raid: `${publicBase}/games/archive-raid/?v=1.0.0`,
+  latency_strike: `${publicBase}/games/latency-strike/?v=1.0.0`,
+  bot_vs_human: `${publicBase}/games/bot-vs-human/?v=1.0.0`,
+};
 
 if (!token) {
   console.error('TELEGRAM_BOT_TOKEN is required. Set it as an environment variable; do not commit it.');
@@ -31,6 +31,7 @@ if (!/^[A-Za-z0-9_-]{1,256}$/.test(secret)) {
 }
 
 const apiBase = `https://api.telegram.org/bot${token}`;
+
 async function call(method, payload = {}) {
   const response = await fetch(`${apiBase}/${method}`, {
     method: 'POST',
@@ -45,19 +46,19 @@ async function call(method, payload = {}) {
 const commands = [
   { command: 'start', description: 'Старт и главно меню' },
   { command: 'menu', description: 'Главно меню' },
-  { command: 'arena', description: 'Играй DyrakArmy Arena' },
+  { command: 'queuegame', description: '1. Queue Commander' },
+  { command: 'beat', description: '2. Beat Hunter' },
+  { command: 'arena', description: '3. DyrakArmy Arena' },
   { command: 'team', description: 'Моят Arena отбор и ранг' },
-  { command: 'game', description: 'Играй Latency Strike' },
-  { command: 'raid', description: 'Играй Archive Raid' },
-  { command: 'collection', description: 'Моята collectible колекция' },
-  { command: 'crate', description: 'Дневен Archive crate' },
-  { command: 'queuegame', description: 'Играй Queue Commander' },
-  { command: 'beathunter', description: 'Играй Beat Hunter' },
-  { command: 'formatforge', description: 'Играй Format Forge' },
-  { command: 'serverdefender', description: 'Играй Server Defender' },
-  { command: 'metadata', description: 'Играй Metadata Detective' },
-  { command: 'linkrunner', description: 'Играй Link Runner' },
-  { command: 'botvshuman', description: 'Играй срещу DK Core' },
+  { command: 'formatgame', description: '4. Format Forge' },
+  { command: 'defender', description: '5. Server Defender' },
+  { command: 'detective', description: '6. Metadata Detective' },
+  { command: 'linkrunner', description: '7. Link Runner' },
+  { command: 'raid', description: '8. Archive Raid' },
+  { command: 'collection', description: 'Archive Raid колекция' },
+  { command: 'crate', description: 'Archive Raid дневен crate' },
+  { command: 'game', description: '9. Latency Strike' },
+  { command: 'botvhuman', description: '10. Bot vs Human' },
   { command: 'rewards', description: 'Общ ранг и игрови награди' },
   { command: 'control', description: 'Мобилен Control Center' },
   { command: 'id', description: 'Покажи моя Telegram ID' },
@@ -84,19 +85,25 @@ try {
   if (actualUsername.toLowerCase() !== expectedUsername.toLowerCase()) {
     throw new Error(`Token belongs to @${actualUsername}, expected @${expectedUsername}. Refusing to bind the wrong Mini App session key.`);
   }
-  if (!me.supports_inline_queries) console.warn('Inline sharing is disabled. In @BotFather run /setinline for this bot.');
+  if (!me.supports_inline_queries) {
+    console.warn('Inline sharing is disabled. In @BotFather run /setinline and add a short placeholder.');
+  }
 
   await call('setMyCommands', { commands, language_code: 'bg' });
   await call('setMyCommands', { commands });
   await call('setChatMenuButton', {
-    menu_button: { type: 'web_app', text: 'Download Killer', web_app: { url: miniAppUrl } },
+    menu_button: {
+      type: 'web_app',
+      text: 'Download Killer',
+      web_app: { url: miniAppUrl },
+    },
   });
   await call('setMyDescription', {
-    description: 'Download Killer: 10 DyrakArmy игри, общ XP и профил, Control Center, опашка, Telegram архив и споделяне.',
+    description: 'Download Killer: 10 DyrakArmy Games, общ XP профил, Control Center, опашка, архив и споделяне.',
     language_code: 'bg',
   });
   await call('setMyShortDescription', {
-    short_description: '10 игри, общ XP, награди, Control Center и архив.',
+    short_description: '10 игри, общ XP, рангове, награди и Control Center.',
     language_code: 'bg',
   });
 
@@ -112,15 +119,12 @@ try {
   const webhook = await call('getWebhookInfo');
   console.log(`Webhook: ${webhook.url || '(not set)'}`);
   console.log(`Pending updates: ${webhook.pending_update_count || 0}`);
-  console.log(`Inline sharing: ${me.supports_inline_queries ? 'enabled' : 'requires /setinline in @BotFather'}`);
-  if (webhook.last_error_message) console.warn(`Last webhook error: ${webhook.last_error_message}`);
   console.log(`Native link: tg://resolve?domain=${expectedUsername}`);
   console.log(`Mini App v${miniAppVersion}: ${miniAppUrl}`);
-  for (const [name, url] of Object.entries(gameUrls)) console.log(`${name}: ${url}`);
+  Object.entries(gameUrls).forEach(([key, url]) => console.log(`${key}: ${url}`));
   console.log(`Control Center v1: ${controlUrl}`);
   console.log(`Health: ${publicBase}/api/telegram/v12/health`);
-  console.log('Admin bootstrap: send /id, then store the numeric ID in TELEGRAM_ADMIN_IDS.');
-  console.log('Beat Hunter uses synthetic clues. Archive Raid collectibles never unlock protected media.');
+  console.log('Admin bootstrap: send /id to the bot, then add that numeric ID to TELEGRAM_ADMIN_IDS.');
   console.log('Next: close the existing Telegram WebView completely and open the Menu button again.');
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
