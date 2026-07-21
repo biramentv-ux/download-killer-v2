@@ -1,0 +1,116 @@
+name: DyrakArmy Software Suite v17
+
+on:
+  pull_request:
+    paths:
+      - worker/**
+      - desktop_launcher/**
+      - browser_extensions/**
+      - extension/**
+      - mobile_expo/**
+      - .github/workflows/release-assets.yml
+      - .github/workflows/software-suite-check.yml
+  push:
+    branches:
+      - main
+    paths:
+      - worker/**
+      - desktop_launcher/**
+      - browser_extensions/**
+      - extension/**
+      - mobile_expo/**
+      - .github/workflows/release-assets.yml
+      - .github/workflows/software-suite-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: software-suite-v17-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  worker-software-contracts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - name: Install Worker dependencies
+        run: npm ci
+      - name: Strict TypeScript
+        run: npm run typecheck
+      - name: Run complete Worker test suite
+        run: npm test
+      - name: Run deterministic software suite simulation
+        run: node scripts/software-suite-simulation.mjs
+      - name: Validate public JavaScript and service worker syntax
+        run: |
+          node --check public/platform/software-suite.js
+          node --check public/platform/landing-v16.js
+          node --check public/sw.js
+      - name: Validate PWA manifest and public v17 contract
+        run: |
+          node -e "const fs=require('fs'); const manifest=JSON.parse(fs.readFileSync('public/manifest.webmanifest','utf8')); if(manifest.name!=='DyrakArmy Unified Platform v17') process.exit(1); if(!manifest.shortcuts.some(x=>x.url==='/#software')) process.exit(1);"
+          grep -q 'id="software"' public/index.html
+          grep -q '/platform/software-suite.css' public/index.html
+          grep -q '/platform/software-suite.js' public/index.html
+          grep -q '/api/software/releases' public/index.html
+          grep -q "{ command: 'software'" src/dyrakarmy_arena_commands.ts
+          grep -q "{ command: 'games'" src/dyrakarmy_arena_commands.ts
+      - name: Wrangler packaging dry-run
+        run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-software-v17
+
+  release-asset-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require every catalog package in the release pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            DyrakArmyDesktop.exe
+            DyrakArmyDesktop-macOS.zip
+            DyrakArmySpotifyOggMp4Engine.exe
+            DyrakArmy-Extension-Chrome.zip
+            DyrakArmy-Extension-Legacy-Chrome.zip
+            DyrakArmy-Extension-Firefox.zip
+            SoundDrop-Expo-Web.zip
+            SoundDrop-Expo-Native-Update.zip
+          )
+          for file in "${files[@]}"; do
+            grep -q "$file" .github/workflows/release-assets.yml
+            grep -q "$file" worker/src/software_catalog.ts
+          done
+          grep -q 'releases/latest/download' worker/src/software_catalog.ts
+          grep -q 'external_engine_is_separate: true' worker/src/software_catalog.ts
+          grep -q 'user_rights_required: true' worker/src/software_catalog.ts
+      - name: Validate sole Telegram bot and ten game entries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '@dyrakarmy_bot' worker/public/index.html
+          grep -q "bot: '@dyrakarmy_bot'" worker/src/software_catalog.ts
+          test "$(grep -c "^  \['[0-9]" worker/src/software_telegram.ts)" -eq 10
+          ! grep -R -n -E 'TELEGRAM_SECONDARY_|v10-secondary|telegram/webhook/dyrakarmy|web\.telegram\.org' worker/src/software_catalog.ts worker/src/software_telegram.ts worker/public/platform/software-suite.js worker/public/index.html
+
+  production-safety-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm PR events cannot deploy production
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            echo "PR validation only. Production deployment is not authorized from this event."
+          else
+            echo "Main push or manual validation event. Deployment remains controlled by the configured Cloudflare/GitHub release pipeline."
+          fi
