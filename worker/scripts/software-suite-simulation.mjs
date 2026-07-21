@@ -87,7 +87,7 @@ for (const marker of [
 for (const marker of [
   "{ command: 'software'",
   "{ command: 'games'",
-  '10 DyrakArmy games',
+  'software releases, 10 games',
 ]) assert.ok(files.commands.includes(marker), `Missing registered bot command: ${marker}`);
 
 const expectedStartApps = [
@@ -134,8 +134,9 @@ for (const [name, content] of Object.entries({ client: files.client, catalog: fi
   assert.ok(!content.toLowerCase().includes(unsafeScheme), `${name} contains unsafe URL scheme`);
 }
 
-const githubLatestPrefix = 'https://github.com/biramentv-ux/download-killer-v2/releases/latest/download/';
-assert.ok(files.catalog.includes(githubLatestPrefix));
+assert.ok(files.catalog.includes("const DEFAULT_REPOSITORY = 'biramentv-ux/download-killer-v2'"));
+assert.ok(files.catalog.includes('releases/latest/download'));
+assert.ok(files.catalog.includes('SAFE_REPOSITORY'));
 assert.ok(files.client.includes('github\\.com|dyrakarmy'));
 
 const report = {
