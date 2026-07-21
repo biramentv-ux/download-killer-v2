@@ -1,4 +1,5 @@
 const CACHE_NAME = 'download-killer-static-v15-games-1-10';
+const INTERFACE_CACHE_VERSION = 'download-killer-static-v16-dyrakarmy-dashboard';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
 const CHALLENGE_GAME_SLUGS = [
   'queue-commander', 'beat-hunter', 'format-forge', 'server-defender',
@@ -11,11 +12,13 @@ const APP_SHELL = [
   '/manifest.webmanifest',
   '/platform/platform.css',
   '/platform/landing-v13.css',
+  '/platform/landing-v16.css',
   '/platform/games-v14.css',
   '/platform/platform-public.css',
   '/platform/status-backoff.js',
   '/platform/site-defaults.js',
   '/platform/landing-v13.js',
+  '/platform/landing-v16.js',
   '/platform/platform.js',
   '/platform/games-v14.js',
   '/platform/platform-public.js',
@@ -41,6 +44,12 @@ const APP_SHELL = [
   '/control/index.html',
   '/control/control.css?v=1.0.0',
   '/control/control.js?v=1.0.0',
+  '/control-v2/',
+  '/control-v2/index.html',
+  '/control-v2/control-v2.css',
+  '/control-v2/control-v2.js',
+  '/control-v2/manifest.webmanifest',
+  '/control-v2/sw.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/apple-touch-icon.png',
@@ -107,7 +116,7 @@ self.addEventListener('message', (event) => {
       await Promise.all(keys
         .filter((request) => {
           const pathname = new URL(request.url).pathname;
-          return pathname.startsWith('/telegram/') || pathname.startsWith('/games/') || pathname.startsWith('/control/');
+          return pathname.startsWith('/telegram/') || pathname.startsWith('/games/') || pathname.startsWith('/control/') || pathname.startsWith('/control-v2/');
         })
         .map((request) => cache.delete(request)));
     }));
@@ -122,7 +131,7 @@ self.addEventListener('fetch', (event) => {
   const isWarmableApi = url.pathname.startsWith('/api/file/') || url.pathname.startsWith('/api/archive/file/');
   const isTelegramAsset = url.pathname.startsWith('/telegram/');
   const isGameAsset = url.pathname.startsWith('/games/');
-  const isControlAsset = url.pathname.startsWith('/control/');
+  const isControlAsset = url.pathname.startsWith('/control/') || url.pathname.startsWith('/control-v2/');
   const gameSlug = url.pathname.split('/').filter(Boolean)[1] || '';
   const isChallengeRoute = CHALLENGE_GAME_SLUGS.includes(gameSlug);
 
