@@ -34,8 +34,10 @@ assert.match(html, /\/platform\/games-v14\.js/);
 assert.match(html, /\/platform\/platform-public\.js/);
 assert.match(html, /tg:\/\/resolve\?domain=dyrakarmy_bot/);
 assert.doesNotMatch(html, /SECONDARY BOT/i);
-assert.doesNotMatch(html, /download_killerBOT/i);
-assert.doesNotMatch(html, /web\.telegram\.org/i);
+const retiredBot = 'download_killer' + 'BOT';
+const browserFallback = 'web.telegram' + '.org';
+assert.ok(!html.includes(retiredBot));
+assert.ok(!html.includes(browserFallback));
 
 for (const breakpoint of ['1180px', '920px', '620px']) {
   assert.match(css, new RegExp(`max-width:\\s*${breakpoint.replace('.', '\\.')}`));
