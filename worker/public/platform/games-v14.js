@@ -2,55 +2,55 @@
   'use strict';
 
   const GAMES = [
-    { id: 'dyrakarmy-arena', title: 'DyrakArmy Arena', icon: '⚔️', badge: 'TEAM ARENA', bg: 'Отбори, дневни мисии, седмични лиги и сезони.', en: 'Teams, daily missions, weekly leagues and seasons.', path: '/games/dyrakarmy-arena/', tg: 'tg://resolve?domain=dyrakarmy_bot&startapp=arena' },
-    { id: 'latency-strike', title: 'Latency Strike', icon: '⚡', badge: 'REACTION', bg: 'Пет reaction рунда, общ XP и профилни награди.', en: 'Five reaction rounds, shared XP and profile rewards.', path: '/games/latency-strike/', tg: 'tg://resolve?domain=dyrakarmy_bot&game=latency_strike' },
-    { id: 'archive-raid', title: 'Archive Raid', icon: '🗃', badge: 'COLLECTION', bg: 'Collectible карти, дневни crates и Army Exclusive rewards.', en: 'Collectible cards, daily crates and Army Exclusive rewards.', path: '/games/archive-raid/', tg: 'tg://resolve?domain=dyrakarmy_bot&startapp=archive_raid' },
-    { id: 'queue-commander', title: 'Queue Commander', icon: '🎛', badge: 'STRATEGY', bg: 'Стратегия за queues, retries, dedupe и backpressure.', en: 'Queue, retry, deduplication and backpressure strategy.', path: '/games/queue-commander/', tg: 'tg://resolve?domain=dyrakarmy_bot&startapp=queue_commander' },
-    { id: 'beat-hunter', title: 'Beat Hunter', icon: '🎧', badge: 'MUSIC', bg: 'Познай жанр, BPM и структура по синтетични waveform clues.', en: 'Identify genre, BPM and structure from synthetic waveform clues.', path: '/games/beat-hunter/', tg: 'tg://resolve?domain=dyrakarmy_bot&startapp=beat_hunter' },
-    { id: 'format-forge', title: 'Format Forge', icon: '⚒', badge: 'FORMAT', bg: 'Избери формат, качество и съвместимост за всяка цел.', en: 'Choose the right format, quality and compatibility.', path: '/games/format-forge/', tg: 'tg://resolve?domain=dyrakarmy_bot&startapp=format_forge' },
-    { id: 'server-defender', title: 'Server Defender', icon: '🛡', badge: 'DEFENSE', bg: 'Защити Worker, Queue, D1, KV и FFmpeg backend.', en: 'Defend Worker, Queue, D1, KV and the FFmpeg backend.', path: '/games/server-defender/', tg: 'tg://resolve?domain=dyrakarmy_bot&startapp=server_defender' },
-    { id: 'metadata-detective', title: 'Metadata Detective', icon: '🔎', badge: 'DETECTIVE', bg: 'Разследвай title, artist, ISRC, duration и artwork match.', en: 'Investigate title, artist, ISRC, duration and artwork matches.', path: '/games/metadata-detective/', tg: 'tg://resolve?domain=dyrakarmy_bot&startapp=metadata_detective' },
-    { id: 'link-runner', title: 'Link Runner', icon: '🔗', badge: 'RUNNER', bg: 'Маршрутизирай URL-и и блокирай SSRF рискове.', en: 'Route URLs and block SSRF risks.', path: '/games/link-runner/', tg: 'tg://resolve?domain=dyrakarmy_bot&startapp=link_runner' },
-    { id: 'bot-vs-human', title: 'Bot vs Human', icon: '🤖', badge: 'DUEL', bg: 'Адаптивен decision дуел срещу DK Core.', en: 'Adaptive decision duel against DK Core.', path: '/games/bot-vs-human/', tg: 'tg://resolve?domain=dyrakarmy_bot&startapp=bot_vs_human' },
+    { number: 1, slug: 'queue-commander', title: 'Queue Commander', icon: '📡', description: 'Priority queue, retry, dedupe и idempotency.', command: 'queuegame' },
+    { number: 2, slug: 'beat-hunter', title: 'Beat Hunter', icon: '🥁', description: 'Ритми, beatgrid, фразиране и DJ структура.', command: 'beat' },
+    { number: 3, slug: 'dyrakarmy-arena', title: 'DyrakArmy Arena', icon: '⚔️', description: 'Отбори, дневни мисии, седмични лиги и сезони.', command: 'arena' },
+    { number: 4, slug: 'format-forge', title: 'Format Forge', icon: '⚒', description: 'Формати, bitrate, lossless и device compatibility.', command: 'formatgame' },
+    { number: 5, slug: 'server-defender', title: 'Server Defender', icon: '🛡', description: 'SSRF, secrets, webhook, CORS и rate limiting.', command: 'defender' },
+    { number: 6, slug: 'metadata-detective', title: 'Metadata Detective', icon: '🕵', description: 'Artist, title, album, year, cover и ISRC разследвания.', command: 'detective' },
+    { number: 7, slug: 'link-runner', title: 'Link Runner', icon: '🔗', description: 'Безопасни URL схеми, redirects и DNS защита.', command: 'linkrunner' },
+    { number: 8, slug: 'archive-raid', title: 'Archive Raid', icon: '🗃', description: 'Collectible карти, crates и профилни ефекти.', command: 'raid' },
+    { number: 9, slug: 'latency-strike', title: 'Latency Strike', icon: '⚡', description: 'Пет реакционни рунда, XP и седмична класация.', command: 'game' },
+    { number: 10, slug: 'bot-vs-human', title: 'Bot vs Human', icon: '🤖', description: 'Privacy-aware разпознаване на автоматизация.', command: 'botvhuman' },
   ];
+
+  const copy = {
+    bg: {
+      nav: 'Игри', tag: 'DYRAKARMY GAMES 1–10', title: 'Една система. Десет игри.',
+      intro: 'Всички игри използват един Telegram профил, общ XP, рангове, козметични награди и седмични класации.',
+      play: 'Играй', telegram: 'Telegram', profile: 'общ профил', modules: 'игрови модула', rankings: 'класации',
+    },
+    en: {
+      nav: 'Games', tag: 'DYRAKARMY GAMES 1–10', title: 'One system. Ten games.',
+      intro: 'Every game shares one Telegram profile, XP, ranks, cosmetic rewards and weekly leaderboards.',
+      play: 'Play', telegram: 'Telegram', profile: 'shared profile', modules: 'game modules', rankings: 'leaderboards',
+    },
+  };
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const language = () => document.documentElement.lang?.slice(0, 2) === 'en' ? 'en' : 'bg';
 
-  function ensureStyles() {
-    if (document.querySelector('link[href="/platform/games-pack.css"]')) return;
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = '/platform/games-pack.css';
-    document.head.append(link);
-  }
-
   function ensureGamesSection() {
     if ($('#games')) return;
-    const lang = language();
     const section = document.createElement('section');
     section.className = 'games-section reveal';
     section.id = 'games';
     section.dataset.platformModule = 'games';
-    section.setAttribute('aria-label', '10 DyrakArmy Games');
+    section.setAttribute('aria-label', GAMES.map((game) => game.title).join(', '));
     section.innerHTML = `
-      <div class="games-heading"><div><span class="kicker">10 CONNECTED GAMES</span><h2>DyrakArmy Games</h2></div><p>${lang === 'en' ? 'Ten games share one Telegram profile, XP, ranks, rewards and separate weekly leaderboards.' : 'Десет игри използват един Telegram профил, общ XP, рангове, награди и отделни седмични класации.'}</p></div>
-      <article class="game-showcase" data-platform-module="dyrakarmy-arena">
-        <span class="game-label">⚔ TEAM ARENA · CORE GAME</span>
-        <h3>DyrakArmy <em>Arena</em></h3>
-        <p>${GAMES[0][lang]}</p>
-        <div class="game-feature-row"><span>8 daily missions</span><span>3 ranked attempts</span><span>Team codes</span><span>Shared XP</span></div>
-        <div class="game-buttons"><a class="primary-button" href="/games/dyrakarmy-arena/"><span>${lang === 'en' ? 'Play' : 'Играй'}</span><b>→</b></a><a class="secondary-button" href="tg://resolve?domain=dyrakarmy_bot&startapp=arena" rel="external"><span>Telegram</span><b>⚔</b></a></div>
-        <div class="arena-emblem"><b>10</b></div>
-      </article>
-      <div class="game-catalog-grid">${GAMES.slice(1).map((game) => gameCard(game, lang)).join('')}</div>
-      <div class="game-live-strip">
-        <article class="game-live-card"><span>${lang === 'en' ? 'total games' : 'общ брой игри'}</span><strong>10</strong><small>One shared profile</small></article>
-        <article class="game-live-card"><span>${lang === 'en' ? 'week' : 'седмица'}</span><strong id="arenaWeekKey">—</strong><small>Weekly rankings</small></article>
-        <article class="game-live-card"><span>${lang === 'en' ? 'season' : 'сезон'}</span><strong id="arenaSeasonKey">—</strong><small>Monthly Arena</small></article>
+      <div class="games-heading">
+        <div><span class="kicker" data-games-i18n="tag">DYRAKARMY GAMES 1–10</span><h2 data-games-i18n="title">Една система. Десет игри.</h2></div>
+        <p data-games-i18n="intro">Всички игри използват един Telegram профил, общ XP, рангове, козметични награди и седмични класации.</p>
       </div>
-      <div class="arena-top-teams" id="arenaTopTeams"><div class="games-skeleton"></div><div class="games-skeleton"></div><div class="games-skeleton"></div></div>`;
+      <div class="games-overview">
+        <article><strong>10</strong><span data-games-i18n="modules">игрови модула</span></article>
+        <article><strong>1</strong><span data-games-i18n="profile">общ профил</span></article>
+        <article><strong>10</strong><span data-games-i18n="rankings">класации</span></article>
+      </div>
+      <div class="game-library-grid">${GAMES.map(gameMarkup).join('')}</div>
+      <div class="games-system-note"><b>COMMON PROFILE CORE</b><span>XP · Rank · Frame · Icon · Animated Badge · Waveform · Theme · Title · Weekly Position</span></div>`;
+
     const engines = $('#engines');
     const consoleSection = $('#console');
     const parent = engines?.parentNode || consoleSection?.parentNode || document.querySelector('main');
@@ -61,52 +61,37 @@
     if (nav && !nav.querySelector('a[href="#games"]')) {
       const link = document.createElement('a');
       link.href = '#games';
-      link.textContent = lang === 'en' ? 'Games' : 'Игри';
+      link.dataset.gamesI18n = 'nav';
+      link.textContent = 'Игри';
       const consoleLink = nav.querySelector('a[href="#console"]');
       nav.insertBefore(link, consoleLink || null);
     }
   }
 
-  function gameCard(game, lang) {
-    return `<article class="game-catalog-card" data-platform-module="${game.id}">
-      <div class="game-card-top"><span>${game.icon}</span><small>${game.badge}</small></div>
-      <h3>${game.title}</h3><p>${game[lang]}</p>
-      <div class="game-card-links"><a href="${game.path}">${lang === 'en' ? 'Play' : 'Играй'} →</a><a href="${game.tg}" rel="external">Telegram</a></div>
+  function gameMarkup(game) {
+    const webPath = `/games/${game.slug}/`;
+    const telegramPath = game.slug === 'latency-strike'
+      ? 'tg://resolve?domain=dyrakarmy_bot&game=latency_strike'
+      : `tg://resolve?domain=dyrakarmy_bot&startapp=${game.slug.replaceAll('-', '_')}`;
+    return `<article class="game-tile" data-platform-module="${game.slug}">
+      <div class="game-tile-top"><span class="game-number">${String(game.number).padStart(2, '0')}</span><i>${game.icon}</i></div>
+      <h3>${game.title}</h3><p>${game.description}</p>
+      <div class="game-command">/${game.command}</div>
+      <div class="game-tile-actions"><a href="${webPath}"><span data-games-i18n="play">Играй</span> →</a><a href="${telegramPath}" rel="external"><span data-games-i18n="telegram">Telegram</span></a></div>
     </article>`;
   }
 
-  function applyRegistry(registry) {
-    for (const module of registry?.modules || []) {
-      $$(`[data-platform-module="${cssEscape(module.id)}"]`).forEach((node) => {
-        node.dataset.platformHidden = module.enabled ? 'false' : 'true';
-      });
-    }
+  function applyCopy() {
+    const strings = copy[language()];
+    $$('[data-games-i18n]').forEach((node) => {
+      const value = strings[node.dataset.gamesI18n];
+      if (value) node.textContent = value;
+    });
   }
 
-  async function loadArenaData() {
-    const list = $('#arenaTopTeams');
-    if (!list) return;
-    try {
-      const [configResponse, leaderboardResponse] = await Promise.all([
-        fetch('/api/games/dyrakarmy-arena/config', { cache: 'no-store' }),
-        fetch('/api/games/dyrakarmy-arena/leaderboard?scope=teams&period=week&limit=5', { cache: 'no-store' }),
-      ]);
-      const config = await configResponse.json();
-      const leaderboard = await leaderboardResponse.json();
-      if (!configResponse.ok || !leaderboardResponse.ok) throw new Error(config?.error?.message || leaderboard?.error?.message || 'Arena unavailable');
-      $('#arenaWeekKey').textContent = config.week_key || '—';
-      $('#arenaSeasonKey').textContent = config.season_key || '—';
-      const entries = leaderboard.entries || [];
-      list.innerHTML = entries.length ? entries.map((entry) => `
-        <div class="arena-team-row"><strong>#${entry.position}</strong><div><b>${escapeHtml(entry.name || 'Arena Team')}</b><small>${Number(entry.members || 0)} members · ${Number(entry.games || 0)} games</small></div><em>${Number(entry.points || 0).toLocaleString()}</em></div>`).join('') : '<div class="arena-team-row"><strong>—</strong><div><b>No ranked teams yet</b><small>Create the first Arena team.</small></div><em>0</em></div>';
-    } catch (error) {
-      list.innerHTML = `<div class="arena-team-row"><strong>!</strong><div><b class="games-error">Arena data unavailable</b><small>${escapeHtml(error.message || String(error))}</small></div><em>—</em></div>`;
-    }
-  }
-
-  function cssEscape(value) { return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/[^a-z0-9_-]/gi, ''); }
-  function escapeHtml(value) { return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[character])); }
-
-  document.addEventListener('platform-registry-ready', (event) => applyRegistry(event.detail));
-  document.addEventListener('DOMContentLoaded', () => { ensureStyles(); ensureGamesSection(); void loadArenaData(); });
+  document.addEventListener('DOMContentLoaded', () => {
+    ensureGamesSection();
+    applyCopy();
+    new MutationObserver(applyCopy).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+  });
 })();

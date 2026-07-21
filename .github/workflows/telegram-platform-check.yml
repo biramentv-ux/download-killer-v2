@@ -8,9 +8,13 @@ on:
       - worker/src/telegram_master_menu.ts
       - worker/src/telegram_master_menu.test.ts
       - worker/src/platform_v2.ts
+      - worker/src/platform_v3.ts
+      - worker/src/platform_governance.ts
       - worker/public/telegram/**
+      - worker/public/control-v2/**
       - worker/scripts/setup-telegram-platform.mjs
       - worker/migrations/0011_telegram_platform_v10.sql
+      - worker/migrations/0017_platform_governance_v2.sql
       - worker/wrangler.jsonc
       - worker/package.json
       - worker/public/manifest.webmanifest
@@ -25,9 +29,13 @@ on:
       - worker/src/telegram_master_menu.ts
       - worker/src/telegram_master_menu.test.ts
       - worker/src/platform_v2.ts
+      - worker/src/platform_v3.ts
+      - worker/src/platform_governance.ts
       - worker/public/telegram/**
+      - worker/public/control-v2/**
       - worker/scripts/setup-telegram-platform.mjs
       - worker/migrations/0011_telegram_platform_v10.sql
+      - worker/migrations/0017_platform_governance_v2.sql
       - worker/wrangler.jsonc
       - worker/package.json
       - worker/public/manifest.webmanifest
@@ -63,6 +71,7 @@ jobs:
       - name: Validate Mini App JavaScript and setup script
         run: |
           node --check public/telegram/telegram.js
+          node --check public/control-v2/control-v2.js
           node --check scripts/setup-telegram-platform.mjs
 
       - name: Validate Telegram platform boundaries
@@ -72,14 +81,18 @@ jobs:
           const html = fs.readFileSync('public/telegram/index.html', 'utf8');
           const css = fs.readFileSync('public/telegram/telegram.css', 'utf8');
           const js = fs.readFileSync('public/telegram/telegram.js', 'utf8');
+          const controlV2 = fs.readFileSync('public/control-v2/control-v2.js', 'utf8');
           const backend = fs.readFileSync('src/telegram_platform.ts', 'utf8');
           const backendTest = fs.readFileSync('src/telegram_platform.test.ts', 'utf8');
           const master = fs.readFileSync('src/telegram_master_menu.ts', 'utf8');
           const masterTest = fs.readFileSync('src/telegram_master_menu.test.ts', 'utf8');
-          const entry = fs.readFileSync('src/platform_v2.ts', 'utf8');
+          const entryV2 = fs.readFileSync('src/platform_v2.ts', 'utf8');
+          const entryV3 = fs.readFileSync('src/platform_v3.ts', 'utf8');
+          const governance = fs.readFileSync('src/platform_governance.ts', 'utf8');
           const wrangler = fs.readFileSync('wrangler.jsonc', 'utf8');
           const setup = fs.readFileSync('scripts/setup-telegram-platform.mjs', 'utf8');
           const migration = fs.readFileSync('migrations/0011_telegram_platform_v10.sql', 'utf8');
+          const governanceMigration = fs.readFileSync('migrations/0017_platform_governance_v2.sql', 'utf8');
           const manifest = JSON.parse(fs.readFileSync('public/manifest.webmanifest', 'utf8'));
 
           for (const marker of [
@@ -133,9 +146,17 @@ jobs:
           if (!backend.includes('tg://resolve?domain=${cleanUsername}')) throw new Error('Native Telegram handoff links are missing');
           if (!backendTest.includes("tg://resolve?domain=dyrakarmy_bot")) throw new Error('Native handoff tests are missing');
           if (!master.includes('X-Telegram-Bot-Api-Secret-Token')) throw new Error('Master webhook secret validation is missing');
-          if (!entry.includes('handleTelegramMasterWebhook')) throw new Error('Telegram master webhook wrapper is not active');
-          if (!entry.includes('ensureTelegramMasterCommands')) throw new Error('Master command synchronization is not active');
-          if (!wrangler.includes('"main": "src/platform_v2.ts"')) throw new Error('Wrangler does not use platform_v2 entrypoint');
+          if (!entryV2.includes('handleTelegramMasterWebhook')) throw new Error('Telegram master webhook wrapper is not active');
+          if (!entryV2.includes('ensureTelegramMasterCommands')) throw new Error('Master command synchronization is not active');
+          if (!entryV3.includes("import platformV2 from './platform_v2'")) throw new Error('Platform v3 does not preserve the Telegram v2 runtime');
+          if (!entryV3.includes('handlePlatformGovernanceTelegramWebhook')) throw new Error('Governance Telegram device-link wrapper is missing');
+          if (!entryV3.includes('return platformV2.fetch')) throw new Error('Platform v3 does not delegate to platform v2');
+          if (!governance.includes('parseDeviceLinkCommand(message.text)')) throw new Error('Telegram /link parsing is missing');
+          if (!governance.includes("['/control', '/admin'].includes(command)")) throw new Error('Governance /control and /admin commands are missing');
+          if (!governance.includes('X-Telegram-Bot-Api-Secret-Token')) throw new Error('Governance webhook secret validation is missing');
+          if (!governance.includes('await sha256(token)') || !governance.includes('token_hash')) throw new Error('Governance session-token hashing is missing');
+          if (!controlV2.includes('identity.link.start')) throw new Error('Control Center v2 device-link flow is missing');
+          if (!wrangler.includes('"main": "src/platform_v3.ts"')) throw new Error('Wrangler does not use platform_v3 entrypoint');
           if (!wrangler.includes('"TELEGRAM_BOT_USERNAME": "dyrakarmy_bot"')) throw new Error('Sole target bot username is not configured');
           if (!css.includes('@media (prefers-reduced-motion: reduce)')) throw new Error('Reduced-motion support is missing');
           if (!js.includes('Telegram.WebApp')) throw new Error('Telegram Mini App SDK integration is missing');
@@ -144,12 +165,13 @@ jobs:
           if (!setup.includes("'inline_query'")) throw new Error('Webhook setup does not subscribe to inline queries');
           if (!setup.includes('/setinline')) throw new Error('Inline mode activation guidance is missing');
           if (setup.includes('123456789:') || setup.includes('bot_token=')) throw new Error('A token-like literal was committed');
-          if (!migration.includes('CREATE TABLE IF NOT EXISTS telegram_media_objects')) throw new Error('D1 migration is incomplete');
-          if (backend.includes('download_killerBOT') || master.includes('download_killerBOT') || html.includes('download_killerBOT') || js.includes('download_killerBOT')) {
+          if (!migration.includes('CREATE TABLE IF NOT EXISTS telegram_media_objects')) throw new Error('D1 Telegram migration is incomplete');
+          if (!governanceMigration.includes('CREATE TABLE IF NOT EXISTS platform_sessions')) throw new Error('D1 governance session migration is incomplete');
+          if (backend.includes('download_killerBOT') || master.includes('download_killerBOT') || html.includes('download_killerBOT') || js.includes('download_killerBOT') || governance.includes('download_killerBOT')) {
             throw new Error('Retired bot username is still present');
           }
 
           const shortcut = (manifest.shortcuts || []).find((item) => item.url === '/telegram/');
           if (!shortcut) throw new Error('Telegram Mini App PWA shortcut is missing');
-          console.log('Single Telegram bot, native handoff, storage and inline sharing boundaries validated.');
+          console.log('Single Telegram bot, native handoff, storage, governance device linking and inline sharing boundaries validated.');
           NODE

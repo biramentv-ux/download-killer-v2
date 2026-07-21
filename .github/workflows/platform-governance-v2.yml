@@ -1,0 +1,62 @@
+name: Platform Governance v2
+
+on:
+  pull_request:
+    paths:
+      - 'worker/src/platform_governance.ts'
+      - 'worker/src/platform_governance.test.ts'
+      - 'worker/src/platform_v3.ts'
+      - 'worker/migrations/0017_platform_governance_v2.sql'
+      - 'worker/public/control-v2/**'
+      - 'worker/scripts/platform-governance-simulation.mjs'
+      - 'worker/wrangler.jsonc'
+      - '.github/workflows/platform-governance-v2.yml'
+  push:
+    branches:
+      - feature/platform-governance-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-governance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - run: npm ci
+      - name: Strict TypeScript
+        run: npm run typecheck
+      - name: Governance unit tests
+        run: npx vitest run src/platform_governance.test.ts
+      - name: Deterministic integration simulation
+        run: node scripts/platform-governance-simulation.mjs
+      - name: Browser JavaScript syntax
+        run: |
+          node --check public/control-v2/control-v2.js
+          node --check public/control-v2/sw.js
+      - name: Wrangler packaging dry-run
+        run: npx wrangler deploy --dry-run --outdir dist-governance-v2
+      - name: Upload simulation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-governance-v2-report
+          path: worker/platform-governance-simulation-report.json
+          if-no-files-found: error
+
+  production-deploy-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm validation-only workflow
+        run: |
+          echo 'Governance v2 workflow is validation-only.'
+          echo 'No Cloudflare credentials are requested and no public deployment command is executed.'

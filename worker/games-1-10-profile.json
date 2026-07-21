@@ -1,0 +1,9 @@
+{
+  "profile": "dyrakarmy-games-1-10",
+  "games": 10,
+  "shared_profile": true,
+  "control_center_flags": true,
+  "preupload_gate_required": true,
+  "gate_version": 5,
+  "protected_content_access": false
+}

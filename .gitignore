@@ -18,6 +18,8 @@ worker/.wrangler/
 worker/tmp-dev.log
 worker/tail.log
 .runtime/
+worker/platform-governance-simulation-report.json
+worker/dist-governance-v2/
 
 # Secrets
 worker/.dev.vars
