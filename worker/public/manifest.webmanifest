@@ -1,16 +1,16 @@
 {
-  "name": "Download Killer Unified Platform v15",
-  "short_name": "Download Killer",
+  "name": "DyrakArmy Unified Platform v16",
+  "short_name": "DyrakArmy",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone"],
   "orientation": "any",
-  "background_color": "#070a18",
-  "theme_color": "#070a18",
-  "description": "Unified Download Killer platform with Telegram, DyrakArmy Arena, Latency Strike, Archive Raid, shared profiles, remote Control Center and public content registry.",
-  "categories": ["music", "utilities", "productivity", "games"],
+  "background_color": "#050914",
+  "theme_color": "#050914",
+  "description": "Unified DyrakArmy platform for Telegram, Games 1-10, rewards, downloads, shared profiles, Governance v2 and the remote Control Center.",
+  "categories": ["music", "utilities", "productivity", "games", "social"],
   "lang": "bg",
   "dir": "ltr",
   "icons": [
@@ -18,6 +18,20 @@
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "shortcuts": [
+    {
+      "name": "DyrakArmy Control Center v2",
+      "short_name": "Control",
+      "description": "Roles, permissions, modules, versions, rollback and shared profiles.",
+      "url": "/control-v2/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "DyrakArmy Games 1-10",
+      "short_name": "Games",
+      "description": "Open the unified Games 1-10 catalog with shared XP and rewards.",
+      "url": "/#games",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
     {
       "name": "DyrakArmy Arena",
       "short_name": "Arena",
@@ -28,7 +42,7 @@
     {
       "name": "Latency Strike",
       "short_name": "Reaction",
-      "description": "Play the Telegram reaction game and unlock profile rewards.",
+      "description": "Play the reaction game and unlock shared profile rewards.",
       "url": "/games/latency-strike/",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
@@ -40,16 +54,9 @@
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "DyrakArmy Control Center",
-      "short_name": "Control",
-      "description": "Administrator-only remote platform management.",
-      "url": "/control/",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Web Console",
-      "short_name": "Console",
-      "description": "Open the Download Killer web console.",
+      "name": "Download Center",
+      "short_name": "Downloads",
+      "description": "Open the working DyrakArmy download console.",
       "url": "/#console",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
@@ -63,7 +70,7 @@
     {
       "name": "System Status",
       "short_name": "Status",
-      "description": "Open live service telemetry.",
+      "description": "Open live edge and backend telemetry.",
       "url": "/#status",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
