@@ -1,5 +1,6 @@
 import type { Env } from './types';
 import { GAME_PACK, getGamePackBotSummary, type GamePackId } from './game_pack';
+import { isPlatformModuleEnabled } from './platform_control';
 
 type ExtendedEnv = Env & { TELEGRAM_BOT_API_BASE?: string };
 interface TelegramUser { id: number; first_name: string; last_name?: string; username?: string; language_code?: string }
@@ -30,7 +31,7 @@ export async function handleGamePackTelegramWebhook(request: WebhookRequestLike,
   const callback = update.callback_query;
   if (callback?.data?.startsWith('game-pack:profile:')) {
     const gameId = callback.data.slice('game-pack:profile:'.length) as GamePackId;
-    if (!GAME_PACK[gameId]) return null;
+    if (!GAME_PACK[gameId] || !await isPlatformModuleEnabled(env, gameId)) return null;
     await telegramRequest('answerCallbackQuery', { callback_query_id: callback.id }, env);
     const language = languageFor(callback.from);
     const summary = await getGamePackBotSummary(gameId, callback.from.id, env, language);
@@ -40,10 +41,13 @@ export async function handleGamePackTelegramWebhook(request: WebhookRequestLike,
 
   const message = update.message;
   if (!message?.text) return null;
-  const text = message.text.trim();
-  const command = text.split(/\s+/)[0]?.split('@')[0]?.toLowerCase() || '';
+  const command = message.text.trim().split(/\s+/)[0]?.split('@')[0]?.toLowerCase() || '';
   const gameId = COMMAND_TO_GAME[command];
   if (!gameId) return null;
+  if (!await isPlatformModuleEnabled(env, gameId)) {
+    await sendMessage(message.chat.id, 'Тази игра е временно скрита от администратора.', env, {});
+    return Response.json({ ok: true, mode: 'game_disabled', game_id: gameId });
+  }
   const language = languageFor(message.from);
   const game = GAME_PACK[gameId];
   const body = language === 'en'
