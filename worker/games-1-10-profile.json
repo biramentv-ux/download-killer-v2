@@ -4,6 +4,6 @@
   "shared_profile": true,
   "control_center_flags": true,
   "preupload_gate_required": true,
-  "gate_version": 2,
+  "gate_version": 3,
   "protected_content_access": false
 }
