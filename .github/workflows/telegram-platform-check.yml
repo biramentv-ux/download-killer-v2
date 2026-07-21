@@ -154,7 +154,7 @@ jobs:
           if (!governance.includes('parseDeviceLinkCommand(message.text)')) throw new Error('Telegram /link parsing is missing');
           if (!governance.includes("['/control', '/admin'].includes(command)")) throw new Error('Governance /control and /admin commands are missing');
           if (!governance.includes('X-Telegram-Bot-Api-Secret-Token')) throw new Error('Governance webhook secret validation is missing');
-          if (!governance.includes('sha256Hex')) throw new Error('Governance sessions are not hashed');
+          if (!governance.includes('await sha256(token)') || !governance.includes('token_hash')) throw new Error('Governance session-token hashing is missing');
           if (!controlV2.includes('identity.link.start')) throw new Error('Control Center v2 device-link flow is missing');
           if (!wrangler.includes('"main": "src/platform_v3.ts"')) throw new Error('Wrangler does not use platform_v3 entrypoint');
           if (!wrangler.includes('"TELEGRAM_BOT_USERNAME": "dyrakarmy_bot"')) throw new Error('Sole target bot username is not configured');
