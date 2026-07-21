@@ -7,7 +7,8 @@ This project includes a deliberately non-executable PlayPlay-shaped demonstratio
 Path after Worker deployment:
 
 - `/platform/playplay-demo/`
-- `https://dyrakarmy.online/platform/playplay-demo/`
+- `https://dyrakarmy.eu/platform/playplay-demo/`
+- `https://dyrakarmy.online/platform/playplay-demo/` (mirror)
 - `https://sounddrop.biramentv.workers.dev/platform/playplay-demo/`
 
 Features:
@@ -74,3 +75,22 @@ The safe implementation preserves only the benign product ideas:
 - local demo JSON export.
 
 Real cookie/WVD/CDM loading and protected-stream execution are intentionally not implemented.
+
+## unplayplay research profile
+
+The seven supplied root files from `unplayplay` are represented by a metadata-only profile:
+
+```text
+worker/public/platform/playplay-demo/unplayplay-profile.json
+```
+
+The profile records upstream name/version/license, the audited commit, file byte sizes, and SHA-256 fingerprints. It does not copy or bundle the native source tree and keeps native build/loading, subprocess execution, network access, credential access, key deobfuscation, and DRM decryption hard-disabled.
+
+Validate a local copy without building or importing it:
+
+```powershell
+cd desktop_launcher
+python -m external_engines.unplayplay_research_profile --source "C:\Users\USER\Desktop\unplayplay"
+```
+
+The verifier reads only the seven allowlisted root metadata files. It does not read `src/` or `lib/`, run package install hooks, invoke CMake/node-gyp, or load a native addon.

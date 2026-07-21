@@ -3,7 +3,8 @@
   if (!ext) return;
 
   const IS_PROMISE_API = Boolean(globalThis.browser && ext === globalThis.browser);
-  const DEFAULT_API_BASE = 'https://dyrakarmy.online';
+  const DEFAULT_API_BASE = 'https://dyrakarmy.eu';
+  const MIRROR_API_BASE = 'https://dyrakarmy.online';
   const DEFAULTS = {
     apiBase: DEFAULT_API_BASE,
     format: 'mp3',
@@ -20,7 +21,7 @@
   const RUNTIME_CONFIG_CACHE_TTL_MS = 5 * 60 * 1000;
   const PREFS_REVISION_KEY = 'sd_prefs_revision_v2';
   const RECENT_JOBS_KEY = 'sd_recent_jobs_v2';
-  const JOB_POLL_INTERVAL_MS = 1800;
+  const JOB_POLL_INTERVAL_MS = 8000;
   const JOB_MAX_WAIT_MS = 12 * 60 * 1000;
   const SUPPORTED_LANGS = new Set(['bg', 'en', 'es', 'ru', 'de']);
   const SUPPORTED_FORMATS = ['mp3', 'm4a', 'ogg', 'opus', 'flac', 'wav'];
@@ -208,7 +209,11 @@
       if (savedAt > 0 && now - savedAt < RUNTIME_CONFIG_CACHE_TTL_MS) return cachedBase;
     }
 
-    const candidates = Array.from(new Set([normalizedBase, stripApiSuffix(DEFAULT_API_BASE)]));
+    const candidates = Array.from(new Set([
+      normalizedBase,
+      stripApiSuffix(DEFAULT_API_BASE),
+      stripApiSuffix(MIRROR_API_BASE),
+    ]));
     for (const candidate of candidates) {
       try {
         const payload = await fetchRuntimeConfig(candidate);

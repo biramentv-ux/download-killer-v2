@@ -16,7 +16,7 @@
     bg: {
       checking: "Проверка", online: "ONLINE", offline: "OFFLINE", guest: "Гост",
       hero_a: "Търси.", hero_b: "Избери качество.", hero_c: "Получи файла в чата.",
-      hero_text: "Една обща система за сайта и @download_killerBOT. Готовите файлове се индексират в Telegram канал и при повторна заявка се използват без ново качване.",
+      hero_text: "Една обща система за сайта и @dyrakarmy_bot. Готовите файлове се индексират в Telegram канал и при повторна заявка се използват без ново качване.",
       active_jobs: "активни задачи", history_jobs: "в историята", stored_files: "Telegram файла", storage_size: "архивен размер",
       tab_download: "Сваляне", tab_search: "Търсене", tab_queue: "Опашка", tab_history: "История", tab_archive: "Архив",
       download_title: "Свали от публичен URL", download_text: "Постави линк, избери формат и качество. След приключване ботът ще изпрати файла директно в този Telegram чат.",
@@ -27,7 +27,7 @@
       queue_title: "Активна опашка", history_title: "История на задачите", refresh: "Обнови", archive_title: "Telegram файлов архив",
       archive_files: "Файлове", archive_unique: "Уникални", archive_bytes: "Общ размер", archive_mode: "Режим",
       archive_text: "Първото успешно сваляне се публикува в частен Telegram канал. Следващите потребители получават копие на същия Telegram файл, без ново качване.",
-      outside_title: "Отвори в Telegram", outside_text: "За персонална опашка и директно изпращане на файлове стартирай Mini App през бота.", open_bot: "Отвори @download_killerBOT",
+      outside_title: "Отвори в Telegram", outside_text: "За персонална опашка и директно изпращане на файлове стартирай Mini App през бота.", open_bot: "Отвори @dyrakarmy_bot",
       auth_required: "Отвори страницата през Telegram бота, за да използваш персоналната опашка.", invalid_url: "Въведи валиден публичен HTTP/HTTPS URL.",
       queued: "Задачата е добавена. Ботът ще изпрати файла след обработката.", request_failed: "Заявката не беше приета.", clipboard_failed: "Няма достъп до клипборда.",
       search_failed: "Търсенето не успя.", no_results: "Няма намерени резултати.", add: "Добави", send_chat: "Изпрати в чата", open_file: "Отвори файла",
@@ -38,7 +38,7 @@
     en: {
       checking: "Checking", online: "ONLINE", offline: "OFFLINE", guest: "Guest",
       hero_a: "Search.", hero_b: "Choose quality.", hero_c: "Receive it in chat.",
-      hero_text: "One shared system for the website and @download_killerBOT. Completed files are indexed in a Telegram channel and reused without reuploading.",
+      hero_text: "One shared system for the website and @dyrakarmy_bot. Completed files are indexed in a Telegram channel and reused without reuploading.",
       active_jobs: "active jobs", history_jobs: "history jobs", stored_files: "Telegram files", storage_size: "archive size",
       tab_download: "Download", tab_search: "Search", tab_queue: "Queue", tab_history: "History", tab_archive: "Archive",
       download_title: "Download from a public URL", download_text: "Paste a link, choose format and quality. The bot will deliver the file to this Telegram chat after processing.",
@@ -49,7 +49,7 @@
       queue_title: "Active queue", history_title: "Job history", refresh: "Refresh", archive_title: "Telegram file archive",
       archive_files: "Files", archive_unique: "Unique", archive_bytes: "Total size", archive_mode: "Mode",
       archive_text: "The first successful download is published to a private Telegram channel. Later users receive a copy of the same Telegram file without a new upload.",
-      outside_title: "Open in Telegram", outside_text: "Launch the Mini App from the bot for a personal queue and direct file delivery.", open_bot: "Open @download_killerBOT",
+      outside_title: "Open in Telegram", outside_text: "Launch the Mini App from the bot for a personal queue and direct file delivery.", open_bot: "Open @dyrakarmy_bot",
       auth_required: "Open this page through the Telegram bot to use the personal queue.", invalid_url: "Enter a valid public HTTP/HTTPS URL.",
       queued: "The job was queued. The bot will deliver the file after processing.", request_failed: "The request was not accepted.", clipboard_failed: "Clipboard access is unavailable.",
       search_failed: "Search failed.", no_results: "No results found.", add: "Add", send_chat: "Send to chat", open_file: "Open file",
@@ -199,11 +199,11 @@
 
   async function loadConfig() {
     config = await apiJson(`${TELEGRAM_API}/config`, {}, 12000);
-    const botUrl = config.bot_url || "https://t.me/download_killerBOT";
+    const botUrl = config.bot_url || "https://t.me/dyrakarmy_bot";
     const miniAppUrl = config.mini_app_url || `${botUrl}?startapp=home`;
     $("#openBotLink").href = miniAppUrl;
     $("#botFooterLink").href = botUrl;
-    $("#botFooterLink").textContent = `@${config.username || "download_killerBOT"}`;
+    $("#botFooterLink").textContent = `@${config.username || "dyrakarmy_bot"}`;
     $("#archiveMode").textContent = config.storage_enabled ? `${config.max_upload_mb || 50} MB` : "OFF";
   }
 

@@ -1,0 +1,92 @@
+name: Archive Raid v1 Checks
+
+on:
+  pull_request:
+    paths:
+      - worker/src/archive_raid.ts
+      - worker/src/archive_raid_bot.ts
+      - worker/src/archive_raid.test.ts
+      - worker/public/games/archive-raid/**
+      - worker/public/platform/games-v14.js
+      - worker/public/platform/platform-public.js
+      - worker/public/sw.js
+      - worker/public/manifest.webmanifest
+      - worker/migrations/0015_archive_raid_v1.sql
+      - worker/src/platform_v2.ts
+      - worker/src/dyrakarmy_arena_commands.ts
+      - worker/scripts/setup-telegram-platform.mjs
+      - .github/workflows/archive-raid-check.yml
+  push:
+    branches:
+      - main
+    paths:
+      - worker/src/archive_raid.ts
+      - worker/src/archive_raid_bot.ts
+      - worker/src/archive_raid.test.ts
+      - worker/public/games/archive-raid/**
+      - worker/migrations/0015_archive_raid_v1.sql
+      - .github/workflows/archive-raid-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: archive-raid-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - run: npm ci
+      - name: Typecheck Worker
+        run: npm run typecheck
+      - name: Run Archive Raid tests
+        run: npx vitest run src/archive_raid.test.ts
+      - name: Run complete Worker test suite
+        run: npm test
+      - name: Validate browser game
+        run: |
+          node --check public/games/archive-raid/raid.js
+          grep -q 'Archive Raid' public/games/archive-raid/index.html
+          grep -q 'id="sectorTrack"' public/games/archive-raid/index.html
+          grep -q 'id="collectionGrid"' public/games/archive-raid/index.html
+          grep -q '/api/games/archive-raid' public/games/archive-raid/raid.js
+          grep -q 'archive-raid' public/platform/games-v14.js
+          grep -q 'archive-raid' public/platform/platform-public.js
+          grep -q '/games/archive-raid/raid.js?v=1.0.0' public/sw.js
+      - name: Validate shared profile and Telegram contracts
+        run: |
+          grep -q 'UPDATE game_profiles' src/archive_raid.ts
+          grep -q 'latencyStrikeRank' src/archive_raid.ts
+          grep -q 'handleArchiveRaidApi' src/platform_v2.ts
+          grep -q 'handleArchiveRaidTelegramWebhook' src/platform_v2.ts
+          grep -q "command: 'raid'" src/dyrakarmy_arena_commands.ts
+          grep -q "command: 'collection'" src/dyrakarmy_arena_commands.ts
+          grep -q "command: 'crate'" scripts/setup-telegram-platform.mjs
+          grep -q 'CREATE TABLE IF NOT EXISTS archive_raid_inventory' migrations/0015_archive_raid_v1.sql
+          grep -q "'archive-raid'" src/platform_v2.ts
+      - name: Enforce virtual collectible safety boundary
+        run: |
+          grep -q 'protected_content_access: false' src/archive_raid.ts
+          grep -q 'No access to protected content' src/archive_raid_bot.ts
+          if grep -R -n -E 'widevine|playplay|content_key|license_challenge|decrypt|decryption' src/archive_raid.ts src/archive_raid_bot.ts public/games/archive-raid migrations/0015_archive_raid_v1.sql; then
+            echo 'Archive Raid must remain virtual and cosmetic only.'
+            exit 1
+          fi
+          if grep -R -n -E 'eval\(|new Function\(|javascript:|data:text/html' src/archive_raid.ts public/games/archive-raid; then
+            echo 'Unsafe executable or URL construct detected.'
+            exit 1
+          fi
+      - name: Wrangler dry-run
+        run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-archive-raid-dry-run

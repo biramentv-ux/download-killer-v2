@@ -1,0 +1,22 @@
+{
+  "name": "DyrakArmy Cyber Control Center v2",
+  "short_name": "DA Control",
+  "description": "Mobile governance, roles, module ordering, versions, rollback and realtime synchronization for DyrakArmy.",
+  "start_url": "/control-v2/",
+  "scope": "/control-v2/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#050914",
+  "theme_color": "#050914",
+  "orientation": "any",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Overview", "url": "/control-v2/#overview", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Modules", "url": "/control-v2/#modules", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Roles", "url": "/control-v2/#roles", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Versions", "url": "/control-v2/#versions", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

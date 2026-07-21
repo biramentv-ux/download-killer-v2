@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Download Killer Companion</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="popup-container">
+    <header class="brand">
+      <img src="icons/icon48.png" alt="" class="logo">
+      <div>
+        <h1>Download Killer</h1>
+        <p>Spotify Web Companion</p>
+      </div>
+      <span class="version">v1.2</span>
+    </header>
+
+    <section class="card">
+      <div class="field-grid">
+        <label>
+          <span>Backend</span>
+          <select id="backendUrl">
+            <option value="https://dyrakarmy.eu">dyrakarmy.eu · основен</option>
+            <option value="https://dyrakarmy.online">dyrakarmy.online · mirror</option>
+            <option value="https://sounddrop.biramentv.workers.dev">workers.dev · аварийно</option>
+          </select>
+        </label>
+        <label>
+          <span>Формат</span>
+          <select id="format">
+            <option value="mp3">MP3</option>
+            <option value="m4a">M4A</option>
+            <option value="ogg">OGG</option>
+            <option value="opus">OPUS</option>
+            <option value="flac">FLAC</option>
+            <option value="wav">WAV</option>
+          </select>
+        </label>
+        <label>
+          <span>Качество</span>
+          <select id="quality">
+            <option value="best">Best</option>
+            <option value="320">320 kbps</option>
+            <option value="256">256 kbps</option>
+            <option value="192">192 kbps</option>
+            <option value="128">128 kbps</option>
+            <option value="96">96 kbps</option>
+            <option value="lossless">Lossless</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="toggle">
+        <input id="autoDownload" type="checkbox">
+        <span>Автоматично изтегли готовия файл</span>
+      </label>
+      <label class="toggle">
+        <input id="saveAs" type="checkbox">
+        <span>Показвай „Запази като“</span>
+      </label>
+    </section>
+
+    <section class="actions">
+      <button id="downloadCurrent" class="primary" type="button">Добави текущата</button>
+      <button id="downloadPlaylist" type="button">Добави видимия плейлист</button>
+      <button id="openSite" type="button">Отвори .eu сайта</button>
+      <button id="cancelAll" class="danger" type="button">Спри локалната опашка</button>
+    </section>
+
+    <div class="status" id="status" data-state="idle">
+      <i></i><span id="statusText">Готов</span>
+    </div>
+
+    <section class="list-section">
+      <div class="section-title">
+        <h2>Опашка</h2>
+        <button id="refresh" class="text-button" type="button">Обнови</button>
+      </div>
+      <div id="queueList" class="list"></div>
+    </section>
+
+    <section class="list-section">
+      <div class="section-title">
+        <h2>История</h2>
+        <button id="clearHistory" class="text-button" type="button">Изчисти</button>
+      </div>
+      <div id="historyList" class="list"></div>
+    </section>
+
+    <p class="legal">
+      Разширението не прихваща и не декриптира Spotify аудио. То изпраща публичния URL
+      към твоя Download Killer backend. Използвай само съдържание, за което имаш право.
+    </p>
+  </main>
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

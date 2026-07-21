@@ -1,0 +1,155 @@
+name: DyrakArmy 10 Games Matrix
+
+on:
+  pull_request:
+    paths:
+      - worker/**
+      - .github/workflows/games-10-check.yml
+  push:
+    branches:
+      - main
+    paths:
+      - worker/**
+      - .github/workflows/games-10-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: games-10-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  worker-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - run: npm ci
+      - name: Typecheck all game handlers
+        run: npm run typecheck
+      - name: Run all server-side game tests
+        run: npm test
+      - name: Run deterministic Games 1-10 simulation
+        run: node scripts/games-1-10-simulation.mjs
+      - name: Wrangler packaging dry-run
+        run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-games-10
+
+  game-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        game:
+          - queue-commander
+          - beat-hunter
+          - dyrakarmy-arena
+          - format-forge
+          - server-defender
+          - metadata-detective
+          - link-runner
+          - archive-raid
+          - latency-strike
+          - bot-vs-human
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate route and public catalog contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          game='${{ matrix.game }}'
+          grep -q "$game" worker/public/platform/games-v14.js
+          grep -q "$game" worker/public/platform/platform-public.js
+          case "$game" in
+            dyrakarmy-arena)
+              grep -q 'handleDyrakArmyArenaApi' worker/src/platform_v2.ts
+              grep -q "$game" worker/public/sw.js
+              ;;
+            archive-raid)
+              grep -q 'handleArchiveRaidApi' worker/src/platform_v2.ts
+              grep -q "$game" worker/public/sw.js
+              ;;
+            latency-strike)
+              grep -q 'handleLatencyStrikeGameApi' worker/src/platform_v2.ts
+              grep -q "$game" worker/public/sw.js
+              ;;
+            *)
+              grep -q "$game" worker/src/challenge_games.ts
+              grep -q 'handleChallengeGamesApi' worker/src/platform_v2.ts
+              grep -q 'CHALLENGE_SLUGS.map' worker/src/platform_v2.ts
+              grep -q 'CHALLENGE_GAME_SLUGS' worker/public/sw.js
+              ;;
+          esac
+      - name: Validate game client syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          case '${{ matrix.game }}' in
+            dyrakarmy-arena) node --check worker/public/games/dyrakarmy-arena/arena.js ;;
+            archive-raid) node --check worker/public/games/archive-raid/raid.js ;;
+            latency-strike) node --check worker/public/games/latency-strike/game.js ;;
+            *)
+              grep -q '${{ matrix.game }}' worker/src/challenge_games.ts
+              node --check worker/public/games/challenge/challenge.js
+              ;;
+          esac
+
+  integration-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate shared profile and migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/public/platform/games-v14.js
+          node --check worker/public/platform/platform-public.js
+          node --check worker/public/games/challenge/challenge.js
+          node --check worker/public/games/archive-raid/raid.js
+          node --check worker/public/games/dyrakarmy-arena/arena.js
+          node --check worker/public/games/latency-strike/game.js
+          node --check worker/public/sw.js
+          grep -q 'handleChallengeGamesApi' worker/src/platform_v2.ts
+          grep -q 'handleChallengeGamesTelegramWebhook' worker/src/platform_v2.ts
+          grep -q 'handleDyrakArmyArenaApi' worker/src/platform_v2.ts
+          grep -q 'handleArchiveRaidApi' worker/src/platform_v2.ts
+          grep -q 'handleLatencyStrikeGameApi' worker/src/platform_v2.ts
+          grep -q 'isPlatformModuleEnabled(env, slug)' worker/src/platform_v2.ts
+          grep -q 'CREATE TABLE IF NOT EXISTS challenge_game_runs' worker/migrations/0016_dyrakarmy_games_1_10.sql
+          grep -q 'CREATE TABLE IF NOT EXISTS archive_raid_runs' worker/migrations/0015_archive_raid_v1.sql
+          grep -q '"shared_profile":true' worker/migrations/0016_dyrakarmy_games_1_10.sql
+          grep -q 'game_profiles' worker/src/challenge_games.ts
+          grep -q 'total_xp' worker/src/challenge_games.ts
+          grep -q 'download-killer-static-v15-games-1-10' worker/public/sw.js
+          grep -q 'download-killer-static-v16-dyrakarmy-dashboard' worker/public/sw.js
+      - name: Validate all Telegram game commands
+        shell: bash
+        run: |
+          set -euo pipefail
+          for command in queuegame beat arena formatgame defender detective linkrunner raid game botvhuman; do
+            grep -q "command: '$command'" worker/scripts/setup-telegram-platform.mjs
+          done
+      - name: Validate safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'protected_content_access: false' worker/src/archive_raid.ts
+          if grep -R -n -E 'eval\(|new Function\(' worker/src/challenge_games.ts worker/src/archive_raid.ts worker/public/games/challenge worker/public/games/archive-raid; then
+            echo 'Executable code construction found in game system.'
+            exit 1
+          fi
+          if grep -R -n -E 'javascript:|data:text/html' worker/public/games/challenge worker/public/games/archive-raid; then
+            echo 'Unsafe browser URL scheme found in game client.'
+            exit 1
+          fi

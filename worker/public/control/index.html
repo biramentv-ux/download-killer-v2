@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#070a18">
+  <meta name="robots" content="noindex,nofollow">
+  <title>DyrakArmy Control Center</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./control.css?v=1.0.0">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="./control.js?v=1.0.0" defer></script>
+</head>
+<body>
+  <div class="control-glow" aria-hidden="true"></div>
+  <header class="control-header">
+    <div class="control-brand"><span>DK</span><div><b>DyrakArmy Control</b><small>REMOTE PLATFORM CMS</small></div></div>
+    <div class="control-auth" id="controlAuth"><i></i><span>Проверка</span></div>
+  </header>
+
+  <main class="control-shell">
+    <section class="control-hero">
+      <div><span class="eyebrow">ONE SYSTEM · INSTANT PUBLIC UPDATES</span><h1>Управлявай всичко<br><em>директно от телефона.</em></h1><p>Модули, игри, публични карти, линкове, съобщения и теми се управляват от един защитен панел. Промените се виждат веднага, без нов deploy.</p></div>
+      <div class="hero-actions"><a class="button secondary" href="/" target="_blank" rel="noopener">Публичен сайт ↗</a><button class="button primary" id="refreshControlBtn" type="button">Обнови</button><button class="button secondary" id="exportControlBtn" type="button">Export JSON</button></div>
+    </section>
+
+    <section class="access-card" id="accessCard">
+      <span>🔒</span><div><h2>Отвори през Telegram</h2><p>Control Center приема само валидирана Telegram сесия на потребител, чийто ID е в <code>TELEGRAM_ADMIN_IDS</code>.</p><small id="accessDetail">Команда в бота: /control</small></div>
+    </section>
+
+    <div class="control-workspace" id="controlWorkspace" hidden>
+      <nav class="control-tabs" aria-label="Control sections">
+        <button class="active" data-tab="overview" type="button">Обзор</button>
+        <button data-tab="modules" type="button">Модули</button>
+        <button data-tab="content" type="button">Съдържание</button>
+        <button data-tab="appearance" type="button">Визия</button>
+        <button data-tab="audit" type="button">История</button>
+      </nav>
+
+      <section class="control-panel active" data-panel="overview">
+        <div class="metric-grid">
+          <article><span>Активни модули</span><strong id="metricEnabled">0</strong><small id="metricTotal">от 0</small></article>
+          <article><span>Публични записи</span><strong id="metricContent">0</strong><small>карти и съобщения</small></article>
+          <article><span>Игри</span><strong id="metricGames">0</strong><small>общ профил и XP</small></article>
+          <article><span>Последна промяна</span><strong id="metricUpdated">—</strong><small>audit log</small></article>
+        </div>
+        <div class="system-map">
+          <div class="map-core"><b>DK</b><small>CONTROL</small></div>
+          <div class="map-node"><i>🌐</i><b>Website</b><small>public registry</small></div>
+          <div class="map-node"><i>✈</i><b>Telegram</b><small>admin identity</small></div>
+          <div class="map-node"><i>🎮</i><b>Games</b><small>shared profile</small></div>
+          <div class="map-node"><i>🗃</i><b>D1 + KV</b><small>instant updates</small></div>
+        </div>
+        <div class="quick-grid">
+          <button class="quick-card" data-open-tab="modules"><span>＋</span><b>Добави модул</b><small>Игра, инструмент, секция или линк</small></button>
+          <button class="quick-card" data-open-tab="content"><span>📣</span><b>Публично съобщение</b><small>Покажи веднага на сайта</small></button>
+          <button class="quick-card" data-open-tab="appearance"><span>◉</span><b>Смени темата</b><small>Цветове и публични текстове</small></button>
+          <button class="quick-card" data-open-tab="audit"><span>↶</span><b>Провери историята</b><small>Кой, кога и какво е променил</small></button>
+        </div>
+      </section>
+
+      <section class="control-panel" data-panel="modules">
+        <div class="panel-heading"><div><span>PLATFORM REGISTRY</span><h2>Модули и функции</h2><p>System модулите могат да се скриват, но не и да се изтриват. Добавените от теб модули могат да се премахват.</p></div><button class="button primary" id="newModuleBtn" type="button">＋ Нов модул</button></div>
+        <div class="module-list" id="moduleList"></div>
+      </section>
+
+      <section class="control-panel" data-panel="content">
+        <div class="panel-heading"><div><span>PUBLIC CONTENT</span><h2>Карти, съобщения и линкове</h2><p>Без HTML и изпълним код. Текстът се публикува безопасно в избрания slot.</p></div><button class="button primary" id="newContentBtn" type="button">＋ Нов запис</button></div>
+        <div class="content-list" id="contentList"></div>
+      </section>
+
+      <section class="control-panel" data-panel="appearance">
+        <div class="panel-heading"><div><span>LIVE APPEARANCE</span><h2>Визия и публични текстове</h2><p>Промените се четат от публичния регистър при всяко отваряне на сайта.</p></div></div>
+        <form class="settings-grid" id="settingsForm">
+          <label><span>Име на сайта</span><input name="site.title" maxlength="120"></label>
+          <label><span>Подзаглавие</span><input name="site.subtitle" maxlength="120"></label>
+          <label class="wide"><span>Footer текст</span><textarea name="site.footer" maxlength="300"></textarea></label>
+          <label><span>Основен цвят</span><input name="theme.accent" type="color"></label>
+          <label><span>Втори цвят</span><input name="theme.accent_secondary" type="color"></label>
+          <label><span>Фон</span><input name="theme.background" type="color"></label>
+          <label><span>Радиус</span><input name="theme.radius" type="number" min="0" max="48"></label>
+          <label><span>Име на сезона</span><input name="games.season_label" maxlength="120"></label>
+          <label class="toggle-setting"><input name="announcement.enabled" type="checkbox"><span>Показвай публичните announcements</span></label>
+          <button class="button primary wide" type="submit">Запази визията</button>
+        </form>
+      </section>
+
+      <section class="control-panel" data-panel="audit">
+        <div class="panel-heading"><div><span>AUDIT LOG</span><h2>История на промените</h2><p>Всеки update, toggle и delete се записва с Telegram ID и време.</p></div><button class="button secondary" id="reloadAuditBtn" type="button">Обнови</button></div>
+        <div class="audit-list" id="auditList"></div>
+      </section>
+    </div>
+  </main>
+
+  <dialog class="control-dialog" id="moduleDialog">
+    <form method="dialog" id="moduleForm">
+      <div class="dialog-heading"><div><span>MODULE EDITOR</span><h2 id="moduleDialogTitle">Нов модул</h2></div><button value="cancel" aria-label="Затвори">×</button></div>
+      <div class="form-grid">
+        <label><span>ID</span><input name="id" pattern="[a-z0-9][a-z0-9_-]{1,47}" required placeholder="new-module"></label>
+        <label><span>Тип</span><select name="kind"><option value="game">Игра</option><option value="tool">Инструмент</option><option value="section">Секция</option><option value="link">Линк</option><option value="system">System</option></select></label>
+        <label><span>Икона</span><input name="icon" maxlength="12" value="◈"></label>
+        <label><span>Позиция</span><input name="sort_order" type="number" min="0" max="9999" value="100"></label>
+        <label class="wide"><span>Заглавие</span><input name="title" maxlength="80" required></label>
+        <label class="wide"><span>Описание</span><textarea name="description" maxlength="500"></textarea></label>
+        <label class="wide"><span>Публичен URL</span><input name="public_url" placeholder="/path или https://..."></label>
+        <label class="wide"><span>Telegram URL</span><input name="telegram_url" placeholder="tg://resolve?domain=..."></label>
+        <label class="toggle-setting wide"><input name="enabled" type="checkbox" checked><span>Публично активен</span></label>
+      </div>
+      <div class="dialog-actions"><button class="button secondary" value="cancel">Отказ</button><button class="button primary" id="saveModuleBtn" type="submit" value="default">Запази</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="control-dialog" id="contentDialog">
+    <form method="dialog" id="contentForm">
+      <div class="dialog-heading"><div><span>CONTENT EDITOR</span><h2 id="contentDialogTitle">Нов публичен запис</h2></div><button value="cancel" aria-label="Затвори">×</button></div>
+      <div class="form-grid">
+        <label><span>ID</span><input name="id" pattern="[a-z0-9][a-z0-9_-]{1,47}" required placeholder="announcement-1"></label>
+        <label><span>Slot</span><select name="slot"><option value="announcement">Announcement</option><option value="navigation">Navigation</option><option value="home">Home</option><option value="games">Games</option><option value="updates">Updates</option><option value="footer">Footer</option></select></label>
+        <label><span>Икона</span><input name="icon" maxlength="12" value="◈"></label>
+        <label><span>Позиция</span><input name="sort_order" type="number" min="0" max="9999" value="100"></label>
+        <label class="wide"><span>Заглавие</span><input name="title" maxlength="120" required></label>
+        <label class="wide"><span>Текст</span><textarea name="body" maxlength="1600"></textarea></label>
+        <label><span>Текст на бутона</span><input name="action_label" maxlength="50"></label>
+        <label><span>URL на бутона</span><input name="action_url" placeholder="/path, https:// или tg://"></label>
+        <label><span>Начало</span><input name="starts_at" type="datetime-local"></label>
+        <label><span>Край</span><input name="ends_at" type="datetime-local"></label>
+        <label class="toggle-setting wide"><input name="visible" type="checkbox" checked><span>Публично видим</span></label>
+      </div>
+      <div class="dialog-actions"><button class="button secondary" value="cancel">Отказ</button><button class="button primary" id="saveContentBtn" type="submit" value="default">Публикувай</button></div>
+    </form>
+  </dialog>
+
+  <div class="control-toast" id="controlToast" role="status" aria-live="polite"></div>
+</body>
+</html>

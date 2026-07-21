@@ -1,0 +1,64 @@
+name: DyrakArmy Landing v16 Checks
+
+on:
+  pull_request:
+    paths:
+      - worker/public/index.html
+      - worker/public/manifest.webmanifest
+      - worker/public/sw.js
+      - worker/public/platform/landing-v16.css
+      - worker/public/platform/landing-v16.js
+      - worker/public/control-v2/**
+      - worker/scripts/landing-v16-simulation.mjs
+      - .github/workflows/landing-v16-check.yml
+  push:
+    branches:
+      - main
+    paths:
+      - worker/public/index.html
+      - worker/public/manifest.webmanifest
+      - worker/public/sw.js
+      - worker/public/platform/landing-v16.css
+      - worker/public/platform/landing-v16.js
+      - worker/public/control-v2/**
+      - worker/scripts/landing-v16-simulation.mjs
+      - .github/workflows/landing-v16-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: landing-v16-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  interface-contract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate browser JavaScript
+        run: |
+          node --check public/platform/landing-v16.js
+          node --check public/platform/platform.js
+          node --check public/platform/games-v14.js
+          node --check public/platform/platform-public.js
+          node --check public/control-v2/control-v2.js
+          node --check public/control-v2/sw.js
+          node --check public/sw.js
+      - name: Run deterministic desktop mobile PWA simulation
+        run: node scripts/landing-v16-simulation.mjs
+      - name: Typecheck shared Worker contracts
+        run: npm run typecheck
+      - name: Wrangler packaging dry-run
+        run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-landing-v16-dry-run

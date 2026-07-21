@@ -1,0 +1,126 @@
+import type { Env } from './types';
+
+type ExtendedEnv = Env & { TELEGRAM_BOT_API_BASE?: string };
+
+const COMMAND_MARKER = 'tg:dyrakarmy:commands:v8-software-games';
+const LATENCY_MARKER = 'tg:latency-strike:commands:v2';
+const V10_MARKER = 'tg:commands:bg:v10';
+const LEGACY_MARKER = 'tg:commands:bg:v4';
+
+const BG_COMMANDS = [
+  { command: 'start', description: 'Старт и главно меню' },
+  { command: 'menu', description: 'Главно меню' },
+  { command: 'software', description: 'Последни приложения и версии' },
+  { command: 'games', description: 'Всички 10 DyrakArmy игри' },
+  { command: 'queuegame', description: '1. Queue Commander' },
+  { command: 'beat', description: '2. Beat Hunter' },
+  { command: 'arena', description: '3. DyrakArmy Arena' },
+  { command: 'team', description: 'Моят Arena отбор и ранг' },
+  { command: 'formatgame', description: '4. Format Forge' },
+  { command: 'defender', description: '5. Server Defender' },
+  { command: 'detective', description: '6. Metadata Detective' },
+  { command: 'linkrunner', description: '7. Link Runner' },
+  { command: 'raid', description: '8. Archive Raid' },
+  { command: 'collection', description: 'Archive Raid колекция' },
+  { command: 'crate', description: 'Archive Raid дневен crate' },
+  { command: 'game', description: '9. Latency Strike' },
+  { command: 'botvhuman', description: '10. Bot vs Human' },
+  { command: 'rewards', description: 'Общ ранг и игрови награди' },
+  { command: 'control', description: 'Мобилен Control Center' },
+  { command: 'id', description: 'Покажи моя Telegram ID' },
+  { command: 'search', description: 'Търсене по име' },
+  { command: 'download', description: 'Свали от публичен URL' },
+  { command: 'myfiles', description: 'Моите готови песни' },
+  { command: 'share', description: 'Сподели готова песен' },
+  { command: 'queue', description: 'Активна опашка' },
+  { command: 'history', description: 'Последни задачи' },
+  { command: 'formats', description: 'Формати и качество' },
+  { command: 'archive', description: 'Търсене в медийния архив' },
+  { command: 'site', description: 'Отвори Mini App' },
+  { command: 'language', description: 'Смяна на езика' },
+  { command: 'storage', description: 'Статистика за архива' },
+  { command: 'cancel', description: 'Откажи чакаща задача' },
+  { command: 'settings', description: 'Настройки' },
+  { command: 'help', description: 'Помощ' },
+];
+
+const EN_COMMANDS = [
+  { command: 'start', description: 'Start and main menu' },
+  { command: 'menu', description: 'Main menu' },
+  { command: 'software', description: 'Latest applications and versions' },
+  { command: 'games', description: 'All 10 DyrakArmy games' },
+  { command: 'queuegame', description: '1. Queue Commander' },
+  { command: 'beat', description: '2. Beat Hunter' },
+  { command: 'arena', description: '3. DyrakArmy Arena' },
+  { command: 'team', description: 'My Arena team and rank' },
+  { command: 'formatgame', description: '4. Format Forge' },
+  { command: 'defender', description: '5. Server Defender' },
+  { command: 'detective', description: '6. Metadata Detective' },
+  { command: 'linkrunner', description: '7. Link Runner' },
+  { command: 'raid', description: '8. Archive Raid' },
+  { command: 'collection', description: 'Archive Raid collection' },
+  { command: 'crate', description: 'Archive Raid daily crate' },
+  { command: 'game', description: '9. Latency Strike' },
+  { command: 'botvhuman', description: '10. Bot vs Human' },
+  { command: 'rewards', description: 'Shared rank and game rewards' },
+  { command: 'control', description: 'Mobile Control Center' },
+  { command: 'id', description: 'Show my Telegram ID' },
+  { command: 'search', description: 'Search by name' },
+  { command: 'download', description: 'Download from a public URL' },
+  { command: 'myfiles', description: 'My completed songs' },
+  { command: 'share', description: 'Share a completed song' },
+  { command: 'queue', description: 'Active queue' },
+  { command: 'history', description: 'Recent jobs' },
+  { command: 'formats', description: 'Formats and quality' },
+  { command: 'archive', description: 'Search the media archive' },
+  { command: 'site', description: 'Open Mini App' },
+  { command: 'language', description: 'Change language' },
+  { command: 'storage', description: 'Archive statistics' },
+  { command: 'cancel', description: 'Cancel a pending job' },
+  { command: 'settings', description: 'Settings' },
+  { command: 'help', description: 'Help' },
+];
+
+export async function ensureDyrakArmyArenaCommands(env: ExtendedEnv): Promise<void> {
+  if (!env.TELEGRAM_BOT_TOKEN) return;
+  if (await env.CACHE.get(COMMAND_MARKER) === '1') return;
+  const results = await Promise.all([
+    telegramRequest('setMyCommands', { commands: BG_COMMANDS }, env),
+    telegramRequest('setMyCommands', { commands: BG_COMMANDS, language_code: 'bg' }, env),
+    telegramRequest('setMyCommands', { commands: EN_COMMANDS, language_code: 'en' }, env),
+    telegramRequest('setMyDescription', {
+      description: 'DyrakArmy: software releases, 10 games, общ XP профил, Control Center, downloads и Telegram архив.',
+      language_code: 'bg',
+    }, env),
+    telegramRequest('setMyShortDescription', {
+      short_description: 'Софтуер, 10 игри, общ XP, награди и Control Center.',
+      language_code: 'bg',
+    }, env),
+  ]);
+  if (!results.every((result) => result.ok)) return;
+
+  const username = String(env.TELEGRAM_BOT_USERNAME || 'dyrakarmy_bot').replace(/^@+/, '').toLowerCase();
+  const markers = [
+    COMMAND_MARKER,
+    LATENCY_MARKER,
+    V10_MARKER,
+    LEGACY_MARKER,
+    `tg:master:commands:v1:${username}`,
+  ];
+  await Promise.all(markers.map((marker) => env.CACHE.put(marker, '1', { expirationTtl: 86400 })));
+}
+
+async function telegramRequest(
+  method: string,
+  payload: Record<string, unknown>,
+  env: ExtendedEnv,
+): Promise<{ ok: boolean; description?: string }> {
+  const base = String(env.TELEGRAM_BOT_API_BASE || 'https://api.telegram.org').replace(/\/+$/, '');
+  const response = await fetch(`${base}/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const parsed = await response.json().catch(() => null) as { ok?: boolean; description?: string } | null;
+  return { ok: Boolean(response.ok && parsed?.ok), description: parsed?.description };
+}

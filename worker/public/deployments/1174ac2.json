@@ -1,0 +1,12 @@
+{
+  "release": "Download Killer Platform 12.2.0",
+  "source_commit": "1174ac2ddda1acdce386603d82de1f71e4f07f48",
+  "source_pr": 18,
+  "triggered_at": "2026-07-15T17:20:00+03:00",
+  "trigger_attempt": 3,
+  "deployment_mode": "github-actions-auto-deploy",
+  "canonical_domain": "https://dyrakarmy.eu",
+  "mirror_domain": "https://dyrakarmy.online",
+  "worker_fallback": "https://sounddrop.biramentv.workers.dev",
+  "receipt_path": ".deployments/latest.json"
+}

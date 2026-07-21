@@ -50,7 +50,7 @@ Source and detailed instructions:
 
 Default production URL inside launcher:
 
-- `https://dyrakarmy.online`
+- `https://dyrakarmy.eu`
 
 Launcher startup behavior:
 
@@ -59,7 +59,7 @@ Launcher startup behavior:
   1) `DYRAKARMY_URL` env var (or legacy `SOUNDDROP_URL`)
   2) `dyrakarmy_desktop.url` (same folder as `.exe`)
   3) `dyrakarmy_desktop.json` (`url` + optional `fallback_urls`)
-  4) built-in defaults (`dyrakarmy.online`, then fallback URLs)
+  4) built-in defaults (`dyrakarmy.eu`, then `.eu`/`.online` fallback URLs)
 
 Override at launch:
 

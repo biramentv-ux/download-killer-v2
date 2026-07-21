@@ -1,57 +1,91 @@
 {
-  "name": "Download Killer Platform v11",
-  "short_name": "Download Killer",
+  "name": "DyrakArmy Unified Platform v17",
+  "short_name": "DyrakArmy",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone"],
   "orientation": "any",
-  "background_color": "#050713",
-  "theme_color": "#050713",
-  "description": "Download Killer web and Telegram platform with shared queues, history, live progress and Telegram file archive.",
-  "categories": ["music", "utilities", "productivity"],
+  "background_color": "#050914",
+  "theme_color": "#050914",
+  "description": "Unified DyrakArmy platform for software releases, Telegram, Games 1-10, rewards, downloads, shared profiles, Governance v2 and the remote Control Center.",
+  "categories": ["music", "utilities", "productivity", "games", "social"],
+  "lang": "bg",
+  "dir": "ltr",
   "icons": [
-    {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "shortcuts": [
     {
-      "name": "Web Console",
-      "short_name": "Console",
-      "description": "Open the Download Killer web console.",
+      "name": "DyrakArmy Software & Mixing Toolkit",
+      "short_name": "Software",
+      "description": "Direct access to the latest desktop, mixing toolkit, browser, mobile and PWA releases.",
+      "url": "/#software",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "DyrakArmy Control Center v2",
+      "short_name": "Control v2",
+      "description": "Roles, permissions, modules, versions, rollback and shared profiles.",
+      "url": "/control-v2/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "DyrakArmy Control Center Legacy",
+      "short_name": "Control",
+      "description": "Compatibility shortcut for the original Control Center.",
+      "url": "/control/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "DyrakArmy Games 1-10",
+      "short_name": "Games",
+      "description": "Open the unified Games 1-10 catalog with shared XP and rewards.",
+      "url": "/#games",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "DyrakArmy Arena",
+      "short_name": "Arena",
+      "description": "Team challenges, weekly leagues and monthly seasons.",
+      "url": "/games/dyrakarmy-arena/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Latency Strike",
+      "short_name": "Reaction",
+      "description": "Play the reaction game and unlock shared profile rewards.",
+      "url": "/games/latency-strike/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Archive Raid",
+      "short_name": "Raid",
+      "description": "Raid virtual archive sectors and collect cosmetic cards.",
+      "url": "/games/archive-raid/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Media Download Center",
+      "short_name": "Downloads",
+      "description": "Open the working DyrakArmy media download console.",
       "url": "/#console",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Telegram Mini App",
       "short_name": "Telegram",
-      "description": "Open the shared Telegram queue, history and archive.",
+      "description": "Open the shared Telegram software, queue, games, history and archive.",
       "url": "/telegram/",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "System Status",
       "short_name": "Status",
-      "description": "Open live service telemetry.",
+      "description": "Open live edge and backend telemetry.",
       "url": "/#status",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Downloads",
-      "short_name": "Apps",
-      "description": "Download desktop and browser applications.",
-      "url": "/downloads/",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
   ],

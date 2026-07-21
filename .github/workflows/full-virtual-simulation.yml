@@ -1,0 +1,300 @@
+name: Full Virtual Simulation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - worker/**
+      - downloader/**
+      - desktop_launcher/**
+      - mobile_expo/**
+      - extension/**
+      - browser_extensions/**
+      - .github/workflows/full-virtual-simulation.yml
+  push:
+    branches:
+      - main
+    paths:
+      - worker/**
+      - downloader/**
+      - desktop_launcher/**
+      - mobile_expo/**
+      - extension/**
+      - browser_extensions/**
+      - .github/workflows/full-virtual-simulation.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-virtual-simulation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  worker-web-telegram-pwa:
+    name: Worker, Web, Telegram and PWA
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install Worker dependencies
+        run: npm ci
+
+      - name: Validate sole Telegram bot
+        run: npm run validate:single-bot
+
+      - name: Typecheck Worker
+        run: npm run typecheck
+
+      - name: Run all Worker unit tests
+        run: npm test
+
+      - name: Run deterministic virtual browser and PWA simulations
+        run: npm run simulate:all
+
+      - name: Print virtual simulation report
+        if: always()
+        run: |
+          if [ -f full-virtual-simulation-report.json ]; then
+            cat full-virtual-simulation-report.json
+          else
+            echo 'Virtual simulation report was not generated.'
+          fi
+
+      - name: Wrangler packaging dry-run
+        run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-dry-run
+
+      - name: Upload virtual simulation report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-virtual-simulation-report
+          path: ${{ github.workspace }}/worker/full-virtual-simulation-report.json
+          if-no-files-found: warn
+
+  downloader-safety-and-api:
+    name: Downloader API and safety boundary
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: downloader
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: downloader/requirements.txt
+
+      - name: Install downloader dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile downloader modules
+        run: python -m compileall -q app
+
+      - name: Run all downloader tests
+        shell: bash
+        run: |
+          set -o pipefail
+          pytest -q --tb=short 2>&1 | tee pytest-report.txt
+
+      - name: Simulate public Spotify normalization and protected-input rejection
+        run: |
+          python - <<'PY'
+          from app.spotify_policy import sanitize_download_payload
+
+          normalized = sanitize_download_payload({
+              'url': 'spotify:track:5msPBVPfpNMt36L9hsPD0B',
+              'format': 'mp3',
+              'quality': 'best',
+          })
+          assert normalized['url'] == 'https://open.spotify.com/track/5msPBVPfpNMt36L9hsPD0B'
+
+          try:
+              sanitize_download_payload({'url': normalized['url'], 'decryption_key': 'NOT_ALLOWED'})
+          except ValueError as error:
+              assert 'Protected-stream' in str(error)
+          else:
+              raise AssertionError('Protected input was not rejected')
+
+          passthrough = sanitize_download_payload({'url': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'})
+          assert passthrough['url'].startswith('https://www.youtube.com/')
+          print('Downloader policy simulation passed.')
+          PY
+
+      - name: Upload downloader test report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: downloader-pytest-report
+          path: ${{ github.workspace }}/downloader/pytest-report.txt
+          if-no-files-found: warn
+
+  desktop-client-simulation:
+    name: Desktop clients and external-engine adapters
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop_launcher
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile desktop entrypoints
+        run: |
+          python -m py_compile sounddrop_desktop.py
+          python -m py_compile macos_portable/sounddrop_desktop.py
+          python -m compileall -q external_engines
+
+      - name: Run all external-engine unit tests
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m unittest discover -s external_engines -p 'test_*.py' -v 2>&1 | tee unittest-report.txt
+
+      - name: Validate desktop API contracts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          for path in [
+              Path('sounddrop_desktop.py'),
+              Path('macos_portable/sounddrop_desktop.py'),
+          ]:
+              text = path.read_text(encoding='utf-8-sig')
+              assert 'https://dyrakarmy.eu' in text, path
+              assert 'download_killerBOT' not in text, path
+          print('Desktop API contract simulation passed.')
+          PY
+
+      - name: Upload desktop test report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-unittest-report
+          path: ${{ github.workspace }}/desktop_launcher/unittest-report.txt
+          if-no-files-found: warn
+
+  mobile-expo-simulation:
+    name: Expo web, iOS and Android bundles
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile_expo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile_expo/package-lock.json
+
+      - name: Install mobile dependencies
+        run: npm ci
+
+      - name: Typecheck mobile client
+        run: npm run typecheck
+
+      - name: Export web simulation bundle
+        run: npm run export:web
+
+      - name: Export iOS simulation bundle
+        run: npm run export:ios
+
+      - name: Export Android simulation bundle
+        run: npm run export:android
+
+      - name: Verify generated platform bundles
+        run: |
+          test -d dist/web
+          test -d dist/native/ios
+          test -d dist/native/android
+          grep -Fq "const DEFAULT_API_BASE = 'https://dyrakarmy.eu';" App.tsx
+          grep -Fq "const MIRROR_API_BASE = 'https://dyrakarmy.online';" App.tsx
+          ! grep -Fq 'download_killerBOT' App.tsx
+
+  extension-simulation:
+    name: Chrome, legacy Chrome and Firefox extensions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate canonical Spotify companion
+        run: |
+          node --check extension/spotify-web-companion/background.js
+          node --check extension/spotify-web-companion/content.js
+          node --check extension/spotify-web-companion/popup.js
+          node extension/spotify-web-companion/scripts/validate.mjs
+          node --test extension/spotify-web-companion/tests/validators.test.mjs
+          python extension/spotify-web-companion/scripts/build_release.py
+          unzip -t worker/public/downloads/DyrakArmy-Extension-Chrome.zip
+
+      - name: Validate legacy browser extension sources
+        run: |
+          node --check browser_extensions/sounddrop_webext/common/background.js
+          node --check browser_extensions/sounddrop_webext/common/web_player_content.js
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('browser_extensions/sounddrop_webext/manifests')
+          for name in ('manifest.chrome.json', 'manifest.firefox.json'):
+              data = json.loads((root / name).read_text(encoding='utf-8-sig'))
+              assert data['version'] == '1.2.0'
+              assert 'https://dyrakarmy.eu/*' in data.get('host_permissions', [])
+              assert data.get('content_scripts')
+          print('Legacy Chrome and Firefox manifest simulation passed.')
+          PY
+
+  simulation-complete:
+    name: Full simulation gate
+    if: always()
+    runs-on: ubuntu-latest
+    needs:
+      - worker-web-telegram-pwa
+      - downloader-safety-and-api
+      - desktop-client-simulation
+      - mobile-expo-simulation
+      - extension-simulation
+    steps:
+      - name: Require every subsystem to pass
+        env:
+          WORKER_RESULT: ${{ needs.worker-web-telegram-pwa.result }}
+          DOWNLOADER_RESULT: ${{ needs.downloader-safety-and-api.result }}
+          DESKTOP_RESULT: ${{ needs.desktop-client-simulation.result }}
+          MOBILE_RESULT: ${{ needs.mobile-expo-simulation.result }}
+          EXTENSION_RESULT: ${{ needs.extension-simulation.result }}
+        run: |
+          printf 'Worker/Web/Telegram/PWA: %s\n' "$WORKER_RESULT"
+          printf 'Downloader: %s\n' "$DOWNLOADER_RESULT"
+          printf 'Desktop: %s\n' "$DESKTOP_RESULT"
+          printf 'Mobile: %s\n' "$MOBILE_RESULT"
+          printf 'Extensions: %s\n' "$EXTENSION_RESULT"
+          test "$WORKER_RESULT" = success
+          test "$DOWNLOADER_RESULT" = success
+          test "$DESKTOP_RESULT" = success
+          test "$MOBILE_RESULT" = success
+          test "$EXTENSION_RESULT" = success

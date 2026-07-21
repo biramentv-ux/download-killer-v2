@@ -41,20 +41,22 @@ jobs:
           pip install -r requirements.txt
           python -m py_compile .\external_engines\spotify_oggmp4_gui.py
           python -m unittest external_engines.test_spotify_oggmp4_gui
-          pyinstaller --noconfirm --clean --onefile --noconsole --name SoundDropDesktop sounddrop_desktop.py
+          pyinstaller --noconfirm --clean --onefile --noconsole --name DyrakArmyDesktop sounddrop_desktop.py
           pyinstaller --noconfirm --clean --onefile --noconsole --name DyrakArmySpotifyOggMp4Engine .\external_engines\spotify_oggmp4_gui.py
 
-      - name: Build Browser Extension ZIPs
+      - name: Build canonical Chrome and legacy browser extension ZIPs
         run: |
+          python .\extension\spotify-web-companion\scripts\build_release.py
           powershell -ExecutionPolicy Bypass -File .\browser_extensions\sounddrop_webext\build.ps1 -OutputDir "$env:GITHUB_WORKSPACE\release_assets\extensions"
 
       - name: Collect Windows artifacts
         run: |
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\release_assets\windows" | Out-Null
-          Copy-Item -Force ".\desktop_launcher\dist\SoundDropDesktop.exe" "$env:GITHUB_WORKSPACE\release_assets\windows\SoundDropDesktop.exe"
+          Copy-Item -Force ".\desktop_launcher\dist\DyrakArmyDesktop.exe" "$env:GITHUB_WORKSPACE\release_assets\windows\DyrakArmyDesktop.exe"
           Copy-Item -Force ".\desktop_launcher\dist\DyrakArmySpotifyOggMp4Engine.exe" "$env:GITHUB_WORKSPACE\release_assets\windows\DyrakArmySpotifyOggMp4Engine.exe"
-          Copy-Item -Force "$env:GITHUB_WORKSPACE\release_assets\extensions\SoundDrop-Extension-Chrome.zip" "$env:GITHUB_WORKSPACE\release_assets\windows\SoundDrop-Extension-Chrome.zip"
-          Copy-Item -Force "$env:GITHUB_WORKSPACE\release_assets\extensions\SoundDrop-Extension-Firefox.zip" "$env:GITHUB_WORKSPACE\release_assets\windows\SoundDrop-Extension-Firefox.zip"
+          Copy-Item -Force ".\worker\public\downloads\DyrakArmy-Extension-Chrome.zip" "$env:GITHUB_WORKSPACE\release_assets\windows\DyrakArmy-Extension-Chrome.zip"
+          Copy-Item -Force "$env:GITHUB_WORKSPACE\release_assets\extensions\DyrakArmy-Extension-Legacy-Chrome.zip" "$env:GITHUB_WORKSPACE\release_assets\windows\DyrakArmy-Extension-Legacy-Chrome.zip"
+          Copy-Item -Force "$env:GITHUB_WORKSPACE\release_assets\extensions\DyrakArmy-Extension-Firefox.zip" "$env:GITHUB_WORKSPACE\release_assets\windows\DyrakArmy-Extension-Firefox.zip"
 
       - name: Upload Windows + Extensions artifact
         uses: actions/upload-artifact@v4
@@ -84,15 +86,15 @@ jobs:
           pip install pyobjc-framework-Cocoa
           python -m py_compile ./external_engines/spotify_oggmp4_gui.py
           python -m unittest external_engines.test_spotify_oggmp4_gui
-          pyinstaller --noconfirm --clean --windowed --name SoundDropDesktop sounddrop_desktop.py
+          pyinstaller --noconfirm --clean --windowed --name DyrakArmyDesktop sounddrop_desktop.py
           cd dist
-          ditto -c -k --sequesterRsrc --keepParent "SoundDropDesktop.app" "SoundDropDesktop-macOS.zip"
+          ditto -c -k --sequesterRsrc --keepParent "DyrakArmyDesktop.app" "DyrakArmyDesktop-macOS.zip"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-macos
-          path: desktop_launcher/dist/SoundDropDesktop-macOS.zip
+          path: desktop_launcher/dist/DyrakArmyDesktop-macOS.zip
 
   build-expo-artifacts:
     runs-on: ubuntu-latest
@@ -114,12 +116,21 @@ jobs:
         working-directory: mobile_expo
         run: npm ci
 
+      - name: Validate mobile canonical and mirror endpoints
+        working-directory: mobile_expo
+        run: |
+          grep -Fq "const DEFAULT_API_BASE = 'https://dyrakarmy.eu';" App.tsx
+          grep -Fq "const MIRROR_API_BASE = 'https://dyrakarmy.online';" App.tsx
+
+      - name: Typecheck mobile shell
+        working-directory: mobile_expo
+        run: npm run typecheck
+
       - name: Export Expo web and native update bundles
         working-directory: mobile_expo
         run: |
-          mkdir -p dist
-          npx expo export --platform web --output-dir dist/web
-          npx expo export --platform ios,android --output-dir dist/native
+          npm run export:web
+          npm run export:native
           cd dist
           zip -r SoundDrop-Expo-Web.zip web
           zip -r SoundDrop-Expo-Native-Update.zip native
@@ -179,7 +190,7 @@ jobs:
           fi
 
           title="SoundDrop ${RELEASE_TAG}"
-          notes="Automated CI/CD release pipeline artifacts: desktop apps, separate Spotify OGG/MP4 external-engine GUI, browser extensions, and Expo bundles."
+          notes="Automated CI/CD release pipeline artifacts: desktop apps, separate Spotify OGG/MP4 external-engine GUI, canonical Chrome companion, legacy Chrome/Firefox extensions, and Expo bundles."
           prerelease_flag=""
           if [ "$RELEASE_PRERELEASE" = "true" ]; then
             prerelease_flag="--prerelease"
