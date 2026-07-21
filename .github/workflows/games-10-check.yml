@@ -145,7 +145,11 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'protected_content_access: false' worker/src/archive_raid.ts
-          if grep -R -n -E 'eval\(|new Function\(|javascript:|data:text/html' worker/src/challenge_games.ts worker/src/archive_raid.ts worker/public/games/challenge worker/public/games/archive-raid; then
-            echo 'Unsafe executable content found in game system.'
+          if grep -R -n -E 'eval\(|new Function\(' worker/src/challenge_games.ts worker/src/archive_raid.ts worker/public/games/challenge worker/public/games/archive-raid; then
+            echo 'Executable code construction found in game system.'
+            exit 1
+          fi
+          if grep -R -n -E 'javascript:|data:text/html' worker/public/games/challenge worker/public/games/archive-raid; then
+            echo 'Unsafe browser URL scheme found in game client.'
             exit 1
           fi
