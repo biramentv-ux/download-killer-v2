@@ -24,7 +24,10 @@ type ExtendedEnv = Env & {
 
 export default {
   async fetch(request: Request, env: ExtendedEnv, context: ExecutionContext): Promise<Response> {
-    const softwareCatalogResponse = await handleSoftwareCatalogApi(request, env);
+    const softwareCatalogResponse = await handleSoftwareCatalogApi(
+      request as unknown as Request,
+      env,
+    );
     if (softwareCatalogResponse) return softwareCatalogResponse;
 
     const governanceResponse = await handlePlatformGovernanceApi(request, env);
@@ -35,7 +38,10 @@ export default {
       const linkResponse = await handlePlatformGovernanceTelegramWebhook(request.clone(), env);
       if (linkResponse) return linkResponse;
 
-      const softwareResponse = await handleSoftwareTelegramWebhook(request.clone(), env);
+      const softwareResponse = await handleSoftwareTelegramWebhook(
+        request.clone() as unknown as Request,
+        env,
+      );
       if (softwareResponse) return softwareResponse;
     }
 
