@@ -62,6 +62,14 @@ jobs:
           install -D /tmp/governance-v2/platform-governance-v2.yml .github/workflows/platform-governance-v2.yml
           install -D /tmp/governance-v2/PLATFORM_GOVERNANCE_V2.md PLATFORM_GOVERNANCE_V2.md
           install -D /tmp/governance-v2/wrangler.jsonc worker/wrangler.jsonc
+          python - <<'PYFIX'
+          from pathlib import Path
+          path = Path('worker/src/platform_governance.ts')
+          source = path.read_text()
+          source = source.replace("return match ? match[1].toUpperCase() : null;", "return match?.[1]?.toUpperCase() ?? null;")
+          source = source.replace("Number(events[events.length - 1].sequence || since)", "Number(events.at(-1)?.sequence || since)")
+          path.write_text(source)
+          PYFIX
           rm -rf .bootstrap
 
       - name: Install Worker dependencies
