@@ -1,0 +1,20 @@
+name: Trigger PR 28 Reconciliation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch-reconcile:
+    if: github.event.pull_request.number == 28
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch reconciliation workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run reconcile-production-release.yml --repo "${{ github.repository }}" --ref main
