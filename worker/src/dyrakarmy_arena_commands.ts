@@ -2,7 +2,7 @@ import type { Env } from './types';
 
 type ExtendedEnv = Env & { TELEGRAM_BOT_API_BASE?: string };
 
-const COMMAND_MARKER = 'tg:dyrakarmy:commands:v7-games-1-10';
+const COMMAND_MARKER = 'tg:dyrakarmy:commands:v8-software-games';
 const LATENCY_MARKER = 'tg:latency-strike:commands:v2';
 const V10_MARKER = 'tg:commands:bg:v10';
 const LEGACY_MARKER = 'tg:commands:bg:v4';
@@ -10,6 +10,8 @@ const LEGACY_MARKER = 'tg:commands:bg:v4';
 const BG_COMMANDS = [
   { command: 'start', description: 'Старт и главно меню' },
   { command: 'menu', description: 'Главно меню' },
+  { command: 'software', description: 'Последни приложения и версии' },
+  { command: 'games', description: 'Всички 10 DyrakArmy игри' },
   { command: 'queuegame', description: '1. Queue Commander' },
   { command: 'beat', description: '2. Beat Hunter' },
   { command: 'arena', description: '3. DyrakArmy Arena' },
@@ -45,6 +47,8 @@ const BG_COMMANDS = [
 const EN_COMMANDS = [
   { command: 'start', description: 'Start and main menu' },
   { command: 'menu', description: 'Main menu' },
+  { command: 'software', description: 'Latest applications and versions' },
+  { command: 'games', description: 'All 10 DyrakArmy games' },
   { command: 'queuegame', description: '1. Queue Commander' },
   { command: 'beat', description: '2. Beat Hunter' },
   { command: 'arena', description: '3. DyrakArmy Arena' },
@@ -85,11 +89,11 @@ export async function ensureDyrakArmyArenaCommands(env: ExtendedEnv): Promise<vo
     telegramRequest('setMyCommands', { commands: BG_COMMANDS, language_code: 'bg' }, env),
     telegramRequest('setMyCommands', { commands: EN_COMMANDS, language_code: 'en' }, env),
     telegramRequest('setMyDescription', {
-      description: 'Download Killer: 10 DyrakArmy Games, общ XP профил, Control Center, опашка и Telegram архив.',
+      description: 'DyrakArmy: software releases, 10 games, общ XP профил, Control Center, downloads и Telegram архив.',
       language_code: 'bg',
     }, env),
     telegramRequest('setMyShortDescription', {
-      short_description: '10 игри, общ XP, рангове, награди и Control Center.',
+      short_description: 'Софтуер, 10 игри, общ XP, награди и Control Center.',
       language_code: 'bg',
     }, env),
   ]);
