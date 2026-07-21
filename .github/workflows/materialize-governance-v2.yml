@@ -70,7 +70,23 @@ jobs:
 
       - name: Strict TypeScript validation
         working-directory: worker
-        run: npm run typecheck
+        shell: bash
+        run: |
+          set +e
+          npm run typecheck > /tmp/governance-v2-typecheck.log 2>&1
+          status=$?
+          cat /tmp/governance-v2-typecheck.log
+          if [ "$status" -ne 0 ]; then
+            mkdir -p ../.ci
+            cp /tmp/governance-v2-typecheck.log ../.ci/platform-governance-v2-typecheck.log
+            git config user.name 'DyrakArmy CI'
+            git config user.email 'actions@users.noreply.github.com'
+            git add ../.ci/platform-governance-v2-typecheck.log
+            git commit -m '[governance-diagnostics] Capture TypeScript failure' || true
+            git push origin HEAD:feature/platform-governance-v2
+            exit "$status"
+          fi
+          rm -f ../.ci/platform-governance-v2-typecheck.log
 
       - name: Governance unit tests
         working-directory: worker
