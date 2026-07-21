@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   simulate:
@@ -19,5 +20,26 @@ jobs:
         working-directory: worker
     steps:
       - uses: actions/checkout@v4
-      - name: Run focused deterministic simulation
-        run: node scripts/games-1-10-simulation.mjs
+      - name: Capture focused deterministic simulation
+        shell: bash
+        run: |
+          set +e
+          node scripts/games-1-10-simulation.mjs > games-simulation-output.txt 2>&1
+          echo $? > games-simulation-exit.txt
+          set -e
+      - name: Publish assertion
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const output = fs.readFileSync('worker/games-simulation-output.txt', 'utf8').slice(-12000);
+            const exitCode = fs.readFileSync('worker/games-simulation-exit.txt', 'utf8').trim();
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## Games 1-10 focused simulation\n\nExit: \`${exitCode}\`\n\n\`\`\`text\n${output}\n\`\`\``
+            });
+      - name: Enforce simulation result
+        shell: bash
+        run: test "$(cat games-simulation-exit.txt)" = "0"
