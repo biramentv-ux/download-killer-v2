@@ -29,7 +29,8 @@ const [
   challengeBot,
   archiveRaid,
   arena,
-  latency,
+  latencyCore,
+  latencyNative,
   gamesHub,
   publicRegistry,
   sharedHtml,
@@ -44,6 +45,7 @@ const [
   read('src/challenge_games_bot.ts'),
   read('src/archive_raid.ts'),
   read('src/dyrakarmy_arena.ts'),
+  read('src/latency_strike.ts'),
   read('src/latency_strike_native.ts'),
   read('public/platform/games-v14.js'),
   read('public/platform/platform-public.js'),
@@ -55,7 +57,7 @@ const [
   read('migrations/0016_dyrakarmy_games_1_10.sql'),
 ]);
 
-assert.equal(expected.length, 10);
+assert.equal(expected.length, 10, 'The public catalog must contain exactly ten numbered games');
 for (const [slug, title, number, command] of expected) {
   assert.ok(gamesHub.includes(`slug: '${slug}'`), `Games Hub missing ${slug}`);
   assert.ok(gamesHub.includes(`number: ${number}`), `Games Hub missing number ${number}`);
@@ -72,25 +74,26 @@ for (const slug of ['queue-commander', 'beat-hunter', 'format-forge', 'server-de
   assert.ok(platform.includes(slug), `Worker feature flag missing ${slug}`);
 }
 
-assert.ok(platform.includes('handleChallengeGamesApi'));
-assert.ok(platform.includes('handleChallengeGamesTelegramWebhook'));
-assert.ok(platform.includes('serveChallengeGamePage'));
-assert.ok(platform.includes('handleArchiveRaidApi'));
-assert.ok(platform.includes('handleDyrakArmyArenaApi'));
-assert.ok(platform.includes('handleLatencyStrikeGameApi'));
-assert.ok(archiveRaid.includes('protected_content_access: false'));
-assert.ok(arena.includes('shared rank') || arena.includes('Общ ранг'));
-assert.ok(latency.includes('game_profiles'));
-assert.ok(sharedHtml.includes('SHARED GAME ENGINE'));
-assert.ok(sharedJs.includes('/api/games/${slug}/'));
-assert.ok(serviceWorker.includes('download-killer-static-v15-games-1-10'));
-assert.ok(serviceWorker.includes('/games/challenge/challenge.js?v=1.0.0'));
-assert.ok(serviceWorker.includes('/games/archive-raid/raid.js?v=1.0.0'));
-assert.ok(!challenge.includes('eval('));
-assert.ok(!challenge.includes('new Function('));
-assert.ok(!sharedJs.includes('localStorage'));
-assert.ok(!sharedJs.includes('sessionStorage'));
-assert.ok(!archiveRaid.includes('decrypt'));
+assert.ok(platform.includes('handleChallengeGamesApi'), 'Worker missing challenge API router');
+assert.ok(platform.includes('handleChallengeGamesTelegramWebhook'), 'Worker missing challenge Telegram router');
+assert.ok(platform.includes('serveChallengeGamePage'), 'Worker missing shared challenge-page router');
+assert.ok(platform.includes('handleArchiveRaidApi'), 'Worker missing Archive Raid API');
+assert.ok(platform.includes('handleDyrakArmyArenaApi'), 'Worker missing Arena API');
+assert.ok(platform.includes('handleLatencyStrikeGameApi'), 'Worker missing Latency Strike API');
+assert.ok(archiveRaid.includes('protected_content_access: false'), 'Archive Raid safety boundary is missing');
+assert.ok(arena.includes('shared rank') || arena.includes('Общ ранг'), 'Arena does not expose the shared rank');
+assert.ok(latencyCore.includes('game_profiles'), 'Latency Strike core does not use the shared game profile');
+assert.ok(latencyNative.includes('handleLatencyStrikeApi'), 'Latency Strike native bridge does not delegate to the core');
+assert.ok(sharedHtml.includes('SHARED GAME ENGINE'), 'Shared challenge page marker is missing');
+assert.ok(sharedJs.includes('/api/games/${slug}/'), 'Shared challenge browser client does not route by game slug');
+assert.ok(serviceWorker.includes('download-killer-static-v15-games-1-10'), 'Games 1-10 PWA cache version is missing');
+assert.ok(serviceWorker.includes('/games/challenge/challenge.js?v=1.0.0'), 'Challenge engine is not cached');
+assert.ok(serviceWorker.includes('/games/archive-raid/raid.js?v=1.0.0'), 'Archive Raid is not cached');
+assert.ok(!challenge.includes('eval('), 'Challenge engine contains eval');
+assert.ok(!challenge.includes('new Function('), 'Challenge engine contains executable-code construction');
+assert.ok(!sharedJs.includes('localStorage'), 'Ranked state must not trust localStorage');
+assert.ok(!sharedJs.includes('sessionStorage'), 'Ranked state must not trust sessionStorage');
+assert.ok(!archiveRaid.includes('decrypt'), 'Archive Raid must not implement decryption');
 
 console.log('Games 1-10 deterministic simulation: PASS');
 console.log('Validated: 10 public modules, 10 commands, shared profile, feature flags, PWA assets and safe Archive Raid boundary.');
