@@ -1,9 +1,13 @@
 name: Trigger PR 28 Reconciliation
 
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - main
+    types:
+      - reopened
+      - synchronize
+      - opened
 
 permissions:
   actions: write
