@@ -1,0 +1,11 @@
+{
+  "profile": "dyrakarmy-games-10-v1",
+  "total_games": 10,
+  "shared_profile": true,
+  "shared_xp": true,
+  "parallel_browser_matrix": true,
+  "server_side_scoring": true,
+  "anti_replay_sessions": true,
+  "control_center_feature_flags": true,
+  "protected_content_access": false
+}
