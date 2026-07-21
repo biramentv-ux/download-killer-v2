@@ -2,7 +2,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "sounddrop",
-  "main": "src/platform_v2.ts",
+  "main": "src/platform_v3.ts",
   "workers_dev": true,
   "routes": [
     { "pattern": "dyrakarmy.eu", "zone_name": "dyrakarmy.eu", "custom_domain": true },
@@ -48,6 +48,7 @@
     "TELEGRAM_STORAGE_MAX_MB": "50",
     "TELEGRAM_MINIAPP_PATH": "/telegram/",
     "TELEGRAM_MINIAPP_AUTH_MAX_AGE_SECONDS": "900",
+    "PLATFORM_SESSION_TTL_SECONDS": "1209600",
     "DOWNLOAD_URL_ALLOWLIST": "youtube.com,*.youtube.com,youtu.be,spotify.com,*.spotify.com,spotify.link,soundcloud.com,*.soundcloud.com,deezer.com,*.deezer.com,music.apple.com,*.music.apple.com,podcasts.apple.com,*.podcasts.apple.com,itunes.apple.com,*.itunes.apple.com,rss.com,*.rss.com,anchor.fm,*.anchor.fm,simplecast.com,*.simplecast.com,buzzsprout.com,*.buzzsprout.com,podbean.com,*.podbean.com,libsyn.com,*.libsyn.com,megaphone.fm,*.megaphone.fm,omny.fm,*.omny.fm,transistor.fm,*.transistor.fm",
     "URL_BLOCKLIST": "localhost,*.localhost,*.local,*.onion",
     "CORS_ORIGINS": "https://dyrakarmy.eu,https://www.dyrakarmy.eu,https://dyrakarmy.online,https://www.dyrakarmy.online,https://sounddrop.biramentv.workers.dev,http://localhost:8787,http://localhost:3000",
@@ -95,7 +96,7 @@
     "PRIVATE_URL_TTL_SECONDS": "3600",
     "TELEGRAM_WEBHOOK_REQUIRE_JWT": "0",
     "WEBHOOK_HMAC_MAX_SKEW_SECONDS": "300",
-    "KV_CLEANUP_PREFIXES": "url:,result:,private-url:,tg:url:,tg:result:,tg:handoff:",
+    "KV_CLEANUP_PREFIXES": "url:,result:,private-url:,tg:url:,tg:result:,tg:handoff:,platform:session:v2:,platform:link:v2:",
     "KV_CLEANUP_MAX_KEYS": "500",
     "SYNC_KEY_EMAIL_REQUIRED": "0",
     "SYNC_KEY_TURNSTILE_REQUIRED": "0",
@@ -106,7 +107,8 @@
     "API_JSON_COMPRESSION_ENABLED": "0"
   }
 
-  // secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_SECRET_TOKEN, DOWNLOADER_API_KEY,
-  // DOWNLOAD_TOKEN_SECRET, WEBHOOK_HMAC_SECRET, OPS_READ_TOKEN,
-  // OPS_OPERATOR_TOKEN, OPS_ADMIN_TOKEN, RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64
+  // secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_SECRET_TOKEN, TELEGRAM_ADMIN_IDS,
+  // DOWNLOADER_API_KEY, DOWNLOAD_TOKEN_SECRET, WEBHOOK_HMAC_SECRET,
+  // OPS_READ_TOKEN, OPS_OPERATOR_TOKEN, OPS_ADMIN_TOKEN,
+  // RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64
 }

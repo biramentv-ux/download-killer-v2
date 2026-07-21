@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "simulated_at": "2026-07-21T09:06:55.294Z",
+  "roles": [
+    "owner",
+    "admin",
+    "editor",
+    "moderator",
+    "user"
+  ],
+  "checks": {
+    "rbac": true,
+    "telegram_device_link": true,
+    "shared_profile": true,
+    "version_snapshots": true,
+    "rollback": true,
+    "realtime_event_feed": true,
+    "mobile_control_center": true,
+    "pwa_offline_shell": true,
+    "arbitrary_code_execution_blocked": true,
+    "production_deploy_triggered": false
+  }
+}
