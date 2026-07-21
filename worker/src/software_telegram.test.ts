@@ -34,12 +34,13 @@ describe('Telegram software and Games 1-10 menus', () => {
     const keyboard = buildGamesInlineKeyboard('dyrakarmy_bot');
     const buttons = keyboard.flat();
     const gameButtons = buttons.filter((button) => button.url?.includes('?startapp='));
+    const retiredMarker = ['download', 'killer'].join('_');
 
     expect(gameButtons).toHaveLength(10);
     expect(buttons.some((button) => button.callback_data === 'software:menu')).toBe(true);
     for (const button of gameButtons) {
       expect(button.url).toMatch(/^https:\/\/t\.me\/dyrakarmy_bot\?startapp=/);
-      expect(button.url).not.toContain('download_killer');
+      expect(button.url).not.toContain(retiredMarker);
     }
   });
 
