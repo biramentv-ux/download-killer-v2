@@ -37,7 +37,9 @@ assert.doesNotMatch(html, /SECONDARY BOT/i);
 assert.doesNotMatch(html, /download_killerBOT/i);
 assert.doesNotMatch(html, /web\.telegram\.org/i);
 
-for (const breakpoint of ['1180px', '920px', '620px']) assert.match(css, new RegExp(`max-width:\s*${breakpoint.replace('.', '\\.')}`));
+for (const breakpoint of ['1180px', '920px', '620px']) {
+  assert.match(css, new RegExp(`max-width:\\s*${breakpoint.replace('.', '\\.')}`));
+}
 assert.match(css, /--da-cyan:/);
 assert.match(css, /\.overview-grid/);
 assert.match(css, /\.module-grid/);
@@ -53,12 +55,15 @@ assert.match(script, /serviceWorker\.register\('\/sw\.js'\)/);
 assert.doesNotMatch(script, /eval\(|new Function\(/);
 
 assert.match(sw, /download-killer-static-v16-dyrakarmy-dashboard/);
-for (const asset of ['/platform/landing-v16.css', '/platform/landing-v16.js', '/control-v2/']) assert.match(sw, new RegExp(asset.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+for (const asset of ['/platform/landing-v16.css', '/platform/landing-v16.js', '/control-v2/']) {
+  assert.match(sw, new RegExp(asset.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+}
 
 const parsedManifest = JSON.parse(manifest);
 assert.equal(parsedManifest.name, 'DyrakArmy Unified Platform v16');
 assert.equal(parsedManifest.theme_color, '#050914');
 assert.ok(parsedManifest.shortcuts.some((shortcut) => shortcut.url === '/control-v2/'));
+assert.ok(parsedManifest.shortcuts.some((shortcut) => shortcut.url === '/control/'));
 assert.ok(parsedManifest.shortcuts.some((shortcut) => shortcut.url === '/#games'));
 
 assert.match(controlHtml, /DyrakArmy Control Center v2/);
