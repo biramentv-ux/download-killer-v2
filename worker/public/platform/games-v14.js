@@ -17,6 +17,14 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const language = () => document.documentElement.lang?.slice(0, 2) === 'en' ? 'en' : 'bg';
 
+  function ensureStyles() {
+    if (document.querySelector('link[href="/platform/games-pack.css"]')) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/platform/games-pack.css';
+    document.head.append(link);
+  }
+
   function ensureGamesSection() {
     if ($('#games')) return;
     const section = document.createElement('section');
@@ -65,6 +73,15 @@
     </article>`;
   }
 
+  function applyRegistry(registry) {
+    const modules = registry?.modules || [];
+    modules.forEach((module) => {
+      document.querySelectorAll(`[data-platform-module="${cssEscape(module.id)}"]`).forEach((node) => {
+        node.dataset.platformHidden = module.enabled ? 'false' : 'true';
+      });
+    });
+  }
+
   async function loadArenaData() {
     const list = $('#arenaTopTeams');
     if (!list) return;
@@ -86,6 +103,9 @@
     }
   }
 
+  function cssEscape(value) { return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/[^a-z0-9_-]/gi, ''); }
   function escapeHtml(value) { return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[character])); }
-  document.addEventListener('DOMContentLoaded', () => { ensureGamesSection(); void loadArenaData(); });
+
+  document.addEventListener('platform-registry-ready', (event) => applyRegistry(event.detail));
+  document.addEventListener('DOMContentLoaded', () => { ensureStyles(); ensureGamesSection(); void loadArenaData(); });
 })();
