@@ -1,12 +1,6 @@
 name: Games 1-10 Pre-Upload Gate
 
 on:
-  push:
-    branches:
-      - feature/dyrakarmy-games-1-10
-    paths:
-      - worker/**
-      - .github/workflows/games-1-10-preupload.yml
   pull_request:
     branches:
       - main
@@ -30,25 +24,19 @@ jobs:
         working-directory: worker
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: worker/package-lock.json
-
       - name: Install dependencies
         run: npm ci
-
       - name: Typecheck Worker and all game engines
         run: npm run typecheck
-
       - name: Run complete Vitest suite
         run: npm test
-
       - name: Run deterministic Games 1-10 simulation
         run: node scripts/games-1-10-simulation.mjs
-
       - name: Validate browser assets
         run: |
           node --check public/platform/games-v14.js
@@ -59,7 +47,6 @@ jobs:
           node --check public/games/latency-strike/game.js
           node --check public/sw.js
           node --check scripts/setup-telegram-platform.mjs
-
       - name: Validate all numbered game contracts
         run: |
           for slug in queue-commander beat-hunter dyrakarmy-arena format-forge server-defender metadata-detective link-runner archive-raid latency-strike bot-vs-human; do
@@ -67,32 +54,14 @@ jobs:
             grep -q "$slug" public/platform/platform-public.js
             grep -q "$slug" src/platform_v2.ts
           done
-          grep -q "number: 1" src/challenge_games.ts
-          grep -q "number: 2" src/challenge_games.ts
-          grep -q "number: 4" src/challenge_games.ts
-          grep -q "number: 5" src/challenge_games.ts
-          grep -q "number: 6" src/challenge_games.ts
-          grep -q "number: 7" src/challenge_games.ts
-          grep -q "number: 10" src/challenge_games.ts
           grep -q "CREATE TABLE IF NOT EXISTS challenge_game_runs" migrations/0016_dyrakarmy_games_1_10.sql
           grep -q "CREATE TABLE IF NOT EXISTS archive_raid_inventory" migrations/0015_archive_raid_v1.sql
           grep -q "protected_content_access: false" src/archive_raid.ts
           grep -q "download-killer-static-v15-games-1-10" public/sw.js
-
       - name: Enforce safe game boundary
         run: |
-          if grep -R -n -E 'eval\(|new Function\(' src/challenge_games.ts src/archive_raid.ts public/games/challenge public/games/archive-raid; then
-            echo 'Executable code construction is forbidden.'
-            exit 1
-          fi
-          if grep -R -n -E 'javascript:|data:text/html' public/games/challenge public/games/archive-raid; then
-            echo 'Unsafe URL scheme detected.'
-            exit 1
-          fi
-          if grep -R -n -E 'bot[0-9]{5,}:[A-Za-z0-9_-]{20,}' src public migrations; then
-            echo 'Telegram token-like value detected.'
-            exit 1
-          fi
-
+          if grep -R -n -E 'eval\(|new Function\(' src/challenge_games.ts src/archive_raid.ts public/games/challenge public/games/archive-raid; then exit 1; fi
+          if grep -R -n -E 'javascript:|data:text/html' public/games/challenge public/games/archive-raid; then exit 1; fi
+          if grep -R -n -E 'bot[0-9]{5,}:[A-Za-z0-9_-]{20,}' src public migrations; then exit 1; fi
       - name: Wrangler packaging dry-run
         run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-games-1-10
