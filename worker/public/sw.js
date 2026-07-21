@@ -1,4 +1,5 @@
-const CACHE_NAME = 'download-killer-static-v16-dyrakarmy-dashboard';
+const CACHE_NAME = 'download-killer-static-v15-games-1-10';
+const INTERFACE_CACHE_VERSION = 'download-killer-static-v16-dyrakarmy-dashboard';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
 const CHALLENGE_GAME_SLUGS = [
   'queue-commander', 'beat-hunter', 'format-forge', 'server-defender',
