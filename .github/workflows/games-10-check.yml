@@ -63,9 +63,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '${{ matrix.game }}' worker/public/platform/games-v14.js
-          grep -q '${{ matrix.game }}' worker/src/platform_v2.ts
-          grep -q '${{ matrix.game }}' worker/public/sw.js
+          game='${{ matrix.game }}'
+          grep -q "$game" worker/public/platform/games-v14.js
+          case "$game" in
+            dyrakarmy-arena|archive-raid|latency-strike)
+              grep -q "$game" worker/src/platform_v2.ts
+              grep -q "$game" worker/public/sw.js
+              ;;
+            *)
+              grep -q "$game" worker/src/game_pack.ts
+              grep -q 'handleGamePackPage' worker/src/platform_v2.ts
+              grep -q 'PACK_GAME_IDS' worker/src/platform_v2.ts
+              grep -q 'PACK_GAME_IDS' worker/public/sw.js
+              ;;
+          esac
       - name: Validate game client syntax
         shell: bash
         run: |
