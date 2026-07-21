@@ -70,12 +70,13 @@ for (const [slug, title, number, command] of expected) {
 for (const slug of ['queue-commander', 'beat-hunter', 'format-forge', 'server-defender', 'metadata-detective', 'link-runner', 'bot-vs-human']) {
   assert.ok(challenge.includes(`slug: '${slug}'`), `Challenge definition missing ${slug}`);
   assert.ok(migration.includes(`'${slug}'`), `D1 module migration missing ${slug}`);
-  assert.ok(platform.includes(slug), `Worker feature flag missing ${slug}`);
 }
 
 assert.ok(challengeBot.includes('challengeGameSlugs()'), 'Challenge Telegram router does not build commands from the shared registry');
 assert.ok(challengeBot.includes('COMMAND_TO_GAME'), 'Challenge Telegram command map is missing');
 assert.ok(challengeBot.includes('isPlatformModuleEnabled'), 'Challenge Telegram router does not respect Control Center flags');
+assert.ok(platform.includes('CHALLENGE_SLUGS.map'), 'Worker does not derive challenge routes and flags from the shared registry');
+assert.ok(platform.includes('isPlatformModuleEnabled(env, slug)'), 'Worker challenge feature flags are not checked dynamically');
 assert.ok(platform.includes('handleChallengeGamesApi'), 'Worker missing challenge API router');
 assert.ok(platform.includes('handleChallengeGamesTelegramWebhook'), 'Worker missing challenge Telegram router');
 assert.ok(platform.includes('serveChallengeGamePage'), 'Worker missing shared challenge-page router');
