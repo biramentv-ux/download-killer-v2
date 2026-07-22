@@ -29,92 +29,83 @@ beforeEach(() => {
   mocks.scheduled.mockClear();
 });
 
-describe('Hugging Face parallel mirror runtime', () => {
-  it('defaults to the safe Cloudflare mirror mode', () => {
+describe('Hugging Face free-public runtime', () => {
+  it('defaults to the native free public Space URL', () => {
     const env = {} as never;
-    expect(resolveHfBackendMode(env)).toBe('cloudflare-mirror');
-    expect(resolveHfUpstream(env).origin).toBe('https://dyrakarmy.eu');
+    expect(resolveHfBackendMode(env)).toBe('free-public');
+    expect(resolveHfUpstream(env).origin).toBe('https://dyrakarmy-dyrakarmy-platform.hf.space');
   });
 
-  it('keeps the landing page local while proxying stateful routes', () => {
-    const env = { HF_BACKEND_MODE: 'cloudflare-mirror' } as never;
-    expect(shouldProxyHfRequest(new Request('https://space.example/'), env)).toBe(false);
-    expect(shouldProxyHfRequest(new Request('https://space.example/games/queue-commander/'), env)).toBe(true);
-    expect(shouldProxyHfRequest(new Request('https://space.example/control-v2/'), env)).toBe(true);
-    expect(shouldProxyHfRequest(new Request('https://space.example/api/health'), env)).toBe(true);
-    expect(shouldProxyHfRequest(new Request('https://space.example/files/example.mp3'), env)).toBe(true);
-    expect(shouldProxyHfRequest(new Request('https://space.example/telegram/webhook'), env)).toBe(true);
+  it('maps every legacy non-standalone value to free-public mode', () => {
+    expect(resolveHfBackendMode({ HF_BACKEND_MODE: 'cloudflare-mirror' } as never)).toBe('free-public');
+    expect(resolveHfBackendMode({ HF_BACKEND_MODE: 'unknown' } as never)).toBe('free-public');
+    expect(resolveHfBackendMode({ HF_BACKEND_MODE: 'standalone' } as never)).toBe('standalone');
   });
 
-  it('exposes a local mirror health contract without touching Cloudflare', async () => {
-    const env = { HF_BACKEND_MODE: 'cloudflare-mirror' } as never;
+  it('never proxies pages, APIs, files, games or Telegram routes', () => {
+    const env = { HF_BACKEND_MODE: 'free-public' } as never;
+    for (const path of ['/', '/api/health', '/files/example.mp3', '/games/queue-commander/', '/control-v2/', '/telegram/webhook']) {
+      expect(shouldProxyHfRequest(new Request(`https://space.example${path}`), env)).toBe(false);
+    }
+  });
+
+  it('exposes the free-public health contract without an external state authority', async () => {
     const response = await handler.fetch(
-      new Request('https://space.example/api/hf-mirror/health'),
-      env,
+      new Request('https://space.example/api/hf-runtime/health'),
+      { HF_BACKEND_MODE: 'free-public' } as never,
       context,
     );
     const payload = await response.json() as Record<string, unknown>;
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
-    expect(payload.mode).toBe('cloudflare-mirror');
-    expect(payload.state_authority).toBe('cloudflare');
-    expect(payload.cloudflare_untouched).toBe(true);
+    expect(payload.mode).toBe('free-public');
+    expect(payload.state_authority).toBe('hugging-face-ephemeral');
+    expect(payload.storage).toBe('ephemeral-disk');
+    expect(payload.cloudflare_dependency).toBe(false);
+    expect(payload.cloudflare_proxy_enabled).toBe(false);
+    expect(payload.telegram_webhook_authority).toBe('disabled');
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
-  it('forwards API requests to the canonical Cloudflare production backend', async () => {
-    const upstreamFetch = vi.fn(async (request: Request) => Response.json({ ok: true, url: request.url }));
-    vi.stubGlobal('fetch', upstreamFetch);
-    const env = {
-      HF_BACKEND_MODE: 'cloudflare-mirror',
-      HF_CLOUDFLARE_UPSTREAM: 'https://dyrakarmy.eu',
-    } as never;
+  it('retains the old health path as a compatibility alias', async () => {
     const response = await handler.fetch(
-      new Request('https://dyrakarmy-dyrakarmy-platform.hf.space/api/health?full=1', {
-        headers: { Origin: 'https://dyrakarmy-dyrakarmy-platform.hf.space' },
-      }),
-      env,
+      new Request('https://space.example/api/hf-mirror/health'),
+      { HF_BACKEND_MODE: 'free-public' } as never,
       context,
     );
-    expect(response.status).toBe(200);
-    expect(response.headers.get('X-DyrakArmy-HF-Mirror')).toBe('cloudflare-upstream');
-    expect(upstreamFetch).toHaveBeenCalledOnce();
-    const forwarded = upstreamFetch.mock.calls.at(0)?.at(0);
-    expect(forwarded).toBeInstanceOf(Request);
-    if (!(forwarded instanceof Request)) throw new Error('Expected one forwarded Request');
-    expect(forwarded.url).toBe('https://dyrakarmy.eu/api/health?full=1');
-    expect(forwarded.headers.get('Origin')).toBe('https://dyrakarmy.eu');
-    expect(forwarded.headers.get('X-DyrakArmy-HF-Mirror')).toBe('1');
+    const payload = await response.json() as { mode?: string };
+    expect(payload.mode).toBe('free-public');
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
-  it('does not fall back to split local state when the upstream fails', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => {
-      throw new Error('upstream unavailable');
-    }));
-    const env = {
-      HF_BACKEND_MODE: 'cloudflare-mirror',
-      HF_MIRROR_FALLBACK_LOCAL: '0',
-    } as never;
+  it('serves all normal requests from the local Worker runtime', async () => {
     const response = await handler.fetch(
       new Request('https://space.example/api/health'),
-      env,
-      context,
-    );
-    const payload = await response.json() as { error?: { code?: string } };
-    expect(response.status).toBe(502);
-    expect(payload.error?.code).toBe('HF_MIRROR_UPSTREAM_UNAVAILABLE');
-    expect(mocks.fetch).not.toHaveBeenCalled();
-  });
-
-  it('supports an explicit standalone mode for the final cutover', async () => {
-    const env = { HF_BACKEND_MODE: 'standalone' } as never;
-    const response = await handler.fetch(
-      new Request('https://space.example/api/health'),
-      env,
+      { HF_BACKEND_MODE: 'free-public' } as never,
       context,
     );
     expect(await response.text()).toBe('local-runtime');
     expect(mocks.fetch).toHaveBeenCalledOnce();
+  });
+
+  it('runs queue and scheduled handlers locally in free-public mode', async () => {
+    const env = { HF_BACKEND_MODE: 'free-public' } as never;
+    await handler.queue({ messages: [] } as never, env, context);
+    await handler.scheduled({} as never, env, context);
+    expect(mocks.queue).toHaveBeenCalledOnce();
+    expect(mocks.scheduled).toHaveBeenCalledOnce();
+  });
+
+  it('reports persistent authority only for explicit standalone mode', async () => {
+    const response = await handler.fetch(
+      new Request('https://space.example/api/hf-runtime/health'),
+      { HF_BACKEND_MODE: 'standalone', HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE: '1' } as never,
+      context,
+    );
+    const payload = await response.json() as Record<string, unknown>;
+    expect(payload.mode).toBe('standalone');
+    expect(payload.state_authority).toBe('hugging-face-persistent');
+    expect(payload.storage).toBe('persistent-volume');
+    expect(payload.telegram_webhook_authority).toBe('hugging-face');
   });
 });
