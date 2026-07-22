@@ -1,0 +1,116 @@
+name: Promote Linked iPhone Owner
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/promote-linked-iphone-owner.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: promote-linked-iphone-owner
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install Worker dependencies
+        working-directory: worker
+        run: npm ci --silent
+
+      - name: Promote exactly one active linked iPhone user
+        id: promote
+        working-directory: worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'Missing CLOUDFLARE_API_TOKEN'; exit 1; }
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo 'Missing CLOUDFLARE_ACCOUNT_ID'; exit 1; }
+
+          query="SELECT s.telegram_user_id, u.role, MAX(s.created_at) AS linked_at FROM platform_sessions s JOIN platform_users u ON u.telegram_user_id=s.telegram_user_id WHERE s.device_name='iPhone · Mobile' AND s.revoked_at IS NULL AND datetime(s.expires_at)>CURRENT_TIMESTAMP GROUP BY s.telegram_user_id, u.role ORDER BY linked_at DESC;"
+          npx wrangler d1 execute sounddrop-db --remote --json --command "$query" > ../owner-candidates.json
+
+          node <<'NODE'
+          const fs = require('fs');
+          const raw = JSON.parse(fs.readFileSync('../owner-candidates.json', 'utf8'));
+          const blocks = Array.isArray(raw) ? raw : [raw];
+          const rows = blocks.flatMap((block) => block?.results || block?.result?.[0]?.results || []);
+          const unique = [...new Map(rows.map((row) => [String(row.telegram_user_id), row])).values()];
+          if (unique.length !== 1) {
+            console.error(`Safety stop: expected exactly one active user for device name iPhone · Mobile, found ${unique.length}.`);
+            process.exit(2);
+          }
+          const row = unique[0];
+          if (!/^\d+$/.test(String(row.telegram_user_id))) throw new Error('Invalid Telegram user ID returned by D1');
+          fs.writeFileSync('../owner-target.env', `TARGET_ID=${row.telegram_user_id}\nPREVIOUS_ROLE=${String(row.role || 'user').replace(/[^a-z]/g, '')}\n`);
+          NODE
+
+          source ../owner-target.env
+          echo "::add-mask::$TARGET_ID"
+          previous_role="${PREVIOUS_ROLE:-user}"
+          case "$previous_role" in owner|admin|editor|moderator|user) ;; *) echo 'Invalid previous role'; exit 3;; esac
+
+          cat > ../promote-owner.sql <<SQL
+          BEGIN IMMEDIATE;
+          UPDATE platform_users
+          SET role='owner', updated_at=CURRENT_TIMESTAMP, last_seen_at=CURRENT_TIMESTAMP
+          WHERE telegram_user_id=$TARGET_ID;
+          INSERT INTO platform_role_history
+            (id, telegram_user_id, previous_role, new_role, changed_by, changed_by_name)
+          SELECT lower(hex(randomblob(16))), $TARGET_ID, '$previous_role', 'owner', 0, 'GitHub one-shot owner promotion'
+          WHERE '$previous_role' <> 'owner';
+          COMMIT;
+          SQL
+
+          npx wrangler d1 execute sounddrop-db --remote --file ../promote-owner.sql > ../owner-promote.log
+          npx wrangler d1 execute sounddrop-db --remote --json --command "SELECT u.role, s.device_name FROM platform_users u JOIN platform_sessions s ON s.telegram_user_id=u.telegram_user_id WHERE u.telegram_user_id=$TARGET_ID AND s.device_name='iPhone · Mobile' AND s.revoked_at IS NULL ORDER BY s.created_at DESC LIMIT 1;" > ../owner-verify.json
+
+          node <<'NODE'
+          const fs = require('fs');
+          const raw = JSON.parse(fs.readFileSync('../owner-verify.json', 'utf8'));
+          const blocks = Array.isArray(raw) ? raw : [raw];
+          const rows = blocks.flatMap((block) => block?.results || block?.result?.[0]?.results || []);
+          if (rows.length !== 1 || rows[0].role !== 'owner' || rows[0].device_name !== 'iPhone · Mobile') {
+            console.error('Owner verification failed.');
+            process.exit(4);
+          }
+          NODE
+
+          echo "previous_role=$previous_role" >> "$GITHUB_OUTPUT"
+          echo "verified=true" >> "$GITHUB_OUTPUT"
+
+      - name: Record sanitized result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_ROLE: ${{ steps.promote.outputs.previous_role }}
+          VERIFIED: ${{ steps.promote.outputs.verified }}
+        shell: bash
+        run: |
+          {
+            echo "## Linked iPhone owner promotion ${GITHUB_RUN_ID}"
+            echo
+            echo "- Device selector: \`iPhone · Mobile\`"
+            echo "- Previous role: \`${PREVIOUS_ROLE:-unknown}\`"
+            echo "- Final role verified: \`${VERIFIED:-false}\`"
+            echo "- Telegram numeric ID: redacted"
+            echo "- Safety rule: exactly one active matching user required"
+          } > owner-promotion-result.md
+          gh issue comment 46 --body-file owner-promotion-result.md
