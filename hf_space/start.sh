@@ -22,6 +22,11 @@ export DYRAKARMY_PERSIST_ROOT="$PERSIST_ROOT"
 mkdir -p "$PERSIST_ROOT"
 
 node /app/hf/render-dev-vars.mjs
+
+if [[ "$BACKEND_MODE" == "standalone" && "${HF_IMPORT_ON_START:-0}" == "1" ]]; then
+  /app/hf/import-cloudflare-state.sh
+fi
+
 node /app/hf/standalone-preflight.mjs
 
 if [[ "${HF_SKIP_LOCAL_MIGRATIONS:-0}" != "1" ]]; then
