@@ -69,6 +69,7 @@ jobs:
         working-directory: worker
         run: |
           grep -q 'cloudflare-mirror' src/platform_hf.ts
+          grep -q 'standalone' src/platform_hf.ts
           grep -q '"main": "src/platform_hf.ts"' wrangler.hf.jsonc
           grep -Fq '"/games/*"' wrangler.hf.jsonc
           grep -Fq '"/files/*"' wrangler.hf.jsonc
@@ -89,12 +90,18 @@ jobs:
           cp hf_space/README.md .hf-stage/README.md
           cp hf_space/Dockerfile .hf-stage/Dockerfile
           cp hf_space/start.sh .hf-stage/start.sh
+          cp hf_space/import-cloudflare-state.sh .hf-stage/import-cloudflare-state.sh
           cp hf_space/render-dev-vars.mjs .hf-stage/render-dev-vars.mjs
+          cp hf_space/standalone-preflight.mjs .hf-stage/standalone-preflight.mjs
+          cp hf_space/standalone-supervisor.mjs .hf-stage/standalone-supervisor.mjs
           cp hf_space/DEPLOYMENT_TRIGGER.txt .hf-stage/DEPLOYMENT_TRIGGER.txt
           test -f .hf-stage/worker/public/index.html
           test -f .hf-stage/worker/src/platform_v3.ts
           test -f .hf-stage/worker/src/platform_hf.ts
           test -f .hf-stage/worker/wrangler.hf.jsonc
+          test -f .hf-stage/import-cloudflare-state.sh
+          test -f .hf-stage/standalone-preflight.mjs
+          test -f .hf-stage/standalone-supervisor.mjs
           grep -q 'sdk: docker' .hf-stage/README.md
           grep -q 'app_port: 7860' .hf-stage/README.md
           grep -q 'DyrakArmy Interface v17' .hf-stage/worker/public/index.html
@@ -103,7 +110,7 @@ jobs:
       - name: Build Space container
         run: docker build --tag dyrakarmy-hf-space:${{ github.sha }} .hf-stage
 
-      - name: Run isolated container smoke test
+      - name: Run isolated mirror container smoke test
         run: |
           set -euo pipefail
           image="dyrakarmy-hf-space:${GITHUB_SHA}"
