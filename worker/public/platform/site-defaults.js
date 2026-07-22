@@ -18,6 +18,7 @@
   }
 
   function apply() {
+    document.body.dataset.daSurface = 'web';
     const copy = labels[language()];
     const canonical = document.querySelector('link[rel="canonical"]');
     if (canonical) canonical.href = PRIMARY_URL;
@@ -61,11 +62,20 @@
     }
   }
 
-  function loadScript(src) {
+  function loadStylesheet(href) {
+    if (document.querySelector(`link[href^="${href}"]`)) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = `${href}?v=19.0.0`;
+    link.dataset.soundUniverse = '19.0.0';
+    document.head.appendChild(link);
+  }
+
+  function loadScript(src, version = '18.0.0') {
     if (document.querySelector(`script[src^="${src}"]`)) return Promise.resolve();
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = `${src}?v=18.0.0`;
+      script.src = `${src}?v=${version}`;
       script.async = false;
       script.onload = resolve;
       script.onerror = reject;
@@ -75,9 +85,11 @@
 
   const init = () => {
     apply();
+    loadStylesheet('/platform/sound-universe-v19.css');
     loadScript('/platform/i18n-v18.js')
       .then(() => loadScript('/platform/source-discovery-v18.js'))
-      .catch((error) => console.warn('Platform v18 UI module failed to load', error));
+      .then(() => loadScript('/platform/sound-universe-v19.js', '19.0.0'))
+      .catch((error) => console.warn('Platform UI module failed to load', error));
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true }); else init();
