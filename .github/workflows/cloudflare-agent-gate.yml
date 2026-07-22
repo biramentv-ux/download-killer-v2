@@ -1,0 +1,94 @@
+name: Cloudflare Agent Integration Gate
+
+on:
+  pull_request:
+    paths:
+      - '.mcp.json'
+      - 'AGENTS.md'
+      - '.agents/skills/cloudflare-direct/**'
+      - 'cloudflare/**'
+      - 'worker/**'
+      - '.github/workflows/cloudflare-agent-gate.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.mcp.json'
+      - 'AGENTS.md'
+      - '.agents/skills/cloudflare-direct/**'
+      - 'cloudflare/**'
+      - 'worker/**'
+      - '.github/workflows/cloudflare-agent-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-agent-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Cloudflare agent policy and MCP configuration
+        run: node scripts/validate-cloudflare-agent.mjs
+
+      - name: Validate sole Telegram bot
+        run: npm run validate:single-bot
+
+      - name: Typecheck Worker
+        run: npm run typecheck
+
+      - name: Run complete Worker test suite
+        run: npm test
+
+      - name: Run deterministic interface simulations
+        run: |
+          node scripts/landing-v16-simulation.mjs
+          node scripts/software-suite-simulation.mjs
+          node scripts/full-virtual-simulation.mjs
+
+      - name: Wrangler packaging dry-run
+        run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-cloudflare-agent
+
+      - name: Reject committed Cloudflare credentials
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -n -E 'Bearer[[:space:]]+[A-Za-z0-9._-]{20,}|CLOUDFLARE_API_TOKEN[[:space:]]*=[[:space:]]*[^$<{[:space:]]|X-Auth-Key[[:space:]]*:' \
+            .mcp.json AGENTS.md .agents cloudflare worker/scripts/validate-cloudflare-agent.mjs; then
+            echo 'Cloudflare credential-like value found in committed agent configuration.'
+            exit 1
+          fi
+
+  production-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm blocked release cannot be promoted by agent policy
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const policy = JSON.parse(fs.readFileSync('cloudflare/agent-policy.json', 'utf8'));
+          const release = JSON.parse(fs.readFileSync('cloudflare/releases/DyrakArmySTUDIO_v3.2.0-rc2.json', 'utf8'));
+          if (policy.release_gate.status !== 'BLOCKED') process.exit(1);
+          if (policy.release_gate.blocked_channel !== 'stable') process.exit(1);
+          if (release.official_release_status !== 'BLOCKED') process.exit(1);
+          if (!release.agent_rule.includes('Must not publish')) process.exit(1);
+          NODE
