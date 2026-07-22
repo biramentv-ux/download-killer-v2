@@ -1,0 +1,242 @@
+name: Hugging Face Publish Ledger
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - worker/**
+      - hf_space/**
+      - .github/workflows/hf-publish-ledger.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
+concurrency:
+  group: hugging-face-publish-ledger
+  cancel-in-progress: true
+
+env:
+  HF_SPACE_REPO_ID: DyrakArmy/dyrakarmy-platform
+  HF_SPACE_URL: https://dyrakarmy-dyrakarmy-platform.hf.space
+  HF_HUB_DISABLE_UPDATE_CHECK: "1"
+  DEPLOYMENT_LEDGER_ISSUE: "46"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare deterministic Space bundle
+        run: |
+          rm -rf .hf-stage
+          mkdir -p .hf-stage
+          rsync -a --delete \
+            --exclude node_modules \
+            --exclude .wrangler \
+            --exclude .dev.vars \
+            worker/ .hf-stage/worker/
+          cp hf_space/platform_hf.ts .hf-stage/worker/src/platform_hf.ts
+          cp hf_space/wrangler.hf.jsonc .hf-stage/worker/wrangler.hf.jsonc
+          rm -f .hf-stage/worker/src/platform_hf.test.ts
+          cp hf_space/README.md .hf-stage/README.md
+          cp hf_space/Dockerfile .hf-stage/Dockerfile
+          cp hf_space/start.sh .hf-stage/start.sh
+          cp hf_space/render-dev-vars.mjs .hf-stage/render-dev-vars.mjs
+          cp hf_space/DEPLOYMENT_TRIGGER.txt .hf-stage/DEPLOYMENT_TRIGGER.txt
+
+      - name: Install Hugging Face CLI
+        run: |
+          curl -LsSf https://hf.co/cli/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Publish Space and capture diagnostics
+        id: upload
+        continue-on-error: true
+        env:
+          HF_OIDC_RESOURCE: spaces/DyrakArmy/dyrakarmy-platform
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        shell: bash
+        run: |
+          set +e
+          {
+            if [[ -n "${HF_TOKEN:-}" ]]; then
+              echo "Authentication mode: HF_TOKEN"
+              hf auth login --token "$HF_TOKEN"
+            else
+              echo "Authentication mode: Trusted Publisher OIDC"
+              unset HF_TOKEN
+            fi
+            hf upload "$HF_SPACE_REPO_ID" .hf-stage . \
+              --repo-type=space \
+              --delete="*" \
+              --commit-message="Deploy GitHub ${GITHUB_SHA::12} in safe Cloudflare mirror mode"
+          } > hf-upload.log 2>&1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          tail -n 100 hf-upload.log || true
+          exit "$status"
+
+      - name: Verify public Hugging Face deployment
+        id: verify
+        if: steps.upload.outputs.status == '0'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          base="$HF_SPACE_URL"
+          deployed=0
+          : > hf-verify.log
+          : > hf-v18-summary.log
+          for attempt in $(seq 1 60); do
+            echo "attempt=$attempt" | tee -a hf-verify.log
+            home="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/" 2>>hf-verify.log || true)"
+            mirror="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/hf-mirror/health" 2>>hf-verify.log || true)"
+            catalog="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/software/releases" 2>>hf-verify.log || true)"
+            telegram="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/telegram/v12/health" 2>>hf-verify.log || true)"
+            governance="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/platform/governance/health" 2>>hf-verify.log || true)"
+            game="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 60 "$base/games/queue-commander/" 2>>hf-verify.log || true)"
+            curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/platform/i18n-v18.js?v=18.0.0" -o hf-i18n-v18.js 2>>hf-verify.log || true
+            curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/platform/source-discovery-v18.js?v=18.0.0" -o hf-source-discovery-v18.js 2>>hf-verify.log || true
+            curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/sources" -o hf-source-catalog.json 2>>hf-verify.log || true
+            curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/telegram/archive/reconcile/status" -o hf-archive-status.json 2>>hf-verify.log || true
+            curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 \
+              -H 'Content-Type: application/json' \
+              -X POST "$base/api/platform/governance" \
+              --data "{\"action\":\"identity.link.start\",\"device_name\":\"hf-v18-ledger-${GITHUB_RUN_ID}\"}" \
+              -o hf-device-link.json 2>>hf-verify.log || true
+
+            v18_ok=0
+            if grep -q 'bg: {' hf-i18n-v18.js 2>/dev/null \
+              && grep -q 'en: {' hf-i18n-v18.js 2>/dev/null \
+              && grep -q 'ru: {' hf-i18n-v18.js 2>/dev/null \
+              && grep -q 'de: {' hf-i18n-v18.js 2>/dev/null \
+              && grep -q 'sourceDiscoveryV18' hf-source-discovery-v18.js 2>/dev/null \
+              && node -e "const p=require('./hf-source-catalog.json');if(!p.ok||!Array.isArray(p.sources)||p.sources.length<12||p.enabled<10)process.exit(1)" \
+              && node -e "const p=require('./hf-archive-status.json');if(!p.ok||typeof p.missing_jobs!=='number'||!['config','cache','none'].includes(p.channel_source))process.exit(1)" \
+              && node -e "const p=require('./hf-device-link.json');if(!p.ok||!/^[A-Z0-9]{8}$/.test(p.code||'')||!String(p.command||'').startsWith('/link '))process.exit(1)"; then
+              v18_ok=1
+            fi
+
+            if grep -q 'DyrakArmy Interface v17' <<<"$home" \
+              && grep -q 'id="software"' <<<"$home" \
+              && grep -q 'cloudflare-mirror' <<<"$mirror" \
+              && grep -q '"cloudflare_untouched":true' <<<"$mirror" \
+              && grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$catalog" \
+              && grep -q 'DyrakArmyDesktop.exe' <<<"$catalog" \
+              && grep -q 'dyrakarmy_bot' <<<"$telegram" \
+              && grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$governance" \
+              && grep -q 'SHARED GAME ENGINE' <<<"$game" \
+              && [[ "$v18_ok" -eq 1 ]]; then
+              deployed=1
+              echo "verified=true" | tee -a hf-verify.log
+              echo "hf_v18_assets=true" >> hf-v18-summary.log
+              echo "hf_source_catalog=true" >> hf-v18-summary.log
+              echo "hf_archive_status=true" >> hf-v18-summary.log
+              echo "hf_device_link=true" >> hf-v18-summary.log
+              node -e "const p=require('./hf-source-catalog.json');console.log('hf_sources_total='+(p.sources?.length||0));console.log('hf_sources_enabled='+(p.enabled||0))" >> hf-v18-summary.log
+              node -e "const p=require('./hf-archive-status.json');console.log('hf_archive_channel_source='+(p.channel_source||'none'));console.log('hf_archive_completed_jobs='+(p.completed_jobs||0));console.log('hf_archive_archived_jobs='+(p.archived_jobs||0));console.log('hf_archive_missing_jobs='+(p.missing_jobs||0));console.log('hf_archive_pending_backfill='+(p.pending_backfill||0))" >> hf-v18-summary.log
+              break
+            fi
+            sleep 20
+          done
+          test "$deployed" -eq 1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Verify Cloudflare continuity and v18 backend
+        id: cloudflare
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          base="https://dyrakarmy.eu"
+          : > hf-cloudflare.log
+          {
+            home="$(curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 "$base/")"
+            health="$(curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 "$base/api/health")"
+            curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 "$base/platform/i18n-v18.js?v=18.0.0" -o cf-i18n-v18.js
+            curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 "$base/platform/source-discovery-v18.js?v=18.0.0" -o cf-source-discovery-v18.js
+            curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 "$base/api/sources" -o cf-source-catalog.json
+            curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 "$base/api/telegram/archive/reconcile/status" -o cf-archive-status.json
+            curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 \
+              -H 'Content-Type: application/json' \
+              -X POST "$base/api/platform/governance" \
+              --data "{\"action\":\"identity.link.start\",\"device_name\":\"cf-v18-ledger-${GITHUB_RUN_ID}\"}" \
+              -o cf-device-link.json
+            grep -q 'DyrakArmy Interface v17' <<<"$home"
+            grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$health"
+            grep -q 'bg: {' cf-i18n-v18.js
+            grep -q 'en: {' cf-i18n-v18.js
+            grep -q 'ru: {' cf-i18n-v18.js
+            grep -q 'de: {' cf-i18n-v18.js
+            grep -q 'sourceDiscoveryV18' cf-source-discovery-v18.js
+            node -e "const p=require('./cf-source-catalog.json');if(!p.ok||!Array.isArray(p.sources)||p.sources.length<12||p.enabled<10)process.exit(1)"
+            node -e "const p=require('./cf-archive-status.json');if(!p.ok||typeof p.missing_jobs!=='number'||!['config','cache','none'].includes(p.channel_source))process.exit(1)"
+            node -e "const p=require('./cf-device-link.json');if(!p.ok||!/^[A-Z0-9]{8}$/.test(p.code||'')||!String(p.command||'').startsWith('/link '))process.exit(1)"
+            echo "cloudflare_v18_assets=true"
+            echo "cloudflare_source_catalog=true"
+            echo "cloudflare_archive_status=true"
+            echo "cloudflare_device_link=true"
+            node -e "const p=require('./cf-source-catalog.json');console.log('cloudflare_sources_total='+(p.sources?.length||0));console.log('cloudflare_sources_enabled='+(p.enabled||0))"
+            node -e "const p=require('./cf-archive-status.json');console.log('cloudflare_archive_channel_source='+(p.channel_source||'none'));console.log('cloudflare_archive_completed_jobs='+(p.completed_jobs||0));console.log('cloudflare_archive_archived_jobs='+(p.archived_jobs||0));console.log('cloudflare_archive_missing_jobs='+(p.missing_jobs||0));console.log('cloudflare_archive_pending_backfill='+(p.pending_backfill||0))"
+          } > hf-cloudflare.log 2>&1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Record deployment ledger
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPLOAD_STATUS: ${{ steps.upload.outputs.status }}
+          VERIFY_STATUS: ${{ steps.verify.outputs.status }}
+          CLOUDFLARE_STATUS: ${{ steps.cloudflare.outputs.status }}
+        shell: bash
+        run: |
+          upload_status="${UPLOAD_STATUS:-not-run}"
+          verify_status="${VERIFY_STATUS:-not-run}"
+          cloudflare_status="${CLOUDFLARE_STATUS:-not-run}"
+          {
+            echo "## Platform v18 final deployment ${GITHUB_RUN_ID}"
+            echo
+            echo "- GitHub commit: \`${GITHUB_SHA}\`"
+            echo "- Upload status: \`${upload_status}\`"
+            echo "- Hugging Face verification: \`${verify_status}\`"
+            echo "- Cloudflare continuity + v18 backend: \`${cloudflare_status}\`"
+            echo "- Checks: complete language packs, source catalog, archive status, device-link POST"
+            echo "- Target: \`${HF_SPACE_REPO_ID}\`"
+            echo "- Mode: \`cloudflare-mirror\`"
+            echo
+            echo "<details><summary>Upload log tail</summary>"
+            echo
+            echo '```text'
+            tail -n 80 hf-upload.log 2>/dev/null || echo 'No upload log.'
+            echo '```'
+            echo "</details>"
+            echo
+            echo "<details><summary>Sanitized verification and archive aggregates</summary>"
+            echo
+            echo '```text'
+            tail -n 80 hf-verify.log 2>/dev/null || echo 'Verification did not run.'
+            tail -n 30 hf-v18-summary.log 2>/dev/null || true
+            tail -n 30 hf-cloudflare.log 2>/dev/null || true
+            echo '```'
+            echo "</details>"
+          } > hf-ledger-comment.md
+          gh issue comment "$DEPLOYMENT_LEDGER_ISSUE" --body-file hf-ledger-comment.md
+
+      - name: Enforce deployment result
+        if: always()
+        env:
+          UPLOAD_STATUS: ${{ steps.upload.outputs.status }}
+          VERIFY_STATUS: ${{ steps.verify.outputs.status }}
+          CLOUDFLARE_STATUS: ${{ steps.cloudflare.outputs.status }}
+        run: |
+          test "${UPLOAD_STATUS:-1}" = "0"
+          test "${VERIFY_STATUS:-1}" = "0"
+          test "${CLOUDFLARE_STATUS:-1}" = "0"

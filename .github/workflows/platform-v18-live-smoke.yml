@@ -1,0 +1,87 @@
+name: Platform v18 Live Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - worker/**
+      - hf_space/**
+      - .github/workflows/platform-v18-live-smoke.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: platform-v18-live-smoke
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Cloudflare and Hugging Face v18 feature release
+        shell: bash
+        run: |
+          set -euo pipefail
+          bases=(
+            "https://dyrakarmy.eu"
+            "https://dyrakarmy-dyrakarmy-platform.hf.space"
+          )
+          : > v18-live-smoke.log
+          verified=0
+          for attempt in $(seq 1 75); do
+            echo "attempt=$attempt" | tee -a v18-live-smoke.log
+            all_ok=1
+            for base in "${bases[@]}"; do
+              prefix="$(echo "$base" | sed 's#https://##; s#[^A-Za-z0-9]#_#g')"
+              curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 45 "$base/platform/i18n-v18.js?v=18.0.0" -o "${prefix}-i18n.js" || all_ok=0
+              curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 45 "$base/platform/source-discovery-v18.js?v=18.0.0" -o "${prefix}-sources.js" || all_ok=0
+              curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 45 "$base/api/sources" -o "${prefix}-catalog.json" || all_ok=0
+              curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 45 "$base/api/telegram/archive/reconcile/status" -o "${prefix}-archive.json" || all_ok=0
+              curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 45 \
+                -H 'Content-Type: application/json' \
+                -X POST "$base/api/platform/governance" \
+                --data "{\"action\":\"identity.link.start\",\"device_name\":\"v18-live-smoke-${GITHUB_RUN_ID}\"}" \
+                -o "${prefix}-link.json" || all_ok=0
+
+              grep -q "bg: {" "${prefix}-i18n.js" || all_ok=0
+              grep -q "ru: {" "${prefix}-i18n.js" || all_ok=0
+              grep -q "de: {" "${prefix}-i18n.js" || all_ok=0
+              grep -q "sourceDiscoveryV18" "${prefix}-sources.js" || all_ok=0
+              node -e "const p=require('./${prefix}-catalog.json'); if(!p.ok||!Array.isArray(p.sources)||p.sources.length<12||p.enabled<10) process.exit(1)" || all_ok=0
+              node -e "const p=require('./${prefix}-archive.json'); if(!p.ok||typeof p.missing_jobs!=='number'||!['config','cache','none'].includes(p.channel_source)) process.exit(1)" || all_ok=0
+              node -e "const p=require('./${prefix}-link.json'); if(!p.ok||!/^[A-Z0-9]{8}$/.test(p.code)||!String(p.command||'').startsWith('/link ')) process.exit(1)" || all_ok=0
+            done
+
+            if [[ "$all_ok" -eq 1 ]]; then
+              verified=1
+              echo "verified=true" | tee -a v18-live-smoke.log
+              break
+            fi
+            sleep 20
+          done
+          test "$verified" -eq 1
+
+      - name: Record live verification
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## Platform v18 live smoke ${GITHUB_RUN_ID}"
+            echo
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Cloudflare: checked"
+            echo "- Hugging Face mirror: checked"
+            echo "- Device-link D1 fallback: checked"
+            echo "- BG/EN/RU/DE assets: checked"
+            echo "- 12-source catalog: checked"
+            echo "- Telegram archive status: checked"
+            echo
+            echo '```text'
+            tail -n 30 v18-live-smoke.log 2>/dev/null || true
+            echo '```'
+          } > v18-live-smoke-comment.md
+          gh issue comment 46 --body-file v18-live-smoke-comment.md

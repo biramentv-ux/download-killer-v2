@@ -1,0 +1,84 @@
+{
+  "schema": "eu.dyrakarmy.cloudflare-agent-policy.v1",
+  "mode": "git-first-preview-first-audited-production",
+  "worker": {
+    "name": "sounddrop",
+    "config": "worker/wrangler.jsonc",
+    "entrypoint": "worker/src/platform_v3.ts",
+    "assets": "worker/public"
+  },
+  "mcp_servers": {
+    "api": "https://mcp.cloudflare.com/mcp",
+    "builds": "https://builds.mcp.cloudflare.com/mcp",
+    "observability": "https://observability.mcp.cloudflare.com/mcp",
+    "docs": "https://docs.mcp.cloudflare.com/mcp",
+    "bindings": "https://bindings.mcp.cloudflare.com/mcp"
+  },
+  "resources": {
+    "d1": {
+      "binding": "DB",
+      "database_name": "sounddrop-db"
+    },
+    "kv": {
+      "binding": "CACHE"
+    },
+    "queues": [
+      "sounddrop-downloads",
+      "sounddrop-history-events"
+    ],
+    "domains": [
+      "dyrakarmy.eu",
+      "www.dyrakarmy.eu",
+      "dyrakarmy.online",
+      "www.dyrakarmy.online",
+      "sounddrop.biramentv.workers.dev"
+    ]
+  },
+  "automatic_operations": [
+    "read_account_configuration",
+    "read_build_status",
+    "read_observability",
+    "run_local_tests",
+    "run_wrangler_dry_run",
+    "create_git_branch",
+    "create_pull_request",
+    "preview_deployment",
+    "non_destructive_health_checks"
+  ],
+  "approval_required": [
+    "production_dns_change",
+    "production_route_change",
+    "production_binding_change",
+    "remote_d1_migration",
+    "production_secret_write_or_rotation",
+    "global_cache_purge",
+    "waf_tls_zero_trust_change",
+    "official_stable_release_promotion",
+    "stateful_resource_deletion"
+  ],
+  "forbidden": [
+    "expose_secret_values",
+    "use_global_api_key",
+    "delete_cloudflare_account_or_zone",
+    "change_nameservers_without_explicit_cutover_plan",
+    "disable_security_controls_as_debugging_shortcut",
+    "apply_remote_migrations_in_preview",
+    "promote_blocked_release_to_stable"
+  ],
+  "release_gate": {
+    "product": "DyrakArmySTUDIO",
+    "version": "3.2.0-rc2",
+    "status": "BLOCKED",
+    "allowed_channels": [
+      "qa",
+      "beta"
+    ],
+    "blocked_channel": "stable",
+    "blockers": [
+      "Windows Setup was not executed as a Windows process in this environment",
+      "No Authenticode production signature",
+      "No final physical ASIO/storage/controller wall-clock qualification",
+      "Production Ed25519 update key has not replaced the QA development key"
+    ]
+  }
+}

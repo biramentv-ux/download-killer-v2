@@ -1,0 +1,128 @@
+name: Hugging Face Space Migration
+
+on:
+  pull_request:
+    paths:
+      - worker/**
+      - hf_space/**
+      - .github/workflows/hugging-face-space.yml
+      - HUGGING_FACE_MIGRATION.md
+  push:
+    branches: [main]
+    paths:
+      - worker/**
+      - hf_space/**
+      - .github/workflows/hugging-face-space.yml
+      - HUGGING_FACE_MIGRATION.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hugging-face-space-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HF_SPACE_REPO_ID: DyrakArmy/dyrakarmy-platform
+  HF_SPACE_URL: https://dyrakarmy-dyrakarmy-platform.hf.space
+  HF_HUB_DISABLE_UPDATE_CHECK: "1"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install Worker dependencies
+        working-directory: worker
+        run: npm ci
+
+      - name: Apply isolated Hugging Face runtime overlays
+        run: |
+          cp hf_space/platform_hf.ts worker/src/platform_hf.ts
+          cp hf_space/platform_hf.test.ts worker/src/platform_hf.test.ts
+          cp hf_space/wrangler.hf.jsonc worker/wrangler.hf.jsonc
+
+      - name: Typecheck Hugging Face runtime
+        working-directory: worker
+        run: npm run typecheck
+
+      - name: Run Worker and mirror tests
+        working-directory: worker
+        run: npm test
+
+      - name: Run interface and full virtual simulations
+        working-directory: worker
+        run: |
+          node scripts/landing-v16-simulation.mjs
+          node scripts/software-suite-simulation.mjs
+          node scripts/full-virtual-simulation.mjs
+
+      - name: Validate Hugging Face configuration and package
+        working-directory: worker
+        run: |
+          grep -q 'cloudflare-mirror' src/platform_hf.ts
+          grep -q '"main": "src/platform_hf.ts"' wrangler.hf.jsonc
+          grep -Fq '"/games/*"' wrangler.hf.jsonc
+          grep -Fq '"/files/*"' wrangler.hf.jsonc
+          npx wrangler deploy --dry-run --config wrangler.hf.jsonc --outdir .wrangler-hf-dry-run
+
+      - name: Prepare deterministic Space bundle
+        run: |
+          rm -rf .hf-stage
+          mkdir -p .hf-stage
+          rsync -a --delete \
+            --exclude node_modules \
+            --exclude .wrangler \
+            --exclude .dev.vars \
+            worker/ .hf-stage/worker/
+          cp hf_space/platform_hf.ts .hf-stage/worker/src/platform_hf.ts
+          cp hf_space/wrangler.hf.jsonc .hf-stage/worker/wrangler.hf.jsonc
+          rm -f .hf-stage/worker/src/platform_hf.test.ts
+          cp hf_space/README.md .hf-stage/README.md
+          cp hf_space/Dockerfile .hf-stage/Dockerfile
+          cp hf_space/start.sh .hf-stage/start.sh
+          cp hf_space/render-dev-vars.mjs .hf-stage/render-dev-vars.mjs
+          cp hf_space/DEPLOYMENT_TRIGGER.txt .hf-stage/DEPLOYMENT_TRIGGER.txt
+          test -f .hf-stage/worker/public/index.html
+          test -f .hf-stage/worker/src/platform_v3.ts
+          test -f .hf-stage/worker/src/platform_hf.ts
+          test -f .hf-stage/worker/wrangler.hf.jsonc
+          grep -q 'sdk: docker' .hf-stage/README.md
+          grep -q 'app_port: 7860' .hf-stage/README.md
+          grep -q 'DyrakArmy Interface v17' .hf-stage/worker/public/index.html
+          grep -q 'cloudflare-mirror' .hf-stage/worker/src/platform_hf.ts
+
+      - name: Build Space container
+        run: docker build --tag dyrakarmy-hf-space:${{ github.sha }} .hf-stage
+
+      - name: Run isolated container smoke test
+        run: |
+          set -euo pipefail
+          image="dyrakarmy-hf-space:${GITHUB_SHA}"
+          docker run -d --name dyrakarmy-hf-smoke -p 17860:7860 "$image"
+          cleanup() {
+            docker logs dyrakarmy-hf-smoke || true
+            docker rm -f dyrakarmy-hf-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          ready=0
+          for attempt in $(seq 1 90); do
+            if curl --compressed -fsS --max-time 10 http://127.0.0.1:17860/api/hf-mirror/health | grep -q 'cloudflare-mirror'; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" -eq 1
+          curl --compressed -fsS http://127.0.0.1:17860/ | grep -q 'DyrakArmy Interface v17'
+          curl --compressed -fsS http://127.0.0.1:17860/api/health | grep -Eq '"ok"[[:space:]]*:[[:space:]]*true'
+          curl --compressed -fsS http://127.0.0.1:17860/api/software/releases | grep -q 'DyrakArmyDesktop.exe'
+          curl --compressed -fsS --max-time 60 http://127.0.0.1:17860/games/queue-commander/ | grep -q 'SHARED GAME ENGINE'
