@@ -1,6 +1,6 @@
 name: Platform v18 Live Diagnostic
 
-# trigger: 2026-07-22T07:05:00Z
+# trigger: merge-event-2026-07-22T07:10:00Z
 on:
   push:
     branches: [main]
@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   diagnose:
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
       - name: Inspect public endpoints once
