@@ -1,0 +1,52 @@
+name: Platform v18 Live Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/platform-v18-live-diagnostic.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect public endpoints once
+        shell: bash
+        run: |
+          set +e
+          : > v18-diagnostic.md
+          echo "## Platform v18 immediate diagnostic ${GITHUB_RUN_ID}" >> v18-diagnostic.md
+          echo >> v18-diagnostic.md
+          echo "- Commit: \`${GITHUB_SHA}\`" >> v18-diagnostic.md
+          for base in https://dyrakarmy.eu https://dyrakarmy-dyrakarmy-platform.hf.space; do
+            prefix="$(echo "$base" | sed 's#https://##; s#[^A-Za-z0-9]#_#g')"
+            i18n_status=$(curl --compressed -sSL -o "$prefix-i18n.js" -w '%{http_code}' --max-time 45 "$base/platform/i18n-v18.js?v=18.0.0")
+            source_asset_status=$(curl --compressed -sSL -o "$prefix-source.js" -w '%{http_code}' --max-time 45 "$base/platform/source-discovery-v18.js?v=18.0.0")
+            catalog_status=$(curl --compressed -sSL -o "$prefix-catalog.json" -w '%{http_code}' --max-time 45 "$base/api/sources")
+            archive_status=$(curl --compressed -sSL -o "$prefix-archive.json" -w '%{http_code}' --max-time 45 "$base/api/telegram/archive/reconcile/status")
+            link_status=$(curl --compressed -sSL -o "$prefix-link.json" -w '%{http_code}' --max-time 45 -H 'Content-Type: application/json' -X POST "$base/api/platform/governance" --data "{\"action\":\"identity.link.start\",\"device_name\":\"v18-diagnostic-${GITHUB_RUN_ID}\"}")
+            i18n_ok=$(node -e "const fs=require('fs');const s=fs.readFileSync('$prefix-i18n.js','utf8');process.stdout.write(String(s.includes('bg: {')&&s.includes('ru: {')&&s.includes('de: {')))" 2>/dev/null)
+            source_asset_ok=$(node -e "const fs=require('fs');const s=fs.readFileSync('$prefix-source.js','utf8');process.stdout.write(String(s.includes('sourceDiscoveryV18')))" 2>/dev/null)
+            catalog_summary=$(node -e "try{const p=require('./$prefix-catalog.json');process.stdout.write('ok='+Boolean(p.ok)+',sources='+(p.sources?.length||0)+',enabled='+(p.enabled||0))}catch{process.stdout.write('invalid-json')}" 2>/dev/null)
+            archive_summary=$(node -e "try{const p=require('./$prefix-archive.json');process.stdout.write('ok='+Boolean(p.ok)+',channel_source='+(p.channel_source||'missing')+',missing_jobs='+(typeof p.missing_jobs==='number'?p.missing_jobs:'missing'))}catch{process.stdout.write('invalid-json')}" 2>/dev/null)
+            link_summary=$(node -e "try{const p=require('./$prefix-link.json');process.stdout.write('ok='+Boolean(p.ok)+',code_pattern='+(/^[A-Z0-9]{8}$/.test(p.code||'')))}catch{process.stdout.write('invalid-json')}" 2>/dev/null)
+            echo >> v18-diagnostic.md
+            echo "### $base" >> v18-diagnostic.md
+            echo "- i18n asset: HTTP \`$i18n_status\`, markers \`$i18n_ok\`" >> v18-diagnostic.md
+            echo "- source UI asset: HTTP \`$source_asset_status\`, marker \`$source_asset_ok\`" >> v18-diagnostic.md
+            echo "- source catalog: HTTP \`$catalog_status\`, \`$catalog_summary\`" >> v18-diagnostic.md
+            echo "- archive status: HTTP \`$archive_status\`, \`$archive_summary\`" >> v18-diagnostic.md
+            echo "- device link: HTTP \`$link_status\`, \`$link_summary\`" >> v18-diagnostic.md
+          done
+          cat v18-diagnostic.md
+
+      - name: Record diagnostic
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 46 --body-file v18-diagnostic.md
