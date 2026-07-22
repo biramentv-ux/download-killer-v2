@@ -1,0 +1,5 @@
+.control-language-segment{display:inline-flex;gap:3px;padding:4px;border:1px solid rgba(111,156,207,.2);border-radius:13px;background:rgba(2,10,22,.72)}
+.control-language-segment button{min-width:36px;height:32px;border:0;border-radius:9px;background:transparent;color:#7f9aba;font:700 .72rem/1 'Space Mono',monospace;cursor:pointer;transition:.18s ease}
+.control-language-segment button:hover,.control-language-segment button:focus-visible{color:#dffcff;background:rgba(0,218,255,.1);outline:none}
+.control-language-segment button.active{color:#03101c;background:linear-gradient(115deg,#12dded,#2094ff);box-shadow:0 5px 18px rgba(0,180,255,.2)}
+@media(max-width:680px){.control-language-segment{order:3;width:100%;justify-content:center}.control-language-segment button{flex:1}.top-actions{flex-wrap:wrap}}
