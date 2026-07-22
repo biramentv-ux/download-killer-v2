@@ -1,6 +1,6 @@
 // Hugging Face Docker Space runtime overlay.
 // This file is copied over worker/wrangler.hf.jsonc only inside the Space bundle.
-// Cloudflare resource IDs, routes and production bindings are intentionally absent.
+// External edge resource IDs, custom routes and paid-domain bindings are intentionally absent.
 {
   "$schema": "../worker/node_modules/wrangler/config-schema.json",
   "name": "dyrakarmy-hf-space",
@@ -32,15 +32,13 @@
     ]
   },
   "vars": {
-    "HF_BACKEND_MODE": "cloudflare-mirror",
-    "HF_CLOUDFLARE_UPSTREAM": "https://dyrakarmy.eu",
-    "HF_MIRROR_FALLBACK_LOCAL": "0",
-    "HF_CUTOVER_GENERATION": "pre-cutover",
-    "HF_STATE_IMPORT_REQUIRED": "1",
+    "HF_BACKEND_MODE": "free-public",
+    "HF_CUTOVER_GENERATION": "hf-free-public-v21",
+    "HF_STATE_IMPORT_REQUIRED": "0",
     "HF_IMPORT_ON_START": "0",
-    "HF_STATE_IMPORT_DIR": "/data/import/cloudflare",
+    "HF_STATE_IMPORT_DIR": "/data/import/archive",
     "HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE": "0",
-    "DYRAKARMY_PERSIST_ROOT": "/data/dyrakarmy",
+    "DYRAKARMY_PERSIST_ROOT": "/tmp/dyrakarmy-free-public",
     "DOWNLOADER_API_URL": "https://dyrakarmy-downloader-primary.onrender.com",
     "DOWNLOADER_ORIGINS_JSON": "[{\"base_url\":\"https://dyrakarmy-downloader-primary.onrender.com\",\"priority\":0,\"id\":\"render-primary\"}]",
     "DOWNLOADER_BACKUP_API_URL": "",
@@ -56,9 +54,9 @@
     "TELEGRAM_MINIAPP_AUTH_MAX_AGE_SECONDS": "900",
     "PLATFORM_SESSION_TTL_SECONDS": "1209600",
     "SOURCE_SEARCH_LIMIT": "36",
-    "DOWNLOAD_URL_ALLOWLIST": "youtube.com,*.youtube.com,youtu.be,spotify.com,*.spotify.com,spotify.link,soundcloud.com,*.soundcloud.com,deezer.com,*.deezer.com,music.apple.com,*.music.apple.com,podcasts.apple.com,*.podcasts.apple.com,itunes.apple.com,*.itunes.apple.com,rss.com,*.rss.com,anchor.fm,*.anchor.fm,simplecast.com,*.simplecast.com,buzzsprout.com,*.buzzsprout.com,podbean.com,*.podbean.com,libsyn.com,*.libsyn.com,megaphone.fm,*.megaphone.fm,omny.fm,*.omny.fm,transistor.fm,*.transistor.fm,archive.org,*.archive.org,commons.wikimedia.org,upload.wikimedia.org,audius.co,*.audius.co,audius.music,*.audius.music,jamendo.com,*.jamendo.com,storage.jamendo.com,*.storage.jamendo.com,dyrakarmy.eu,*.dyrakarmy.eu,dyrakarmy.online,*.dyrakarmy.online",
+    "DOWNLOAD_URL_ALLOWLIST": "youtube.com,*.youtube.com,youtu.be,spotify.com,*.spotify.com,spotify.link,soundcloud.com,*.soundcloud.com,deezer.com,*.deezer.com,music.apple.com,*.music.apple.com,podcasts.apple.com,*.podcasts.apple.com,itunes.apple.com,*.itunes.apple.com,rss.com,*.rss.com,anchor.fm,*.anchor.fm,simplecast.com,*.simplecast.com,buzzsprout.com,*.buzzsprout.com,podbean.com,*.podbean.com,libsyn.com,*.libsyn.com,megaphone.fm,*.megaphone.fm,omny.fm,*.omny.fm,transistor.fm,*.transistor.fm,archive.org,*.archive.org,commons.wikimedia.org,upload.wikimedia.org,audius.co,*.audius.co,audius.music,*.audius.music,jamendo.com,*.jamendo.com,storage.jamendo.com,*.storage.jamendo.com,dyrakarmy-dyrakarmy-platform.hf.space",
     "URL_BLOCKLIST": "localhost,*.localhost,*.local,*.onion",
-    "CORS_ORIGINS": "https://dyrakarmy-dyrakarmy-platform.hf.space,https://dyrakarmy.eu,https://www.dyrakarmy.eu,https://dyrakarmy.online,https://www.dyrakarmy.online,http://localhost:7860",
+    "CORS_ORIGINS": "https://dyrakarmy-dyrakarmy-platform.hf.space,http://localhost:7860",
     "DOWNLOAD_TOKEN_TTL_SECONDS": "3600",
     "SEARCH_CACHE_TTL_SECONDS": "180",
     "DOWNLOAD_DEDUPE_TTL_SECONDS": "120",
