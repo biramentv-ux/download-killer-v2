@@ -36,10 +36,11 @@ describe('Hugging Face parallel mirror runtime', () => {
     expect(resolveHfUpstream(env).origin).toBe('https://dyrakarmy.eu');
   });
 
-  it('keeps static pages local while proxying stateful routes', () => {
+  it('keeps the landing page local while proxying stateful routes', () => {
     const env = { HF_BACKEND_MODE: 'cloudflare-mirror' } as never;
     expect(shouldProxyHfRequest(new Request('https://space.example/'), env)).toBe(false);
-    expect(shouldProxyHfRequest(new Request('https://space.example/games/queue-commander/'), env)).toBe(false);
+    expect(shouldProxyHfRequest(new Request('https://space.example/games/queue-commander/'), env)).toBe(true);
+    expect(shouldProxyHfRequest(new Request('https://space.example/control-v2/'), env)).toBe(true);
     expect(shouldProxyHfRequest(new Request('https://space.example/api/health'), env)).toBe(true);
     expect(shouldProxyHfRequest(new Request('https://space.example/files/example.mp3'), env)).toBe(true);
     expect(shouldProxyHfRequest(new Request('https://space.example/telegram/webhook'), env)).toBe(true);
