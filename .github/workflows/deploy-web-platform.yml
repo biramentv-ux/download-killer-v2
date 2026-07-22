@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - worker/**
+      - wrangler.jsonc
       - .github/workflows/deploy-web-platform.yml
   push:
     branches:
       - main
     paths:
       - worker/**
+      - wrangler.jsonc
       - .github/workflows/deploy-web-platform.yml
   workflow_dispatch:
 
@@ -114,6 +116,9 @@ jobs:
           grep -q 'handleSoftwareCatalogApi' src/platform_v3.ts
           grep -q 'handleSoftwareTelegramWebhook' src/platform_v3.ts
           grep -q '"main": "src/platform_v3.ts"' wrangler.jsonc
+          grep -Fq '"/games/*"' wrangler.jsonc
+          grep -Fq '"/games/*"' ../wrangler.jsonc
+          ! grep -R -n -F 'DB.exec(' src
           grep -q 'CREATE TABLE IF NOT EXISTS game_profiles' migrations/0012_latency_strike_v1.sql
           grep -q 'CREATE TABLE IF NOT EXISTS arena_teams' migrations/0013_dyrakarmy_arena_v1.sql
           grep -q 'CREATE TABLE IF NOT EXISTS platform_modules' migrations/0014_platform_control_center_v1.sql

@@ -1,5 +1,6 @@
 import type { Env } from './types';
 import { latencyStrikeRank, latencyStrikeWeekKey } from './latency_strike';
+import { applyD1SchemaStatements } from './schema';
 import { validateTelegramInitData } from './telegram_platform';
 import { rateLimit, readEnvInt } from './utils';
 
@@ -292,18 +293,21 @@ export async function getGamePackBotSummary(gameId: GamePackId, telegramUserId: 
 
 async function ensureSchema(env: ExtendedEnv): Promise<void> {
   if (schemaReady) return schemaReady;
-  schemaReady = env.DB.exec(`
-    CREATE TABLE IF NOT EXISTS game_pack_runs (
+  schemaReady = applyD1SchemaStatements(env, [
+    `CREATE TABLE IF NOT EXISTS game_pack_runs (
       id TEXT PRIMARY KEY, game_id TEXT NOT NULL, telegram_user_id INTEGER NOT NULL,
       day_key TEXT NOT NULL, week_key TEXT NOT NULL, score INTEGER NOT NULL,
       correct_answers INTEGER NOT NULL, total_questions INTEGER NOT NULL,
       accuracy INTEGER NOT NULL, avg_response_ms INTEGER NOT NULL, best_combo INTEGER NOT NULL,
       xp_earned INTEGER NOT NULL, opponent_score INTEGER, won_duel INTEGER,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS idx_game_pack_runs_week ON game_pack_runs(game_id, week_key, score DESC, created_at ASC);
-    CREATE INDEX IF NOT EXISTS idx_game_pack_runs_user_day ON game_pack_runs(game_id, telegram_user_id, day_key, created_at DESC);
-  `).then(() => undefined);
+    )`,
+    'CREATE INDEX IF NOT EXISTS idx_game_pack_runs_week ON game_pack_runs(game_id, week_key, score DESC, created_at ASC)',
+    'CREATE INDEX IF NOT EXISTS idx_game_pack_runs_user_day ON game_pack_runs(game_id, telegram_user_id, day_key, created_at DESC)',
+  ]).catch((error) => {
+    schemaReady = null;
+    throw error;
+  });
   return schemaReady;
 }
 

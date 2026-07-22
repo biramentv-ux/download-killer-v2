@@ -1,4 +1,5 @@
 import type { Env } from './types';
+import { applyD1SchemaStatements } from './schema';
 import { validateTelegramInitData } from './telegram_platform';
 import { rateLimit, readEnvInt } from './utils';
 
@@ -403,8 +404,8 @@ function normalizeRound(input: ReactionRoundInput): NormalizedRound {
 async function ensureLatencyStrikeSchema(env: ExtendedEnv): Promise<void> {
   if (schemaReady) return schemaReady;
   schemaReady = (async () => {
-    await env.DB.exec(`
-      CREATE TABLE IF NOT EXISTS game_profiles (
+    await applyD1SchemaStatements(env, [
+      `CREATE TABLE IF NOT EXISTS game_profiles (
         telegram_user_id INTEGER PRIMARY KEY,
         username TEXT,
         display_name TEXT NOT NULL,
@@ -421,8 +422,8 @@ async function ensureLatencyStrikeSchema(env: ExtendedEnv): Promise<void> {
         equipped_title TEXT NOT NULL DEFAULT 'title_recruit',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS game_runs (
+      )`,
+      `CREATE TABLE IF NOT EXISTS game_runs (
         id TEXT PRIMARY KEY,
         telegram_user_id INTEGER NOT NULL,
         week_key TEXT NOT NULL,
@@ -434,16 +435,16 @@ async function ensureLatencyStrikeSchema(env: ExtendedEnv): Promise<void> {
         false_starts INTEGER NOT NULL DEFAULT 0,
         xp_earned INTEGER NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_game_runs_week_score ON game_runs(week_key, score DESC, avg_reaction_ms ASC, created_at ASC);
-      CREATE INDEX IF NOT EXISTS idx_game_runs_user_created ON game_runs(telegram_user_id, created_at DESC);
-      CREATE TABLE IF NOT EXISTS game_unlocks (
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_game_runs_week_score ON game_runs(week_key, score DESC, avg_reaction_ms ASC, created_at ASC)',
+      'CREATE INDEX IF NOT EXISTS idx_game_runs_user_created ON game_runs(telegram_user_id, created_at DESC)',
+      `CREATE TABLE IF NOT EXISTS game_unlocks (
         telegram_user_id INTEGER NOT NULL,
         reward_id TEXT NOT NULL,
         unlocked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (telegram_user_id, reward_id)
-      );
-    `);
+      )`,
+    ]);
   })().catch((error) => {
     schemaReady = null;
     throw error;

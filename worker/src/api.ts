@@ -15,7 +15,12 @@ import {
 } from './origins';
 import { buildOpsSummary, recordTelemetry } from './telemetry';
 import { enqueueHistoryEvent } from './history';
-import { ensureDownloadJobMetadataSchema, ensurePlaylistWorkflowSchema, ensureSyncKeyClaimsSchema } from './schema';
+import {
+  applyD1SchemaStatements,
+  ensureDownloadJobMetadataSchema,
+  ensurePlaylistWorkflowSchema,
+  ensureSyncKeyClaimsSchema,
+} from './schema';
 import {
   hashAndCachePrivateUrl,
   resolvePrivateUrl,
@@ -3152,7 +3157,7 @@ function hasOpsRole(context: OpsAuthContext, required: Exclude<OpsRole, 'none'>)
 }
 
 async function ensureOpsAuditTable(env: Env): Promise<void> {
-  await env.DB.exec(
+  await applyD1SchemaStatements(env, [
     `CREATE TABLE IF NOT EXISTS ops_audit_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       action TEXT NOT NULL,
@@ -3162,10 +3167,10 @@ async function ensureOpsAuditTable(env: Env): Promise<void> {
       status TEXT NOT NULL,
       details TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS idx_ops_audit_created ON ops_audit_events(created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_ops_audit_action ON ops_audit_events(action, created_at DESC);`,
-  );
+    )`,
+    'CREATE INDEX IF NOT EXISTS idx_ops_audit_created ON ops_audit_events(created_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_ops_audit_action ON ops_audit_events(action, created_at DESC)',
+  ]);
 }
 
 async function writeOpsAuditEvent(
