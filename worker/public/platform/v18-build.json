@@ -1,6 +1,8 @@
 {
   "feature_release": "18.0.0",
   "public_interface_contract": "17.0.0",
+  "source_commit": "d8a2f00647047c64e8e4775b94858614022cd42b",
+  "live_smoke_trigger": "2026-07-22T07:00:00Z",
   "features": [
     "bg-en-ru-de-language-packs",
     "resilient-governance-link-state",
