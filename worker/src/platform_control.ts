@@ -386,8 +386,16 @@ async function publicRegistry(env: ExtendedEnv) {
     content: (contentResult.results || []).map((row) => ({ ...row, visible: Number(row.visible) === 1 })),
     settings: Object.fromEntries((settingsResult.results || []).map((row) => [row.key, parseJson(row.value_json, null)])),
   };
-  await env.CACHE.put(PUBLIC_CACHE_KEY, JSON.stringify(payload), { expirationTtl: PUBLIC_CACHE_TTL });
+  await cachePlatformPublicRegistry(env.CACHE, payload);
   return payload;
+}
+
+export async function cachePlatformPublicRegistry(
+  cache: KVNamespace,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  // KV is an optimization; exhausted write quota must not take down the public registry.
+  await cache.put(PUBLIC_CACHE_KEY, JSON.stringify(payload), { expirationTtl: PUBLIC_CACHE_TTL }).catch(() => undefined);
 }
 
 async function controlSnapshot(env: ExtendedEnv) {

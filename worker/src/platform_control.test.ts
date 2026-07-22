@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { isPlatformAdminId, parsePlatformAdminIds } from './platform_control';
+import { describe, expect, it, vi } from 'vitest';
+import { cachePlatformPublicRegistry, isPlatformAdminId, parsePlatformAdminIds } from './platform_control';
 
 describe('DyrakArmy platform control authorization', () => {
   it('parses comma, space and semicolon separated Telegram IDs', () => {
@@ -19,5 +19,18 @@ describe('DyrakArmy platform control authorization', () => {
 
   it('defaults to deny when the admin list is missing', () => {
     expect(isPlatformAdminId(111, {})).toBe(false);
+  });
+
+  it('keeps the public registry available when the KV write quota is exhausted', async () => {
+    const put = vi.fn().mockRejectedValue(new Error('KV put() limit exceeded for the day.'));
+    const cache = { put } as unknown as KVNamespace;
+
+    await expect(cachePlatformPublicRegistry(cache, { ok: true })).resolves.toBeUndefined();
+
+    expect(put).toHaveBeenCalledWith(
+      'platform:public:registry:v1',
+      '{"ok":true}',
+      { expirationTtl: 90 },
+    );
   });
 });
