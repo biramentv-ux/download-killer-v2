@@ -22,7 +22,7 @@ env:
   HF_SPACE_REPO_ID: DyrakArmy/dyrakarmy-platform
   HF_SPACE_URL: https://dyrakarmy-dyrakarmy-platform.hf.space
   HF_HUB_DISABLE_UPDATE_CHECK: "1"
-  DEPLOYMENT_LEDGER_ISSUE: "43"
+  DEPLOYMENT_LEDGER_ISSUE: "46"
 
 jobs:
   deploy:
@@ -137,6 +137,8 @@ jobs:
               echo "hf_source_catalog=true" >> hf-v18-summary.log
               echo "hf_archive_status=true" >> hf-v18-summary.log
               echo "hf_device_link=true" >> hf-v18-summary.log
+              node -e "const p=require('./hf-source-catalog.json');console.log('hf_sources_total='+(p.sources?.length||0));console.log('hf_sources_enabled='+(p.enabled||0))" >> hf-v18-summary.log
+              node -e "const p=require('./hf-archive-status.json');console.log('hf_archive_channel_source='+(p.channel_source||'none'));console.log('hf_archive_completed_jobs='+(p.completed_jobs||0));console.log('hf_archive_archived_jobs='+(p.archived_jobs||0));console.log('hf_archive_missing_jobs='+(p.missing_jobs||0));console.log('hf_archive_pending_backfill='+(p.pending_backfill||0))" >> hf-v18-summary.log
               break
             fi
             sleep 20
@@ -180,6 +182,8 @@ jobs:
             echo "cloudflare_source_catalog=true"
             echo "cloudflare_archive_status=true"
             echo "cloudflare_device_link=true"
+            node -e "const p=require('./cf-source-catalog.json');console.log('cloudflare_sources_total='+(p.sources?.length||0));console.log('cloudflare_sources_enabled='+(p.enabled||0))"
+            node -e "const p=require('./cf-archive-status.json');console.log('cloudflare_archive_channel_source='+(p.channel_source||'none'));console.log('cloudflare_archive_completed_jobs='+(p.completed_jobs||0));console.log('cloudflare_archive_archived_jobs='+(p.archived_jobs||0));console.log('cloudflare_archive_missing_jobs='+(p.missing_jobs||0));console.log('cloudflare_archive_pending_backfill='+(p.pending_backfill||0))"
           } > hf-cloudflare.log 2>&1
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
@@ -198,13 +202,13 @@ jobs:
           verify_status="${VERIFY_STATUS:-not-run}"
           cloudflare_status="${CLOUDFLARE_STATUS:-not-run}"
           {
-            echo "## Hugging Face deployment ${GITHUB_RUN_ID}"
+            echo "## Platform v18 final deployment ${GITHUB_RUN_ID}"
             echo
             echo "- GitHub commit: \`${GITHUB_SHA}\`"
             echo "- Upload status: \`${upload_status}\`"
             echo "- Hugging Face verification: \`${verify_status}\`"
             echo "- Cloudflare continuity + v18 backend: \`${cloudflare_status}\`"
-            echo "- v18 checks: language packs, 12-source catalog, archive status, device-link POST"
+            echo "- Checks: complete language packs, source catalog, archive status, device-link POST"
             echo "- Target: \`${HF_SPACE_REPO_ID}\`"
             echo "- Mode: \`cloudflare-mirror\`"
             echo
@@ -215,12 +219,12 @@ jobs:
             echo '```'
             echo "</details>"
             echo
-            echo "<details><summary>Verification log tail</summary>"
+            echo "<details><summary>Sanitized verification and archive aggregates</summary>"
             echo
             echo '```text'
             tail -n 80 hf-verify.log 2>/dev/null || echo 'Verification did not run.'
-            tail -n 20 hf-v18-summary.log 2>/dev/null || true
-            tail -n 20 hf-cloudflare.log 2>/dev/null || true
+            tail -n 30 hf-v18-summary.log 2>/dev/null || true
+            tail -n 30 hf-cloudflare.log 2>/dev/null || true
             echo '```'
             echo "</details>"
           } > hf-ledger-comment.md
