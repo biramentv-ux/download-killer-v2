@@ -48,15 +48,18 @@ describe('DyrakArmy Sound Universe v19', () => {
   it('uses only working public navigation targets and keeps both domains synchronized', () => {
     const runtime = read('public/platform/sound-universe-v19.js');
     const landing = read('public/index.html');
-    const targets = ['home', 'engines', 'games', 'software', 'console', 'community', 'status'];
+    const gamesRuntime = read('public/platform/games-v14.js');
+    const staticTargets = ['home', 'engines', 'software', 'console', 'community', 'status'];
 
     expect(runtime).toContain("const PRIMARY_HOST = 'dyrakarmy.eu'");
     expect(runtime).toContain("const SECONDARY_HOST = 'dyrakarmy.online'");
-    expect(runtime).toContain("fetch(`/api/health?");
-    for (const target of targets) {
+    expect(runtime).toContain('fetch(`/api/health?');
+    for (const target of staticTargets) {
       expect(runtime).toContain(`'#${target}'`);
       expect(landing).toContain(`id="${target}"`);
     }
+    expect(runtime).toContain("'#games'");
+    expect(gamesRuntime).toContain("section.id = 'games'");
     expect(runtime).toContain("['/control-v2/'");
   });
 });
