@@ -1,0 +1,99 @@
+name: Sound Universe v19 Dual-domain Live Gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - worker/public/**
+      - worker/src/sound_universe_v19_assets.test.ts
+      - .github/workflows/sound-universe-v19-live.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: sound-universe-v19-live
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - name: Verify both public domains and all UI surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          bases=("https://dyrakarmy.eu" "https://dyrakarmy.online")
+          : > sound-universe-v19-live.log
+          verified=0
+
+          for attempt in $(seq 1 60); do
+            echo "attempt=$attempt" | tee -a sound-universe-v19-live.log
+            all_ok=1
+            for base in "${bases[@]}"; do
+              prefix="$(echo "$base" | sed 's#https://##; s#[^A-Za-z0-9]#_#g')"
+              curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 45 "$base/platform/sound-universe-v19.css?v=19.0.0" -o "$prefix-theme.css" || all_ok=0
+              curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 45 "$base/platform/sound-universe-v19.js?v=19.0.0" -o "$prefix-theme.js" || all_ok=0
+              curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 45 "$base/platform/site-defaults.js" -o "$prefix-defaults.js" || all_ok=0
+              curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 45 "$base/telegram/" -o "$prefix-telegram.html" || all_ok=0
+              curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 45 "$base/control-v2/" -o "$prefix-control.html" || all_ok=0
+              curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 45 "$base/api/health" -o "$prefix-health.json" || all_ok=0
+              curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 45 "$base/api/software/releases" -o "$prefix-software.json" || all_ok=0
+              curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 45 "$base/api/sources" -o "$prefix-sources.json" || all_ok=0
+
+              grep -q 'DyrakArmy Sound Universe v19' "$prefix-theme.css" || all_ok=0
+              grep -q "const VERSION = '19.0.0'" "$prefix-theme.js" || all_ok=0
+              grep -q "sound-universe-v19.css" "$prefix-defaults.js" || all_ok=0
+              grep -q 'data-da-surface="telegram"' "$prefix-telegram.html" || all_ok=0
+              grep -q '/platform/sound-universe-v19.js?v=19.0.0' "$prefix-telegram.html" || all_ok=0
+              grep -q 'data-da-surface="control"' "$prefix-control.html" || all_ok=0
+              grep -q '/platform/sound-universe-v19.js?v=19.0.0' "$prefix-control.html" || all_ok=0
+              grep -q 'id="downloadForm"' "$prefix-telegram.html" || all_ok=0
+              grep -q 'id="runtimeDiagnostic"' "$prefix-telegram.html" || all_ok=0
+              grep -q 'id="linkDeviceBtn"' "$prefix-control.html" || all_ok=0
+              grep -q 'id="roleForm"' "$prefix-control.html" || all_ok=0
+              node -e "const p=require('./$prefix-health.json'); if(p.ok===false) process.exit(1)" || all_ok=0
+              node -e "const p=require('./$prefix-software.json'); if(!p.ok||!Array.isArray(p.releases)) process.exit(1)" || all_ok=0
+              node -e "const p=require('./$prefix-sources.json'); if(!p.ok||!Array.isArray(p.sources)||p.sources.length<10) process.exit(1)" || all_ok=0
+            done
+
+            if [[ "$all_ok" -eq 1 ]]; then
+              sha256sum dyrakarmy_eu-theme.css dyrakarmy_online-theme.css | tee -a sound-universe-v19-live.log
+              sha256sum dyrakarmy_eu-theme.js dyrakarmy_online-theme.js | tee -a sound-universe-v19-live.log
+              cmp -s dyrakarmy_eu-theme.css dyrakarmy_online-theme.css || all_ok=0
+              cmp -s dyrakarmy_eu-theme.js dyrakarmy_online-theme.js || all_ok=0
+            fi
+
+            if [[ "$all_ok" -eq 1 ]]; then
+              verified=1
+              echo "verified=true" | tee -a sound-universe-v19-live.log
+              break
+            fi
+            sleep 20
+          done
+
+          test "$verified" -eq 1
+
+      - name: Record sanitized production result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          {
+            echo "## Sound Universe v19 dual-domain deployment ${GITHUB_RUN_ID}"
+            echo
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Primary: \`dyrakarmy.eu\`"
+            echo "- Secondary: \`dyrakarmy.online\`"
+            echo "- Surfaces: Web, Telegram Mini App, Control Center"
+            echo "- Preserved gates: health, software releases, source catalog, downloader and governance form IDs"
+            echo
+            echo '```text'
+            tail -n 40 sound-universe-v19-live.log 2>/dev/null || true
+            echo '```'
+          } > sound-universe-v19-live-comment.md
+          gh issue comment 46 --body-file sound-universe-v19-live-comment.md

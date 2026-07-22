@@ -1,0 +1,412 @@
+/* DyrakArmy Sound Universe v19
+ * Additive visual system for Web, Telegram Mini App and Control Center.
+ * Business logic, API endpoints and existing form IDs remain untouched.
+ */
+:root {
+  --su-bg: #01030a;
+  --su-bg-soft: #040719;
+  --su-panel: rgba(5, 9, 24, .86);
+  --su-panel-strong: rgba(6, 10, 27, .96);
+  --su-panel-soft: rgba(10, 14, 34, .72);
+  --su-line: rgba(109, 91, 255, .26);
+  --su-line-cyan: rgba(0, 218, 255, .34);
+  --su-cyan: #13dfff;
+  --su-blue: #168bff;
+  --su-violet: #7438ff;
+  --su-magenta: #d32fff;
+  --su-pink: #ff45c8;
+  --su-green: #32efad;
+  --su-text: #f7f7ff;
+  --su-muted: #9ca8c3;
+  --su-radius: 17px;
+  --su-shadow: 0 26px 90px rgba(0, 0, 0, .58);
+  --su-glow: 0 0 24px rgba(87, 52, 255, .22), 0 0 60px rgba(0, 190, 255, .09);
+}
+
+body[data-da-surface] {
+  color: var(--su-text);
+  background:
+    radial-gradient(circle at 84% 10%, rgba(75, 39, 255, .20), transparent 28rem),
+    radial-gradient(circle at 13% 46%, rgba(0, 179, 255, .10), transparent 32rem),
+    radial-gradient(circle at 72% 78%, rgba(204, 38, 255, .10), transparent 30rem),
+    linear-gradient(180deg, #01030a 0%, #020512 42%, #030513 100%);
+}
+
+body[data-da-surface]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  opacity: .56;
+  background:
+    linear-gradient(122deg, transparent 0 44%, rgba(38, 41, 118, .14) 44.2% 44.8%, transparent 45% 100%),
+    linear-gradient(48deg, transparent 0 62%, rgba(0, 203, 255, .08) 62.2% 62.6%, transparent 62.8% 100%),
+    repeating-linear-gradient(90deg, rgba(118, 94, 255, .018) 0 1px, transparent 1px 60px),
+    repeating-linear-gradient(0deg, rgba(0, 196, 255, .014) 0 1px, transparent 1px 60px);
+  mask-image: radial-gradient(circle at 50% 30%, black, transparent 82%);
+}
+
+body[data-da-surface] a,
+body[data-da-surface] button,
+body[data-da-surface] input,
+body[data-da-surface] select,
+body[data-da-surface] textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body[data-da-surface] :focus-visible {
+  outline: 2px solid var(--su-cyan);
+  outline-offset: 3px;
+}
+
+/* Shared top navigation */
+body[data-da-surface] .topbar,
+body[data-da-surface] .app-header {
+  border-color: rgba(104, 117, 212, .25) !important;
+  background: linear-gradient(180deg, rgba(4, 7, 19, .97), rgba(3, 5, 16, .90)) !important;
+  box-shadow: 0 16px 58px rgba(0, 0, 0, .48), inset 0 1px rgba(255, 255, 255, .035), var(--su-glow) !important;
+  backdrop-filter: blur(22px) saturate(135%);
+}
+
+body[data-da-surface] .brand-word,
+body[data-da-surface] .brand > b,
+body[data-da-surface] .brand strong {
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+body[data-da-surface] .da-logo,
+body[data-da-surface] .brand-logo,
+body[data-da-surface] .brand-mark {
+  filter: drop-shadow(0 0 16px rgba(18, 218, 255, .42)) drop-shadow(0 0 30px rgba(115, 49, 255, .24));
+}
+
+.da-domain-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid rgba(103, 88, 255, .35);
+  border-radius: 999px;
+  color: #dbe5ff;
+  background: rgba(10, 11, 31, .82);
+  font: 700 .58rem/1 "Space Mono", monospace;
+  letter-spacing: .04em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.da-domain-pill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffc85a;
+  box-shadow: 0 0 12px currentColor;
+}
+.da-domain-pill[data-state="online"] i { background: var(--su-green); }
+.da-domain-pill[data-state="offline"] i { background: #ff5577; }
+.da-domain-pill b { color: var(--su-cyan); }
+
+/* Web platform */
+body[data-da-surface="web"] .dashboard-shell {
+  width: min(1510px, calc(100% - 118px));
+  margin-left: max(88px, calc((100% - 1510px) / 2 + 72px));
+  margin-right: auto;
+}
+
+body[data-da-surface="web"] .topbar {
+  width: min(1510px, calc(100% - 118px));
+  margin-left: max(88px, calc((100% - 1510px) / 2 + 72px));
+  margin-right: auto;
+}
+
+.sound-universe-rail {
+  position: fixed;
+  top: 92px;
+  left: 18px;
+  z-index: 88;
+  display: grid;
+  gap: 7px;
+  width: 58px;
+  padding: 9px;
+  border: 1px solid rgba(107, 102, 205, .24);
+  border-radius: 18px;
+  background: rgba(3, 6, 18, .90);
+  box-shadow: 0 22px 65px rgba(0, 0, 0, .46), var(--su-glow);
+  backdrop-filter: blur(20px);
+}
+.sound-universe-rail a {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: #8895b2;
+  background: transparent;
+  text-decoration: none;
+  transition: .2s ease;
+}
+.sound-universe-rail a:hover,
+.sound-universe-rail a.active {
+  color: white;
+  border-color: rgba(95, 74, 255, .52);
+  background: linear-gradient(145deg, rgba(111, 53, 255, .30), rgba(0, 196, 255, .12));
+  box-shadow: 0 0 18px rgba(106, 51, 255, .25), inset 0 0 0 1px rgba(255,255,255,.025);
+}
+.sound-universe-rail a span { font-size: 1rem; }
+.sound-universe-rail a small {
+  position: absolute;
+  left: 49px;
+  top: 50%;
+  z-index: 2;
+  display: none;
+  transform: translateY(-50%);
+  padding: 7px 9px;
+  border: 1px solid var(--su-line);
+  border-radius: 8px;
+  color: white;
+  background: #070a1b;
+  font: 700 .58rem/1 Manrope, sans-serif;
+  white-space: nowrap;
+}
+.sound-universe-rail a:hover small,
+.sound-universe-rail a:focus-visible small { display: block; }
+
+body[data-da-surface="web"] .da-hero {
+  min-height: 610px;
+  padding-top: 144px;
+  border-color: rgba(111, 88, 255, .34);
+  background:
+    linear-gradient(90deg, rgba(1, 3, 12, .98) 0%, rgba(2, 4, 15, .92) 42%, rgba(5, 7, 26, .44) 74%, rgba(4, 5, 19, .78) 100%),
+    radial-gradient(circle at 73% 44%, rgba(82, 40, 255, .34), transparent 28rem),
+    radial-gradient(circle at 83% 52%, rgba(0, 197, 255, .18), transparent 20rem);
+  box-shadow: var(--su-shadow), inset 0 1px rgba(255,255,255,.035), var(--su-glow);
+}
+body[data-da-surface="web"] .da-hero::after {
+  content: "";
+  position: absolute;
+  right: -4%;
+  top: 6%;
+  width: min(690px, 52vw);
+  aspect-ratio: 1.18;
+  pointer-events: none;
+  opacity: .72;
+  background:
+    conic-gradient(from 210deg at 48% 52%, transparent 0 11%, rgba(0, 219, 255, .38) 11.4% 12%, transparent 12.6% 24%, rgba(115, 48, 255, .48) 24.6% 25.5%, transparent 26.1% 38%, rgba(221, 49, 255, .36) 38.5% 39.2%, transparent 39.8% 100%),
+    radial-gradient(circle at 48% 50%, rgba(8, 13, 39, .1) 0 17%, rgba(41, 20, 113, .30) 18% 30%, transparent 31% 100%);
+  clip-path: polygon(48% 0, 64% 24%, 100% 19%, 72% 48%, 92% 85%, 55% 69%, 35% 100%, 28% 63%, 0 52%, 30% 35%);
+  filter: drop-shadow(0 0 28px rgba(82, 47, 255, .45)) drop-shadow(0 0 60px rgba(0, 188, 255, .26));
+}
+body[data-da-surface="web"] .hero-copy { max-width: 720px; }
+body[data-da-surface="web"] .hero-kicker {
+  color: #a9b5d7;
+  letter-spacing: .34em;
+}
+body[data-da-surface="web"] .da-hero h1 {
+  max-width: 760px;
+  font-size: clamp(3.1rem, 6.2vw, 6.8rem);
+  line-height: .88;
+  letter-spacing: -.06em;
+  text-shadow: 0 12px 48px rgba(0,0,0,.58);
+}
+body[data-da-surface="web"] .da-hero h1 span {
+  color: transparent;
+  background: linear-gradient(105deg, #f4f6ff 2%, #c235ff 35%, #25bcff 88%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: none;
+}
+body[data-da-surface="web"] .hero-description { color: #aeb9d2; }
+body[data-da-surface="web"] .hero-emblem { opacity: .86; transform: scale(.96); }
+body[data-da-surface="web"] .emblem-grid { background: radial-gradient(circle, rgba(105, 45, 255, .23), transparent 57%), repeating-radial-gradient(circle, rgba(0, 189, 255, .16) 0 1px, transparent 1px 25px); }
+body[data-da-surface="web"] .emblem-ring { border-color: rgba(117, 70, 255, .36); }
+
+body[data-da-surface="web"] .module-section,
+body[data-da-surface="web"] .rewards-section,
+body[data-da-surface="web"] .console-section,
+body[data-da-surface="web"] .status-section,
+body[data-da-surface="web"] .support-section,
+body[data-da-surface="web"] .software-suite-section,
+body[data-da-surface="web"] .community-section,
+body[data-da-surface="web"] .telegram-strip,
+body[data-da-surface="web"] .dashboard-panel,
+body[data-da-surface="web"] .glass {
+  border-color: rgba(96, 86, 190, .25) !important;
+  background: linear-gradient(145deg, rgba(6, 9, 25, .91), rgba(4, 7, 19, .78)) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.028), 0 18px 60px rgba(0,0,0,.26);
+}
+
+body[data-da-surface="web"] .module-card,
+body[data-da-surface="web"] .reward-grid article,
+body[data-da-surface="web"] .software-release-card,
+body[data-da-surface="web"] .status-card,
+body[data-da-surface="web"] .support-links a {
+  border-color: rgba(93, 88, 187, .24) !important;
+  background: linear-gradient(145deg, rgba(10, 13, 34, .86), rgba(5, 8, 22, .92)) !important;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+body[data-da-surface="web"] .module-card:hover,
+body[data-da-surface="web"] .software-release-card:hover,
+body[data-da-surface="web"] .support-links a:hover {
+  transform: translateY(-3px);
+  border-color: rgba(25, 213, 255, .48) !important;
+  box-shadow: 0 14px 42px rgba(0,0,0,.32), 0 0 24px rgba(83, 48, 255, .14);
+}
+
+body[data-da-surface="web"] .primary-button,
+body[data-da-surface="web"] .launch-button,
+body[data-da-surface="telegram"] .primary-button,
+body[data-da-surface="control"] .primary {
+  border-color: rgba(87, 46, 255, .9) !important;
+  color: white !important;
+  background: linear-gradient(112deg, #612dff, #8e35ff 42%, #12bfff) !important;
+  box-shadow: 0 12px 34px rgba(91, 40, 255, .30), 0 0 20px rgba(0, 190, 255, .11) !important;
+}
+body[data-da-surface] .secondary-button,
+body[data-da-surface="control"] .secondary {
+  border-color: rgba(39, 190, 255, .48) !important;
+  background: rgba(5, 9, 25, .76) !important;
+}
+
+/* Telegram Mini App */
+body[data-da-surface="telegram"] .app-header {
+  width: min(1180px, calc(100% - 24px));
+  margin: 10px auto 0;
+  border-radius: 18px;
+}
+body[data-da-surface="telegram"] main { width: min(1180px, calc(100% - 24px)); }
+body[data-da-surface="telegram"] .hero,
+body[data-da-surface="telegram"] .command-center,
+body[data-da-surface="telegram"] .metric-strip,
+body[data-da-surface="telegram"] .tab-panel,
+body[data-da-surface="telegram"] .tabs,
+body[data-da-surface="telegram"] .glass,
+body[data-da-surface="telegram"] .runtime-diagnostic {
+  border-color: rgba(104, 77, 231, .30) !important;
+  background: linear-gradient(150deg, rgba(6, 9, 27, .95), rgba(3, 6, 18, .88)) !important;
+  box-shadow: 0 18px 62px rgba(0, 0, 0, .38), inset 0 1px rgba(255,255,255,.03);
+}
+body[data-da-surface="telegram"] .hero {
+  overflow: hidden;
+  background:
+    linear-gradient(95deg, rgba(4, 6, 20, .98), rgba(8, 8, 30, .78)),
+    radial-gradient(circle at 77% 42%, rgba(102, 44, 255, .40), transparent 24rem) !important;
+}
+body[data-da-surface="telegram"] .hero::after {
+  content: "";
+  position: absolute;
+  right: -8%;
+  top: -10%;
+  width: 58%;
+  aspect-ratio: 1;
+  background: conic-gradient(from 140deg, transparent, rgba(0,201,255,.20), transparent 30%, rgba(199,38,255,.30), transparent 58%);
+  clip-path: polygon(50% 0, 66% 27%, 100% 22%, 74% 50%, 92% 83%, 57% 70%, 38% 100%, 30% 66%, 0 52%, 33% 35%);
+  filter: drop-shadow(0 0 34px rgba(104, 44, 255, .40));
+  pointer-events: none;
+}
+body[data-da-surface="telegram"] .hero-copy { position: relative; z-index: 2; }
+body[data-da-surface="telegram"] .hero h1 strong,
+body[data-da-surface="telegram"] .step,
+body[data-da-surface="telegram"] .eyebrow { color: var(--su-magenta) !important; }
+body[data-da-surface="telegram"] .command-card,
+body[data-da-surface="telegram"] .stat-card,
+body[data-da-surface="telegram"] .card-list > *,
+body[data-da-surface="telegram"] .result-list > * {
+  border-color: rgba(91, 79, 198, .26) !important;
+  background: linear-gradient(145deg, rgba(11, 13, 37, .88), rgba(5, 8, 22, .92)) !important;
+}
+body[data-da-surface="telegram"] .command-card:hover,
+body[data-da-surface="telegram"] .tabs button.active {
+  border-color: rgba(20, 218, 255, .46) !important;
+  box-shadow: 0 0 24px rgba(83, 50, 255, .18);
+}
+
+/* Control Center */
+body[data-da-surface="control"] main { width: min(1220px, calc(100% - 28px)); }
+body[data-da-surface="control"] .auth-card,
+body[data-da-surface="control"] .hero-card,
+body[data-da-surface="control"] .panel,
+body[data-da-surface="control"] .tabs,
+body[data-da-surface="control"] .metrics article,
+body[data-da-surface="control"] .row,
+body[data-da-surface="control"] .profile-summary {
+  border-color: rgba(105, 79, 221, .28) !important;
+  background: linear-gradient(145deg, rgba(7, 10, 29, .95), rgba(3, 6, 18, .88)) !important;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .35), inset 0 1px rgba(255,255,255,.03);
+}
+body[data-da-surface="control"] .auth-card::before,
+body[data-da-surface="control"] .hero-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(circle at 80% 20%, rgba(106, 46, 255, .24), transparent 24rem), radial-gradient(circle at 12% 80%, rgba(0, 197, 255, .10), transparent 22rem);
+}
+body[data-da-surface="control"] .orb,
+body[data-da-surface="control"] .revision {
+  border-color: rgba(28, 210, 255, .40) !important;
+  box-shadow: 0 0 34px rgba(85, 42, 255, .22);
+}
+body[data-da-surface="control"] .tabs button.active,
+body[data-da-surface="control"] .pill.on,
+body[data-da-surface="control"] .status.online {
+  color: white !important;
+  background: linear-gradient(110deg, rgba(98, 43, 255, .86), rgba(14, 179, 255, .62)) !important;
+}
+
+.sound-universe-sync-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: min(1180px, calc(100% - 24px));
+  margin: 12px auto;
+  padding: 10px 14px;
+  border: 1px solid rgba(85, 78, 190, .26);
+  border-radius: 12px;
+  color: #cfd8ef;
+  background: rgba(4, 7, 20, .82);
+  font-size: .72rem;
+}
+.sound-universe-sync-banner b { color: var(--su-cyan); }
+.sound-universe-sync-banner a { color: #dba7ff; font-weight: 700; text-decoration: none; }
+
+@media (max-width: 1180px) {
+  body[data-da-surface="web"] .dashboard-shell,
+  body[data-da-surface="web"] .topbar {
+    width: min(100% - 28px, 1040px);
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .sound-universe-rail { display: none; }
+}
+
+@media (max-width: 760px) {
+  body[data-da-surface="web"] .da-hero {
+    min-height: 660px;
+    padding: 116px 22px 30px;
+    background: radial-gradient(circle at 72% 24%, rgba(95, 40, 255, .30), transparent 19rem), linear-gradient(180deg, rgba(2,4,14,.97), rgba(4,5,20,.94)) !important;
+  }
+  body[data-da-surface="web"] .da-hero::after { top: 25%; right: -26%; width: 105%; opacity: .38; }
+  body[data-da-surface="web"] .da-hero h1 { font-size: clamp(3rem, 16vw, 5rem); }
+  body[data-da-surface="web"] .hero-emblem { min-height: 250px; opacity: .58; }
+  .da-domain-pill { min-width: 38px; padding: 0 9px; }
+  .da-domain-pill span { display: none; }
+  .sound-universe-sync-banner { align-items: flex-start; flex-direction: column; }
+  body[data-da-surface="telegram"] .hero::after { width: 100%; right: -45%; opacity: .34; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-da-surface] *,
+  body[data-da-surface] *::before,
+  body[data-da-surface] *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}
