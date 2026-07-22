@@ -143,11 +143,26 @@ jobs:
             -o /tmp/link-status.json
           node -e "const p=require('/tmp/link-status.json'); if(p.status!=='pending') process.exit(1)"
 
-      - name: Diagnostics
+      - name: Capture diagnostics
         if: always()
         run: |
-          docker logs dyrakarmy-hf-standalone 2>&1 | tail -n 250 || true
-          find .hf-test-data -maxdepth 5 -type f -printf '%p %s bytes\n' | sort | tail -n 100 || true
+          mkdir -p standalone-diagnostics
+          docker logs dyrakarmy-hf-standalone > standalone-diagnostics/container.log 2>&1 || true
+          docker inspect dyrakarmy-hf-standalone > standalone-diagnostics/container-inspect.json 2>&1 || true
+          find .hf-test-data -maxdepth 8 -type f -printf '%p %s bytes\n' | sort > standalone-diagnostics/persistent-files.txt || true
+          cp /tmp/hf-health.json standalone-diagnostics/ 2>/dev/null || true
+          cp /tmp/sources.json standalone-diagnostics/ 2>/dev/null || true
+          cp /tmp/link-status.json standalone-diagnostics/ 2>/dev/null || true
+          tail -n 250 standalone-diagnostics/container.log || true
+          cat standalone-diagnostics/persistent-files.txt || true
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hf-standalone-cutover-diagnostics
+          path: standalone-diagnostics
+          if-no-files-found: error
 
       - name: Cleanup
         if: always()
