@@ -5,6 +5,14 @@ let downloadJobMetadataSchemaReady: Promise<void> | null = null;
 let deadLetterSchemaReady: Promise<void> | null = null;
 let syncKeyClaimsSchemaReady: Promise<void> | null = null;
 
+export async function applyD1SchemaStatements(
+  env: Pick<Env, 'DB'>,
+  statements: readonly string[],
+): Promise<void> {
+  if (!statements.length) return;
+  await env.DB.batch(statements.map((statement) => env.DB.prepare(statement)));
+}
+
 export function ensureDownloadJobMetadataSchema(env: Env): Promise<void> {
   if (!downloadJobMetadataSchemaReady) {
     downloadJobMetadataSchemaReady = ensureDownloadJobMetadataSchemaInternal(env).catch((error) => {

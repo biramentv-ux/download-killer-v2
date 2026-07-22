@@ -1,5 +1,6 @@
 import type { Env } from './types';
 import { handlePlatformControlApi, parsePlatformAdminIds } from './platform_control';
+import { applyD1SchemaStatements } from './schema';
 import { validateTelegramInitData } from './telegram_platform';
 import { readEnvInt } from './utils';
 
@@ -362,8 +363,8 @@ export async function handlePlatformGovernanceTelegramWebhook(
 async function ensureGovernanceSchema(env: ExtendedEnv): Promise<void> {
   if (schemaReady) return schemaReady;
   schemaReady = (async () => {
-    await env.DB.exec(`
-      CREATE TABLE IF NOT EXISTS platform_users (
+    await applyD1SchemaStatements(env, [
+      `CREATE TABLE IF NOT EXISTS platform_users (
         telegram_user_id INTEGER PRIMARY KEY,
         role TEXT NOT NULL DEFAULT 'user',
         username TEXT,
@@ -373,8 +374,8 @@ async function ensureGovernanceSchema(env: ExtendedEnv): Promise<void> {
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS platform_role_history (
+      )`,
+      `CREATE TABLE IF NOT EXISTS platform_role_history (
         id TEXT PRIMARY KEY,
         telegram_user_id INTEGER NOT NULL,
         previous_role TEXT NOT NULL,
@@ -382,8 +383,8 @@ async function ensureGovernanceSchema(env: ExtendedEnv): Promise<void> {
         changed_by INTEGER NOT NULL,
         changed_by_name TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS platform_sessions (
+      )`,
+      `CREATE TABLE IF NOT EXISTS platform_sessions (
         id TEXT PRIMARY KEY,
         telegram_user_id INTEGER NOT NULL,
         device_name TEXT NOT NULL,
@@ -393,8 +394,8 @@ async function ensureGovernanceSchema(env: ExtendedEnv): Promise<void> {
         expires_at TEXT NOT NULL,
         last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         revoked_at TEXT
-      );
-      CREATE TABLE IF NOT EXISTS platform_versions (
+      )`,
+      `CREATE TABLE IF NOT EXISTS platform_versions (
         revision INTEGER PRIMARY KEY AUTOINCREMENT,
         version_id TEXT NOT NULL UNIQUE,
         action TEXT NOT NULL,
@@ -404,8 +405,8 @@ async function ensureGovernanceSchema(env: ExtendedEnv): Promise<void> {
         created_by INTEGER NOT NULL,
         created_by_name TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS platform_events (
+      )`,
+      `CREATE TABLE IF NOT EXISTS platform_events (
         sequence INTEGER PRIMARY KEY AUTOINCREMENT,
         event_type TEXT NOT NULL,
         target_type TEXT NOT NULL,
@@ -416,12 +417,12 @@ async function ensureGovernanceSchema(env: ExtendedEnv): Promise<void> {
         payload_json TEXT,
         visibility TEXT NOT NULL DEFAULT 'private',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_platform_users_role ON platform_users(role, updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_platform_sessions_user ON platform_sessions(telegram_user_id, created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_platform_versions_created ON platform_versions(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_platform_events_visibility_sequence ON platform_events(visibility, sequence ASC);
-    `);
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_platform_users_role ON platform_users(role, updated_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_platform_sessions_user ON platform_sessions(telegram_user_id, created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_platform_versions_created ON platform_versions(created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_platform_events_visibility_sequence ON platform_events(visibility, sequence ASC)',
+    ]);
 
     const admins = [...parsePlatformAdminIds(env.TELEGRAM_ADMIN_IDS)];
     for (let index = 0; index < admins.length; index += 1) {
@@ -435,7 +436,10 @@ async function ensureGovernanceSchema(env: ExtendedEnv): Promise<void> {
           updated_at = CURRENT_TIMESTAMP
       `).bind(id, bootstrapRole, `Telegram ${id}`).run();
     }
-  })();
+  })().catch((error) => {
+    schemaReady = null;
+    throw error;
+  });
   return schemaReady;
 }
 

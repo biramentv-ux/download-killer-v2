@@ -1,5 +1,6 @@
 import type { Env } from './types';
 import { latencyStrikeRank, latencyStrikeWeekKey } from './latency_strike';
+import { applyD1SchemaStatements } from './schema';
 import { validateTelegramInitData } from './telegram_platform';
 import { rateLimit, readEnvInt } from './utils';
 
@@ -363,8 +364,8 @@ async function authenticate(body: Record<string, unknown>, env: ExtendedEnv) {
 
 async function ensureArenaSchema(env: ExtendedEnv): Promise<void> {
   if (schemaReady) return schemaReady;
-  schemaReady = env.DB.exec(`
-    CREATE TABLE IF NOT EXISTS game_profiles (
+  schemaReady = applyD1SchemaStatements(env, [
+    `CREATE TABLE IF NOT EXISTS game_profiles (
       telegram_user_id INTEGER PRIMARY KEY, username TEXT, display_name TEXT NOT NULL,
       total_xp INTEGER NOT NULL DEFAULT 0, total_games INTEGER NOT NULL DEFAULT 0,
       best_score INTEGER NOT NULL DEFAULT 0, best_reaction_ms INTEGER,
@@ -373,28 +374,31 @@ async function ensureArenaSchema(env: ExtendedEnv): Promise<void> {
       equipped_badge TEXT NOT NULL DEFAULT 'badge_recruit', equipped_waveform TEXT NOT NULL DEFAULT 'waveform_pulse',
       equipped_theme TEXT NOT NULL DEFAULT 'theme_violet', equipped_title TEXT NOT NULL DEFAULT 'title_recruit',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS arena_teams (
+    )`,
+    `CREATE TABLE IF NOT EXISTS arena_teams (
       id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
       owner_user_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS arena_team_members (
+    )`,
+    `CREATE TABLE IF NOT EXISTS arena_team_members (
       team_id TEXT NOT NULL, telegram_user_id INTEGER NOT NULL UNIQUE,
       role TEXT NOT NULL DEFAULT 'member', joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (team_id, telegram_user_id)
-    );
-    CREATE TABLE IF NOT EXISTS arena_runs (
+    )`,
+    `CREATE TABLE IF NOT EXISTS arena_runs (
       id TEXT PRIMARY KEY, telegram_user_id INTEGER NOT NULL, team_id TEXT,
       day_key TEXT NOT NULL, week_key TEXT NOT NULL, season_key TEXT NOT NULL,
       score INTEGER NOT NULL, correct_answers INTEGER NOT NULL, total_questions INTEGER NOT NULL,
       accuracy INTEGER NOT NULL, avg_response_ms INTEGER NOT NULL, best_combo INTEGER NOT NULL,
       xp_earned INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS idx_arena_runs_week_score ON arena_runs(week_key, score DESC, created_at ASC);
-    CREATE INDEX IF NOT EXISTS idx_arena_runs_season_score ON arena_runs(season_key, score DESC, created_at ASC);
-    CREATE INDEX IF NOT EXISTS idx_arena_runs_user_day ON arena_runs(telegram_user_id, day_key, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_arena_runs_team_week ON arena_runs(team_id, week_key, score DESC);
-  `).then(() => undefined);
+    )`,
+    'CREATE INDEX IF NOT EXISTS idx_arena_runs_week_score ON arena_runs(week_key, score DESC, created_at ASC)',
+    'CREATE INDEX IF NOT EXISTS idx_arena_runs_season_score ON arena_runs(season_key, score DESC, created_at ASC)',
+    'CREATE INDEX IF NOT EXISTS idx_arena_runs_user_day ON arena_runs(telegram_user_id, day_key, created_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_arena_runs_team_week ON arena_runs(team_id, week_key, score DESC)',
+  ]).catch((error) => {
+    schemaReady = null;
+    throw error;
+  });
   return schemaReady;
 }
 

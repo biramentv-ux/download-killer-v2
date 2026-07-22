@@ -1,4 +1,5 @@
 import type { Env } from './types';
+import { applyD1SchemaStatements } from './schema';
 import { validateTelegramInitData } from './telegram_platform';
 import { readEnvInt } from './utils';
 
@@ -258,8 +259,8 @@ async function authorizeControl(
 async function ensurePlatformControlSchema(env: ExtendedEnv): Promise<void> {
   if (schemaReady) return schemaReady;
   schemaReady = (async () => {
-    await env.DB.exec(`
-      CREATE TABLE IF NOT EXISTS platform_modules (
+    await applyD1SchemaStatements(env, [
+      `CREATE TABLE IF NOT EXISTS platform_modules (
         id TEXT PRIMARY KEY,
         kind TEXT NOT NULL,
         title TEXT NOT NULL,
@@ -273,8 +274,8 @@ async function ensurePlatformControlSchema(env: ExtendedEnv): Promise<void> {
         metadata_json TEXT NOT NULL DEFAULT '{}',
         updated_by INTEGER,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS platform_content (
+      )`,
+      `CREATE TABLE IF NOT EXISTS platform_content (
         id TEXT PRIMARY KEY,
         slot TEXT NOT NULL,
         title TEXT NOT NULL,
@@ -288,14 +289,14 @@ async function ensurePlatformControlSchema(env: ExtendedEnv): Promise<void> {
         ends_at TEXT,
         updated_by INTEGER,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS platform_settings (
+      )`,
+      `CREATE TABLE IF NOT EXISTS platform_settings (
         key TEXT PRIMARY KEY,
         value_json TEXT NOT NULL,
         updated_by INTEGER,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS platform_audit (
+      )`,
+      `CREATE TABLE IF NOT EXISTS platform_audit (
         id TEXT PRIMARY KEY,
         admin_user_id INTEGER NOT NULL,
         admin_name TEXT NOT NULL,
@@ -305,11 +306,11 @@ async function ensurePlatformControlSchema(env: ExtendedEnv): Promise<void> {
         before_json TEXT,
         after_json TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_platform_modules_order ON platform_modules(enabled DESC, sort_order ASC, id ASC);
-      CREATE INDEX IF NOT EXISTS idx_platform_content_slot ON platform_content(slot, visible DESC, sort_order ASC, id ASC);
-      CREATE INDEX IF NOT EXISTS idx_platform_audit_created ON platform_audit(created_at DESC);
-    `);
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_platform_modules_order ON platform_modules(enabled DESC, sort_order ASC, id ASC)',
+      'CREATE INDEX IF NOT EXISTS idx_platform_content_slot ON platform_content(slot, visible DESC, sort_order ASC, id ASC)',
+      'CREATE INDEX IF NOT EXISTS idx_platform_audit_created ON platform_audit(created_at DESC)',
+    ]);
     const defaults = [
       ['home', 'system', 'Начало', 'Главна секция на платформата.', '⌂', '/', null, 1, 10, 1],
       ['how-it-works', 'section', 'Как работи', 'Процесът от публичен URL до резултат.', '↗', '/#tutorial', null, 1, 20, 1],
@@ -345,7 +346,10 @@ async function ensurePlatformControlSchema(env: ExtendedEnv): Promise<void> {
       await env.DB.prepare('INSERT OR IGNORE INTO platform_settings (key, value_json) VALUES (?, ?)')
         .bind(key, JSON.stringify(value)).run();
     }
-  })();
+  })().catch((error) => {
+    schemaReady = null;
+    throw error;
+  });
   return schemaReady;
 }
 
