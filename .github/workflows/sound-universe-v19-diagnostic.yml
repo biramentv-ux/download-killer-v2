@@ -1,0 +1,53 @@
+name: Sound Universe v19 Diagnostic
+
+on:
+  push:
+    branches:
+      - feature/sound-universe-v19-design-system
+    paths:
+      - .github/workflows/sound-universe-v19-diagnostic.yml
+      - worker/src/sound_universe_v19_assets.test.ts
+      - worker/public/platform/sound-universe-v19.*
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - working-directory: worker
+        run: npm ci --silent
+      - name: Capture isolated test output
+        working-directory: worker
+        shell: bash
+        run: |
+          set +e
+          npx vitest run src/sound_universe_v19_assets.test.ts --reporter=verbose > ../sound-universe-v19-diagnostic.log 2>&1
+          status=$?
+          echo "$status" > ../sound-universe-v19-diagnostic.status
+          cat ../sound-universe-v19-diagnostic.log
+          exit 0
+      - name: Record diagnostic on PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          {
+            echo "## Sound Universe v19 diagnostic ${GITHUB_RUN_ID}"
+            echo
+            echo '```text'
+            tail -n 120 sound-universe-v19-diagnostic.log 2>/dev/null || true
+            echo '```'
+          } > sound-universe-v19-diagnostic.md
+          gh pr comment 53 --body-file sound-universe-v19-diagnostic.md
+      - name: Enforce isolated result
+        run: test "$(cat sound-universe-v19-diagnostic.status)" -eq 0
