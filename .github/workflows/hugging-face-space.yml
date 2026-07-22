@@ -1,0 +1,137 @@
+name: Hugging Face Space Migration
+
+on:
+  pull_request:
+    paths:
+      - worker/**
+      - hf_space/**
+      - .github/workflows/hugging-face-space.yml
+      - HUGGING_FACE_MIGRATION.md
+  push:
+    branches: [main]
+    paths:
+      - worker/**
+      - hf_space/**
+      - .github/workflows/hugging-face-space.yml
+      - HUGGING_FACE_MIGRATION.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hugging-face-space-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HF_SPACE_REPO_ID: DyrakArmy/dyrakarmy-platform
+  HF_HUB_DISABLE_UPDATE_CHECK: "1"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install Worker dependencies
+        working-directory: worker
+        run: npm ci
+
+      - name: Validate Worker and migration contracts
+        working-directory: worker
+        run: |
+          npm run typecheck
+          npm test
+          node scripts/landing-v16-simulation.mjs
+          node scripts/software-suite-simulation.mjs
+          node scripts/full-virtual-simulation.mjs
+          npx wrangler deploy --dry-run --config wrangler.hf.jsonc --outdir .wrangler-hf-dry-run
+
+      - name: Prepare deterministic Space bundle
+        run: |
+          rm -rf .hf-stage
+          mkdir -p .hf-stage
+          rsync -a --delete \
+            --exclude node_modules \
+            --exclude .wrangler \
+            --exclude .dev.vars \
+            worker/ .hf-stage/worker/
+          cp hf_space/README.md .hf-stage/README.md
+          cp hf_space/Dockerfile .hf-stage/Dockerfile
+          cp hf_space/start.sh .hf-stage/start.sh
+          cp hf_space/render-dev-vars.mjs .hf-stage/render-dev-vars.mjs
+          test -f .hf-stage/worker/public/index.html
+          test -f .hf-stage/worker/src/platform_v3.ts
+          test -f .hf-stage/worker/wrangler.hf.jsonc
+          grep -q 'sdk: docker' .hf-stage/README.md
+          grep -q 'app_port: 7860' .hf-stage/README.md
+          grep -q 'DyrakArmy Interface v17' .hf-stage/worker/public/index.html
+
+      - name: Build Space container
+        run: docker build --tag dyrakarmy-hf-space:${{ github.sha }} .hf-stage
+
+  publish:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      vars.HF_SPACE_SYNC_ENABLED == 'true'
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare deterministic Space bundle
+        run: |
+          rm -rf .hf-stage
+          mkdir -p .hf-stage
+          rsync -a --delete \
+            --exclude node_modules \
+            --exclude .wrangler \
+            --exclude .dev.vars \
+            worker/ .hf-stage/worker/
+          cp hf_space/README.md .hf-stage/README.md
+          cp hf_space/Dockerfile .hf-stage/Dockerfile
+          cp hf_space/start.sh .hf-stage/start.sh
+          cp hf_space/render-dev-vars.mjs .hf-stage/render-dev-vars.mjs
+
+      - name: Install Hugging Face CLI
+        run: |
+          curl -LsSf https://hf.co/cli/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Publish public Docker Space with OIDC
+        env:
+          HF_OIDC_RESOURCE: spaces/DyrakArmy/dyrakarmy-platform
+        run: |
+          hf upload "$HF_SPACE_REPO_ID" .hf-stage . \
+            --repo-type=space \
+            --delete="*" \
+            --commit-message="Deploy GitHub ${GITHUB_SHA::12}"
+
+      - name: Verify Hugging Face public deployment
+        run: |
+          set -euo pipefail
+          base="https://dyrakarmy-dyrakarmy-platform.hf.space"
+          deployed=0
+          for attempt in $(seq 1 45); do
+            echo "Hugging Face verification attempt $attempt/45"
+            home="$(curl -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/" 2>/dev/null || true)"
+            catalog="$(curl -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/software/releases" 2>/dev/null || true)"
+            if grep -q 'DyrakArmy Interface v17' <<<"$home" \
+              && grep -q 'id="software"' <<<"$home" \
+              && grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$catalog" \
+              && grep -q 'DyrakArmyDesktop.exe' <<<"$catalog" \
+              && grep -q '"bot":"@dyrakarmy_bot"' <<<"$catalog"; then
+              deployed=1
+              break
+            fi
+            sleep 20
+          done
+          test "$deployed" -eq 1
