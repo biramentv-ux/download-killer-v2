@@ -1,0 +1,46 @@
+name: Platform v18 Typecheck Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - worker/**
+      - .github/workflows/v18-typecheck-diagnostic.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - working-directory: worker
+        run: npm ci --silent
+      - name: Capture TypeScript diagnostics
+        working-directory: worker
+        shell: bash
+        run: |
+          set +e
+          npm run typecheck --silent > ../v18-typecheck.log 2>&1
+          status=$?
+          echo "$status" > ../v18-typecheck.status
+          tail -n 160 ../v18-typecheck.log || true
+          exit 0
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: v18-typecheck-diagnostic
+          path: |
+            v18-typecheck.log
+            v18-typecheck.status
+          if-no-files-found: error
+      - name: Enforce result
+        run: test "$(cat v18-typecheck.status)" -eq 0
