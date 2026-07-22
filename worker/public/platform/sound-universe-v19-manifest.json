@@ -1,0 +1,38 @@
+{
+  "design_system": "DyrakArmy Sound Universe",
+  "feature_version": "19.0.0",
+  "reference_asset": "Adobe Creative Cloud asset urn:aaid:sc:EU:1ab27e9a-98c4-43b0-b83b-fe0c9679efa7",
+  "surfaces": [
+    "web",
+    "telegram-mini-app",
+    "control-center"
+  ],
+  "domains": {
+    "primary": "https://dyrakarmy.eu",
+    "secondary": "https://dyrakarmy.online"
+  },
+  "visual_tokens": {
+    "background": "deep-black-blue",
+    "primary_accent": "electric-violet",
+    "secondary_accent": "cyan-blue",
+    "support_accent": "magenta",
+    "surface_style": "layered-glass-panels",
+    "decorative_style": "crystalline-signal-universe"
+  },
+  "preserved_runtime_contracts": [
+    "/api/health",
+    "/api/download",
+    "/api/search/multi",
+    "/api/software/releases",
+    "/api/platform/governance",
+    "/api/telegram/v12/health"
+  ],
+  "preserved_interactions": [
+    "downloadForm",
+    "softwareReleaseGrid",
+    "runtimeDiagnostic",
+    "linkDeviceBtn",
+    "roleForm",
+    "profileForm"
+  ]
+}
