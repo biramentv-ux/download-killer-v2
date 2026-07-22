@@ -52,6 +52,7 @@ jobs:
           cp hf_space/standalone-preflight.mjs .hf-stage/standalone-preflight.mjs
           cp hf_space/standalone-supervisor.mjs .hf-stage/standalone-supervisor.mjs
           printf '{"test":true}\n' > .hf-test-data/dyrakarmy/.cloudflare-state-imported
+          chmod -R 0777 .hf-test-data
 
       - name: Build standalone Docker image
         run: docker build -t dyrakarmy-hf-standalone:test .hf-stage
@@ -76,10 +77,19 @@ jobs:
             -e RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64=test-signing-key \
             dyrakarmy-hf-standalone:test
 
+          ready=0
           for attempt in $(seq 1 90); do
-            if curl -fsS http://127.0.0.1:17860/api/hf-mirror/health >/tmp/hf-health.json; then break; fi
+            if curl -fsS http://127.0.0.1:17860/api/hf-mirror/health >/tmp/hf-health.json; then
+              ready=1
+              break
+            fi
+            if ! docker inspect -f '{{.State.Running}}' dyrakarmy-hf-standalone 2>/dev/null | grep -q true; then
+              docker logs dyrakarmy-hf-standalone || true
+              exit 1
+            fi
             sleep 2
           done
+          test "$ready" -eq 1
           node -e "const p=require('/tmp/hf-health.json'); if(!p.ok||p.mode!=='standalone'||p.state_authority!=='hugging-face-local') process.exit(1)"
 
       - name: Validate Web, API, D1 and KV state
@@ -113,10 +123,19 @@ jobs:
             -e OPS_ADMIN_TOKEN=test-ops-admin \
             -e RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64=test-signing-key \
             dyrakarmy-hf-standalone:test
+          ready=0
           for attempt in $(seq 1 90); do
-            if curl -fsS http://127.0.0.1:17860/api/hf-mirror/health >/dev/null; then break; fi
+            if curl -fsS http://127.0.0.1:17860/api/hf-mirror/health >/dev/null; then
+              ready=1
+              break
+            fi
+            if ! docker inspect -f '{{.State.Running}}' dyrakarmy-hf-standalone 2>/dev/null | grep -q true; then
+              docker logs dyrakarmy-hf-standalone || true
+              exit 1
+            fi
             sleep 2
           done
+          test "$ready" -eq 1
           code="$(cat /tmp/link-code)"
           curl -fsS -H 'Content-Type: application/json' \
             -X POST http://127.0.0.1:17860/api/platform/governance \
