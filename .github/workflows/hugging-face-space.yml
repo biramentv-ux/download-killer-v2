@@ -26,6 +26,7 @@ concurrency:
 
 env:
   HF_SPACE_REPO_ID: DyrakArmy/dyrakarmy-platform
+  HF_SPACE_URL: https://dyrakarmy-dyrakarmy-platform.hf.space
   HF_HUB_DISABLE_UPDATE_CHECK: "1"
 
 jobs:
@@ -44,14 +45,34 @@ jobs:
         working-directory: worker
         run: npm ci
 
-      - name: Validate Worker and migration contracts
+      - name: Apply isolated Hugging Face runtime overlays
+        run: |
+          cp hf_space/platform_hf.ts worker/src/platform_hf.ts
+          cp hf_space/platform_hf.test.ts worker/src/platform_hf.test.ts
+          cp hf_space/wrangler.hf.jsonc worker/wrangler.hf.jsonc
+
+      - name: Typecheck Hugging Face runtime
+        working-directory: worker
+        run: npm run typecheck
+
+      - name: Run Worker and mirror tests
+        working-directory: worker
+        run: npm test
+
+      - name: Run interface and full virtual simulations
         working-directory: worker
         run: |
-          npm run typecheck
-          npm test
           node scripts/landing-v16-simulation.mjs
           node scripts/software-suite-simulation.mjs
           node scripts/full-virtual-simulation.mjs
+
+      - name: Validate Hugging Face configuration and package
+        working-directory: worker
+        run: |
+          grep -q 'cloudflare-mirror' src/platform_hf.ts
+          grep -q '"main": "src/platform_hf.ts"' wrangler.hf.jsonc
+          grep -Fq '"/games/*"' wrangler.hf.jsonc
+          grep -Fq '"/files/*"' wrangler.hf.jsonc
           npx wrangler deploy --dry-run --config wrangler.hf.jsonc --outdir .wrangler-hf-dry-run
 
       - name: Prepare deterministic Space bundle
@@ -63,25 +84,54 @@ jobs:
             --exclude .wrangler \
             --exclude .dev.vars \
             worker/ .hf-stage/worker/
+          cp hf_space/platform_hf.ts .hf-stage/worker/src/platform_hf.ts
+          cp hf_space/wrangler.hf.jsonc .hf-stage/worker/wrangler.hf.jsonc
+          rm -f .hf-stage/worker/src/platform_hf.test.ts
           cp hf_space/README.md .hf-stage/README.md
           cp hf_space/Dockerfile .hf-stage/Dockerfile
           cp hf_space/start.sh .hf-stage/start.sh
           cp hf_space/render-dev-vars.mjs .hf-stage/render-dev-vars.mjs
+          cp hf_space/DEPLOYMENT_TRIGGER.txt .hf-stage/DEPLOYMENT_TRIGGER.txt
           test -f .hf-stage/worker/public/index.html
           test -f .hf-stage/worker/src/platform_v3.ts
+          test -f .hf-stage/worker/src/platform_hf.ts
           test -f .hf-stage/worker/wrangler.hf.jsonc
           grep -q 'sdk: docker' .hf-stage/README.md
           grep -q 'app_port: 7860' .hf-stage/README.md
           grep -q 'DyrakArmy Interface v17' .hf-stage/worker/public/index.html
+          grep -q 'cloudflare-mirror' .hf-stage/worker/src/platform_hf.ts
 
       - name: Build Space container
         run: docker build --tag dyrakarmy-hf-space:${{ github.sha }} .hf-stage
 
+      - name: Run isolated container smoke test
+        run: |
+          set -euo pipefail
+          image="dyrakarmy-hf-space:${GITHUB_SHA}"
+          docker run -d --name dyrakarmy-hf-smoke -p 17860:7860 "$image"
+          cleanup() {
+            docker logs dyrakarmy-hf-smoke || true
+            docker rm -f dyrakarmy-hf-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          ready=0
+          for attempt in $(seq 1 90); do
+            if curl --compressed -fsS --max-time 10 http://127.0.0.1:17860/api/hf-mirror/health | grep -q 'cloudflare-mirror'; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" -eq 1
+          curl --compressed -fsS http://127.0.0.1:17860/ | grep -q 'DyrakArmy Interface v17'
+          curl --compressed -fsS http://127.0.0.1:17860/api/health | grep -Eq '"ok"[[:space:]]*:[[:space:]]*true'
+          curl --compressed -fsS http://127.0.0.1:17860/api/software/releases | grep -q 'DyrakArmyDesktop.exe'
+          curl --compressed -fsS --max-time 60 http://127.0.0.1:17860/games/queue-commander/ | grep -q 'SHARED GAME ENGINE'
+
   publish:
     if: >-
       github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      vars.HF_SPACE_SYNC_ENABLED == 'true'
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: validate
     runs-on: ubuntu-latest
     steps:
@@ -96,42 +146,67 @@ jobs:
             --exclude .wrangler \
             --exclude .dev.vars \
             worker/ .hf-stage/worker/
+          cp hf_space/platform_hf.ts .hf-stage/worker/src/platform_hf.ts
+          cp hf_space/wrangler.hf.jsonc .hf-stage/worker/wrangler.hf.jsonc
+          rm -f .hf-stage/worker/src/platform_hf.test.ts
           cp hf_space/README.md .hf-stage/README.md
           cp hf_space/Dockerfile .hf-stage/Dockerfile
           cp hf_space/start.sh .hf-stage/start.sh
           cp hf_space/render-dev-vars.mjs .hf-stage/render-dev-vars.mjs
+          cp hf_space/DEPLOYMENT_TRIGGER.txt .hf-stage/DEPLOYMENT_TRIGGER.txt
 
       - name: Install Hugging Face CLI
         run: |
           curl -LsSf https://hf.co/cli/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Publish public Docker Space with OIDC
+      - name: Publish public Docker Space
         env:
           HF_OIDC_RESOURCE: spaces/DyrakArmy/dyrakarmy-platform
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          set -euo pipefail
+          if [[ -n "${HF_TOKEN:-}" ]]; then
+            hf auth login --token "$HF_TOKEN"
+          else
+            unset HF_TOKEN
+            echo "Using Hugging Face Trusted Publisher OIDC."
+          fi
           hf upload "$HF_SPACE_REPO_ID" .hf-stage . \
             --repo-type=space \
             --delete="*" \
-            --commit-message="Deploy GitHub ${GITHUB_SHA::12}"
+            --commit-message="Deploy GitHub ${GITHUB_SHA::12} in safe Cloudflare mirror mode"
 
-      - name: Verify Hugging Face public deployment
+      - name: Verify Hugging Face deployment and Cloudflare continuity
         run: |
           set -euo pipefail
-          base="https://dyrakarmy-dyrakarmy-platform.hf.space"
+          base="$HF_SPACE_URL"
           deployed=0
-          for attempt in $(seq 1 45); do
-            echo "Hugging Face verification attempt $attempt/45"
-            home="$(curl -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/" 2>/dev/null || true)"
-            catalog="$(curl -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/software/releases" 2>/dev/null || true)"
+          for attempt in $(seq 1 60); do
+            echo "Hugging Face verification attempt $attempt/60"
+            home="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/" 2>/dev/null || true)"
+            mirror="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/hf-mirror/health" 2>/dev/null || true)"
+            catalog="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/software/releases" 2>/dev/null || true)"
+            telegram="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/telegram/v12/health" 2>/dev/null || true)"
+            governance="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/platform/governance/health" 2>/dev/null || true)"
+            game="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 60 "$base/games/queue-commander/" 2>/dev/null || true)"
             if grep -q 'DyrakArmy Interface v17' <<<"$home" \
               && grep -q 'id="software"' <<<"$home" \
+              && grep -q 'cloudflare-mirror' <<<"$mirror" \
+              && grep -q '"cloudflare_untouched":true' <<<"$mirror" \
               && grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$catalog" \
               && grep -q 'DyrakArmyDesktop.exe' <<<"$catalog" \
-              && grep -q '"bot":"@dyrakarmy_bot"' <<<"$catalog"; then
+              && grep -q 'dyrakarmy_bot' <<<"$telegram" \
+              && grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$governance" \
+              && grep -q 'SHARED GAME ENGINE' <<<"$game"; then
               deployed=1
               break
             fi
             sleep 20
           done
           test "$deployed" -eq 1
+
+          cloudflare_home="$(curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 https://dyrakarmy.eu/)"
+          cloudflare_health="$(curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 https://dyrakarmy.eu/api/health)"
+          grep -q 'DyrakArmy Interface v17' <<<"$cloudflare_home"
+          grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$cloudflare_health"
