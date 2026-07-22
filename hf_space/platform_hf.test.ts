@@ -78,7 +78,9 @@ describe('Hugging Face parallel mirror runtime', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('X-DyrakArmy-HF-Mirror')).toBe('cloudflare-upstream');
     expect(upstreamFetch).toHaveBeenCalledOnce();
-    const forwarded = upstreamFetch.mock.calls[0][0];
+    const forwarded = upstreamFetch.mock.calls.at(0)?.at(0);
+    expect(forwarded).toBeInstanceOf(Request);
+    if (!(forwarded instanceof Request)) throw new Error('Expected one forwarded Request');
     expect(forwarded.url).toBe('https://dyrakarmy.eu/api/health?full=1');
     expect(forwarded.headers.get('Origin')).toBe('https://dyrakarmy.eu');
     expect(forwarded.headers.get('X-DyrakArmy-HF-Mirror')).toBe('1');
