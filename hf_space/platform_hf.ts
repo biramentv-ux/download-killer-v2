@@ -79,6 +79,7 @@ function buildMirrorRequest(request: Request, env: HfEnv): Request {
   headers.delete('X-Forwarded-Host');
   headers.delete('X-Forwarded-Proto');
   if (clientOrigin) headers.set('X-DyrakArmy-Client-Origin', clientOrigin);
+  headers.set('Accept-Encoding', 'identity');
   headers.set('Origin', upstream.origin);
   headers.set('Referer', `${upstream.origin}/`);
   headers.set('X-DyrakArmy-HF-Mirror', '1');
