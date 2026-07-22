@@ -27,7 +27,7 @@ USER 1000
 EXPOSE 7860
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
-  CMD curl -fsS "http://127.0.0.1:${PORT}/" >/dev/null || exit 1
+  CMD curl -fsS "http://127.0.0.1:${PORT}/api/hf-mirror/health" >/dev/null || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/app/hf/start.sh"]
