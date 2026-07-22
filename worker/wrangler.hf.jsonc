@@ -1,0 +1,125 @@
+// Hugging Face Docker Space compatibility runtime.
+// Cloudflare resource IDs and routes are intentionally absent.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "dyrakarmy-hf-space",
+  "main": "src/platform_v3.ts",
+  "compatibility_date": "2026-05-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./public/",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/telegram/*"]
+  },
+  "observability": { "enabled": false },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sounddrop-db",
+      "database_id": "00000000-0000-0000-0000-000000000001"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "00000000000000000000000000000001",
+      "preview_id": "00000000000000000000000000000001"
+    }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "DOWNLOAD_QUEUE", "queue": "sounddrop-downloads" },
+      { "binding": "HISTORY_QUEUE", "queue": "sounddrop-history-events" }
+    ],
+    "consumers": [
+      {
+        "queue": "sounddrop-downloads",
+        "max_batch_size": 5,
+        "max_batch_timeout": 10,
+        "max_retries": 5,
+        "retry_delay": 20,
+        "dead_letter_queue": "sounddrop-downloads-dlq"
+      },
+      {
+        "queue": "sounddrop-history-events",
+        "max_batch_size": 25,
+        "max_batch_timeout": 10,
+        "max_retries": 3,
+        "retry_delay": 10
+      }
+    ]
+  },
+  "vars": {
+    "DOWNLOADER_API_URL": "https://dyrakarmy-downloader-primary.onrender.com",
+    "DOWNLOADER_ORIGINS_JSON": "[{\"base_url\":\"https://dyrakarmy-downloader-primary.onrender.com\",\"priority\":0,\"id\":\"render-primary\"}]",
+    "DOWNLOADER_BACKUP_API_URL": "",
+    "TELEGRAM_BOT_USERNAME": "dyrakarmy_bot",
+    "TELEGRAM_DOWNLOAD_CHANNEL_ID": "",
+    "TELEGRAM_CHANNEL_PUBLISH_ENABLED": "1",
+    "TELEGRAM_CHANNEL_SEND_AUDIO": "1",
+    "TELEGRAM_STORAGE_ENABLED": "1",
+    "TELEGRAM_STORAGE_MAX_MB": "50",
+    "TELEGRAM_MINIAPP_PATH": "/telegram/",
+    "TELEGRAM_MINIAPP_AUTH_MAX_AGE_SECONDS": "900",
+    "PLATFORM_SESSION_TTL_SECONDS": "1209600",
+    "DOWNLOAD_URL_ALLOWLIST": "youtube.com,*.youtube.com,youtu.be,spotify.com,*.spotify.com,spotify.link,soundcloud.com,*.soundcloud.com,deezer.com,*.deezer.com,music.apple.com,*.music.apple.com,podcasts.apple.com,*.podcasts.apple.com,itunes.apple.com,*.itunes.apple.com,rss.com,*.rss.com,anchor.fm,*.anchor.fm,simplecast.com,*.simplecast.com,buzzsprout.com,*.buzzsprout.com,podbean.com,*.podbean.com,libsyn.com,*.libsyn.com,megaphone.fm,*.megaphone.fm,omny.fm,*.omny.fm,transistor.fm,*.transistor.fm",
+    "URL_BLOCKLIST": "localhost,*.localhost,*.local,*.onion",
+    "CORS_ORIGINS": "https://dyrakarmy-dyrakarmy-platform.hf.space,https://dyrakarmy.eu,https://www.dyrakarmy.eu,http://localhost:7860",
+    "DOWNLOAD_TOKEN_TTL_SECONDS": "3600",
+    "SEARCH_CACHE_TTL_SECONDS": "180",
+    "DOWNLOAD_DEDUPE_TTL_SECONDS": "120",
+    "JOB_STATUS_RATE_LIMIT_PER_MINUTE": "120",
+    "PUBLIC_BASE_URL": "https://dyrakarmy-dyrakarmy-platform.hf.space",
+    "INVIDIOUS_BASE_URL": "https://invidious.f5.si",
+    "ORIGIN_HEALTH_TIMEOUT_MS": "60000",
+    "ORIGIN_FAIL_THRESHOLD": "3",
+    "ORIGIN_RECOVERY_SECONDS": "45",
+    "OPS_QUEUE_BACKLOG_THRESHOLD": "250",
+    "QUEUE_RETRY_BASE_SECONDS": "30",
+    "QUEUE_RETRY_MAX_SECONDS": "900",
+    "QUEUE_RETRY_JITTER_PERCENT": "20",
+    "SMOKE_TEST_YOUTUBE_URL": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "SMOKE_TEST_SPOTIFY_URL": "https://open.spotify.com/track/5msPBVPfpNMt36L9hsPD0B",
+    "SMOKE_TEST_FORMAT": "mp3",
+    "SMOKE_TEST_QUALITY": "best",
+    "OPS_SMOKE_ALERT_COOLDOWN_SECONDS": "300",
+    "OPS_SMOKE_CONSECUTIVE_ALERT_THRESHOLD": "2",
+    "OPS_SMOKE_FAILURES_1H_ALERT_THRESHOLD": "2",
+    "OPS_REPLAY_RATE_LIMIT_PER_MINUTE": "12",
+    "OPS_REPLAY_RATE_LIMIT_OPERATOR_PER_MINUTE": "12",
+    "OPS_REPLAY_RATE_LIMIT_ADMIN_PER_MINUTE": "30",
+    "OPS_REPLAY_RATE_LIMIT_IP_PER_MINUTE": "30",
+    "OPS_REPLAY_MAX_TARGETS_OPERATOR": "60",
+    "OPS_REPLAY_MAX_TARGETS_ADMIN": "200",
+    "MIN_CLIENT_WEB": "8.0.0",
+    "MIN_CLIENT_DESKTOP_WINDOWS": "7.2.0",
+    "MIN_CLIENT_DESKTOP_MACOS": "7.2.0",
+    "MIN_CLIENT_MOBILE_EXPO": "1.0.0",
+    "MIN_CLIENT_EXTENSION": "1.0.0",
+    "LATEST_DESKTOP_WINDOWS_VERSION": "7.2.1",
+    "LATEST_DESKTOP_MACOS_VERSION": "7.2.1",
+    "LATEST_MOBILE_EXPO_VERSION": "1.0.1",
+    "LATEST_EXTENSION_VERSION": "1.2.0",
+    "LATEST_WEB_VERSION": "17.0.0",
+    "RELEASE_GITHUB_REPOSITORY": "biramentv-ux/download-killer-v2",
+    "RELEASE_CHANNEL": "stable",
+    "RELEASE_SIGNING_KEY_ID": "stable-main",
+    "RELEASE_MANIFEST_CACHE_TTL_SECONDS": "600",
+    "AUTO_MOBILE_VARIANT_ENABLED": "1",
+    "MOBILE_VARIANT_FORMAT": "mp3",
+    "MOBILE_VARIANT_QUALITY": "128",
+    "PRIVATE_URL_TTL_SECONDS": "3600",
+    "TELEGRAM_WEBHOOK_REQUIRE_JWT": "0",
+    "WEBHOOK_HMAC_MAX_SKEW_SECONDS": "300",
+    "KV_CLEANUP_PREFIXES": "url:,result:,private-url:,tg:url:,tg:result:,tg:handoff:,platform:session:v2:,platform:link:v2:",
+    "KV_CLEANUP_MAX_KEYS": "500",
+    "SYNC_KEY_EMAIL_REQUIRED": "0",
+    "SYNC_KEY_TURNSTILE_REQUIRED": "0",
+    "SYNC_KEY_TURNSTILE_SITE_KEY": "",
+    "JOB_RETENTION_ENABLED": "1",
+    "JOB_RETENTION_DAYS": "30",
+    "JOB_RETENTION_BATCH_SIZE": "100",
+    "API_JSON_COMPRESSION_ENABLED": "0"
+  }
+}
