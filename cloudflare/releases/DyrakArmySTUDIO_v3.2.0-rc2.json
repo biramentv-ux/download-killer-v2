@@ -1,0 +1,45 @@
+{
+  "schema": "eu.dyrakarmy.cloudflare-release-candidate.v1",
+  "product": "DyrakArmySTUDIO",
+  "version": "3.2.0-rc2",
+  "channel": "beta",
+  "official_release_status": "BLOCKED",
+  "website_deployment_status": "PREPARED_NOT_DEPLOYED",
+  "artifacts": [
+    {
+      "file": "DyrakArmySTUDIO_v3.2.0-rc2-QA2_Windows_x64_Setup.exe",
+      "sha256": "3b11ab0265b20e0d5b6a40a94f05782c6b6dbc77341daa2c585ca6fc1e9bb5a2"
+    },
+    {
+      "file": "DyrakArmySTUDIO_v3.2.0-rc2-QA2_Windows_x64_Portable.zip",
+      "sha256": "5e68498abc940a4de6e6a7194200aff794a0ce90f6c72deffa26c52cd23c2eae"
+    },
+    {
+      "file": "DyrakArmySTUDIO_v3.2.0-rc2_Recording_Update_Sync_Source.zip",
+      "sha256": "6bb4d58beb41039f1bbfe0da8bef8db8b578647da1e8c09b625188688d29b9f0"
+    },
+    {
+      "file": "DyrakArmySTUDIO_v3.2.0-rc2-QA2_DyrakArmyEU_Update_Deployment.zip",
+      "sha256": "ee3ec56f437eb7052a0a566e9a9e37a662bd92869c7e3078c1377e2cb02a32a1"
+    },
+    {
+      "file": "DyrakArmySTUDIO_v3.2.0-rc2_Full_Virtual_Benchmark_Lab.zip",
+      "sha256": "3ac24e6766ffbbf2ba582404ade0e7cea8b9a496a0918257a96ee9f7b09e2e41"
+    }
+  ],
+  "verified_gates": {
+    "native_rebuild": "6/6 PASS",
+    "python_regression": "47/47 PASS",
+    "localization": "706/706/706 PASS",
+    "recording_digital_twin": "108 virtual hours PASS",
+    "signed_update_virtual_lab": "PASS",
+    "windows_qa2_static_tamper_gate": "PASS"
+  },
+  "blockers": [
+    "Windows Setup was not executed as a Windows process in this environment",
+    "No Authenticode production signature",
+    "No final physical ASIO/storage/controller wall-clock qualification",
+    "Production Ed25519 update key has not replaced the QA development key"
+  ],
+  "agent_rule": "May stage QA/beta Cloudflare assets and manifests. Must not publish or label this candidate as official stable."
+}
