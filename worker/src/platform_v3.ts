@@ -6,6 +6,12 @@ import {
 } from './platform_governance';
 import { handleSoftwareCatalogApi } from './software_catalog';
 import { handleSoftwareTelegramWebhook } from './software_telegram';
+import { withResilientGovernanceCache } from './resilient_governance_cache';
+import { handleSourceDiscoveryApi } from './source_discovery';
+import {
+  handleTelegramArchiveReconcileApi,
+  runTelegramArchiveReconcile,
+} from './telegram_archive_reconcile';
 
 type ExtendedEnv = Env & {
   TELEGRAM_ADMIN_IDS?: string;
@@ -20,22 +26,39 @@ type ExtendedEnv = Env & {
   RELEASE_CHANNEL?: string;
   RELEASE_GITHUB_REPOSITORY?: string;
   PUBLIC_BASE_URL?: string;
+  AUDIUS_API_KEY?: string;
+  JAMENDO_CLIENT_ID?: string;
+  SOURCE_SEARCH_LIMIT?: string;
+  TELEGRAM_STORAGE_ENABLED?: string;
+  TELEGRAM_DOWNLOAD_CHANNEL_ID?: string;
+  TELEGRAM_ARCHIVE_RECONCILE_BATCH?: string;
+  TELEGRAM_ARCHIVE_RECONCILE_RETRY_MINUTES?: string;
 };
 
 export default {
   async fetch(request: Request, env: ExtendedEnv, context: ExecutionContext): Promise<Response> {
+    const sourceDiscoveryResponse = await handleSourceDiscoveryApi(request, env);
+    if (sourceDiscoveryResponse) return sourceDiscoveryResponse;
+
+    const archiveReconcileResponse = await handleTelegramArchiveReconcileApi(request, env);
+    if (archiveReconcileResponse) return archiveReconcileResponse;
+
     const softwareCatalogResponse = await handleSoftwareCatalogApi(
       request as unknown as Request,
       env,
     );
     if (softwareCatalogResponse) return softwareCatalogResponse;
 
-    const governanceResponse = await handlePlatformGovernanceApi(request, env);
+    // Device-link and opaque session state are written to D1 first and mirrored to KV.
+    // This keeps Control Center login working even when the Cloudflare KV daily write
+    // quota is temporarily exhausted.
+    const governanceEnv = withResilientGovernanceCache(env);
+    const governanceResponse = await handlePlatformGovernanceApi(request, governanceEnv);
     if (governanceResponse) return governanceResponse;
 
     const url = new URL(request.url);
     if (url.pathname === '/telegram/webhook' && request.method === 'POST') {
-      const linkResponse = await handlePlatformGovernanceTelegramWebhook(request.clone(), env);
+      const linkResponse = await handlePlatformGovernanceTelegramWebhook(request.clone(), governanceEnv);
       if (linkResponse) return linkResponse;
 
       const softwareResponse = await handleSoftwareTelegramWebhook(
@@ -61,6 +84,11 @@ export default {
     env: ExtendedEnv,
     context: ExecutionContext,
   ): Promise<void> {
-    return platformV2.scheduled(controller, env, context);
+    await platformV2.scheduled(controller, env, context);
+    context.waitUntil(
+      runTelegramArchiveReconcile(env).catch((error) => {
+        console.warn('Telegram archive reconciliation skipped', error);
+      }),
+    );
   },
 } satisfies ExportedHandler<ExtendedEnv, DownloadJob | JobHistoryEvent>;

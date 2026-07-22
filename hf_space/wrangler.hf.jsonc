@@ -15,18 +15,10 @@
   },
   "observability": { "enabled": false },
   "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "sounddrop-db",
-      "database_id": "00000000-0000-0000-0000-000000000001"
-    }
+    { "binding": "DB", "database_name": "sounddrop-db", "database_id": "00000000-0000-0000-0000-000000000001" }
   ],
   "kv_namespaces": [
-    {
-      "binding": "CACHE",
-      "id": "00000000000000000000000000000001",
-      "preview_id": "00000000000000000000000000000001"
-    }
+    { "binding": "CACHE", "id": "00000000000000000000000000000001", "preview_id": "00000000000000000000000000000001" }
   ],
   "queues": {
     "producers": [
@@ -34,21 +26,8 @@
       { "binding": "HISTORY_QUEUE", "queue": "sounddrop-history-events" }
     ],
     "consumers": [
-      {
-        "queue": "sounddrop-downloads",
-        "max_batch_size": 5,
-        "max_batch_timeout": 10,
-        "max_retries": 5,
-        "retry_delay": 20,
-        "dead_letter_queue": "sounddrop-downloads-dlq"
-      },
-      {
-        "queue": "sounddrop-history-events",
-        "max_batch_size": 25,
-        "max_batch_timeout": 10,
-        "max_retries": 3,
-        "retry_delay": 10
-      }
+      { "queue": "sounddrop-downloads", "max_batch_size": 5, "max_batch_timeout": 10, "max_retries": 5, "retry_delay": 20, "dead_letter_queue": "sounddrop-downloads-dlq" },
+      { "queue": "sounddrop-history-events", "max_batch_size": 25, "max_batch_timeout": 10, "max_retries": 3, "retry_delay": 10 }
     ]
   },
   "vars": {
@@ -64,10 +43,13 @@
     "TELEGRAM_CHANNEL_SEND_AUDIO": "0",
     "TELEGRAM_STORAGE_ENABLED": "0",
     "TELEGRAM_STORAGE_MAX_MB": "50",
+    "TELEGRAM_ARCHIVE_RECONCILE_BATCH": "10",
+    "TELEGRAM_ARCHIVE_RECONCILE_RETRY_MINUTES": "30",
     "TELEGRAM_MINIAPP_PATH": "/telegram/",
     "TELEGRAM_MINIAPP_AUTH_MAX_AGE_SECONDS": "900",
     "PLATFORM_SESSION_TTL_SECONDS": "1209600",
-    "DOWNLOAD_URL_ALLOWLIST": "youtube.com,*.youtube.com,youtu.be,spotify.com,*.spotify.com,spotify.link,soundcloud.com,*.soundcloud.com,deezer.com,*.deezer.com,music.apple.com,*.music.apple.com,podcasts.apple.com,*.podcasts.apple.com,itunes.apple.com,*.itunes.apple.com,rss.com,*.rss.com,anchor.fm,*.anchor.fm,simplecast.com,*.simplecast.com,buzzsprout.com,*.buzzsprout.com,podbean.com,*.podbean.com,libsyn.com,*.libsyn.com,megaphone.fm,*.megaphone.fm,omny.fm,*.omny.fm,transistor.fm,*.transistor.fm",
+    "SOURCE_SEARCH_LIMIT": "36",
+    "DOWNLOAD_URL_ALLOWLIST": "youtube.com,*.youtube.com,youtu.be,spotify.com,*.spotify.com,spotify.link,soundcloud.com,*.soundcloud.com,deezer.com,*.deezer.com,music.apple.com,*.music.apple.com,podcasts.apple.com,*.podcasts.apple.com,itunes.apple.com,*.itunes.apple.com,rss.com,*.rss.com,anchor.fm,*.anchor.fm,simplecast.com,*.simplecast.com,buzzsprout.com,*.buzzsprout.com,podbean.com,*.podbean.com,libsyn.com,*.libsyn.com,megaphone.fm,*.megaphone.fm,omny.fm,*.omny.fm,transistor.fm,*.transistor.fm,archive.org,*.archive.org,commons.wikimedia.org,upload.wikimedia.org,audius.co,*.audius.co,audius.music,*.audius.music,jamendo.com,*.jamendo.com,storage.jamendo.com,*.storage.jamendo.com,dyrakarmy.eu,*.dyrakarmy.eu",
     "URL_BLOCKLIST": "localhost,*.localhost,*.local,*.onion",
     "CORS_ORIGINS": "https://dyrakarmy-dyrakarmy-platform.hf.space,https://dyrakarmy.eu,https://www.dyrakarmy.eu,http://localhost:7860",
     "DOWNLOAD_TOKEN_TTL_SECONDS": "3600",

@@ -1,0 +1,13 @@
+{
+  "feature_release": "18.0.0",
+  "public_interface_contract": "17.0.0",
+  "features": [
+    "bg-en-ru-de-language-packs",
+    "resilient-governance-link-state",
+    "multi-source-authorized-media-discovery",
+    "telegram-history-archive-reconciliation"
+  ],
+  "telegram_bot": "dyrakarmy_bot",
+  "state_authority": "cloudflare",
+  "hugging_face_mode": "cloudflare-mirror"
+}
