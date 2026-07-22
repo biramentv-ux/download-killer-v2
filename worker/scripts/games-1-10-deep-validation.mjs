@@ -67,8 +67,8 @@ for (const game of manifest.games) {
     includes(files.platform, 'handleChallengeGamesApi', `${label}: API router`);
     includes(files.platform, 'serveChallengeGamePage', `${label}: page router`);
     includes(files.challengeBot, 'isPlatformModuleEnabled', `${label}: Telegram flag`);
-    for (const endpoint of ['/config', '/session', '/score', '/profile', '/leaderboard']) {
-      includes(files.challengeClient, `'${endpoint}'`, `${label}: ${endpoint}`);
+    for (const action of ['config', 'session', 'score', 'profile', 'leaderboard?limit=10']) {
+      includes(files.challengeClient, `api('${action}'`, `${label}: client action ${action}`);
     }
   }
 
