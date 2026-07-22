@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,follow">
+  <title>DyrakArmy</title>
+  <style>
+    html,body{height:100%;margin:0;background:#030711;color:#eaf7ff;font-family:system-ui,sans-serif}body{display:grid;place-items:center;text-align:center}main{padding:32px}a{color:#5fe7ff}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>DyrakArmy</h1>
+    <p>Пренасочване към основната платформа…</p>
+    <p><a id="fallback" href="https://dyrakarmy.eu/">Отвори dyrakarmy.eu</a></p>
+  </main>
+  <script>
+    (() => {
+      const primary = new URL('https://dyrakarmy.eu/');
+      primary.pathname = location.pathname;
+      primary.search = location.search;
+      primary.hash = location.hash;
+      document.querySelector('#fallback').href = primary.toString();
+      location.replace(primary.toString());
+    })();
+  </script>
+</body>
+</html>
