@@ -90,6 +90,7 @@ jobs:
           base="$HF_SPACE_URL"
           deployed=0
           : > hf-verify.log
+          : > hf-v18-summary.log
           for attempt in $(seq 1 60); do
             echo "attempt=$attempt" | tee -a hf-verify.log
             home="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/" 2>>hf-verify.log || true)"
@@ -98,6 +99,28 @@ jobs:
             telegram="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/telegram/v12/health" 2>>hf-verify.log || true)"
             governance="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/platform/governance/health" 2>>hf-verify.log || true)"
             game="$(curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 60 "$base/games/queue-commander/" 2>>hf-verify.log || true)"
+            curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/platform/i18n-v18.js?v=18.0.0" -o hf-i18n-v18.js 2>>hf-verify.log || true
+            curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/platform/source-discovery-v18.js?v=18.0.0" -o hf-source-discovery-v18.js 2>>hf-verify.log || true
+            curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/sources" -o hf-source-catalog.json 2>>hf-verify.log || true
+            curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 "$base/api/telegram/archive/reconcile/status" -o hf-archive-status.json 2>>hf-verify.log || true
+            curl --compressed -fsSL --retry 2 --retry-all-errors --max-time 30 \
+              -H 'Content-Type: application/json' \
+              -X POST "$base/api/platform/governance" \
+              --data "{\"action\":\"identity.link.start\",\"device_name\":\"hf-v18-ledger-${GITHUB_RUN_ID}\"}" \
+              -o hf-device-link.json 2>>hf-verify.log || true
+
+            v18_ok=0
+            if grep -q 'bg: {' hf-i18n-v18.js 2>/dev/null \
+              && grep -q 'en: {' hf-i18n-v18.js 2>/dev/null \
+              && grep -q 'ru: {' hf-i18n-v18.js 2>/dev/null \
+              && grep -q 'de: {' hf-i18n-v18.js 2>/dev/null \
+              && grep -q 'sourceDiscoveryV18' hf-source-discovery-v18.js 2>/dev/null \
+              && node -e "const p=require('./hf-source-catalog.json');if(!p.ok||!Array.isArray(p.sources)||p.sources.length<12||p.enabled<10)process.exit(1)" \
+              && node -e "const p=require('./hf-archive-status.json');if(!p.ok||typeof p.missing_jobs!=='number'||!['config','cache','none'].includes(p.channel_source))process.exit(1)" \
+              && node -e "const p=require('./hf-device-link.json');if(!p.ok||!/^[A-Z0-9]{8}$/.test(p.code||'')||!String(p.command||'').startsWith('/link '))process.exit(1)"; then
+              v18_ok=1
+            fi
+
             if grep -q 'DyrakArmy Interface v17' <<<"$home" \
               && grep -q 'id="software"' <<<"$home" \
               && grep -q 'cloudflare-mirror' <<<"$mirror" \
@@ -106,9 +129,14 @@ jobs:
               && grep -q 'DyrakArmyDesktop.exe' <<<"$catalog" \
               && grep -q 'dyrakarmy_bot' <<<"$telegram" \
               && grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$governance" \
-              && grep -q 'SHARED GAME ENGINE' <<<"$game"; then
+              && grep -q 'SHARED GAME ENGINE' <<<"$game" \
+              && [[ "$v18_ok" -eq 1 ]]; then
               deployed=1
               echo "verified=true" | tee -a hf-verify.log
+              echo "hf_v18_assets=true" >> hf-v18-summary.log
+              echo "hf_source_catalog=true" >> hf-v18-summary.log
+              echo "hf_archive_status=true" >> hf-v18-summary.log
+              echo "hf_device_link=true" >> hf-v18-summary.log
               break
             fi
             sleep 20
@@ -118,17 +146,40 @@ jobs:
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit "$status"
 
-      - name: Verify Cloudflare continuity
+      - name: Verify Cloudflare continuity and v18 backend
         id: cloudflare
         continue-on-error: true
         shell: bash
         run: |
           set +e
+          base="https://dyrakarmy.eu"
+          : > hf-cloudflare.log
           {
-            home="$(curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 https://dyrakarmy.eu/)"
-            health="$(curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 https://dyrakarmy.eu/api/health)"
+            home="$(curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 "$base/")"
+            health="$(curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 "$base/api/health")"
+            curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 "$base/platform/i18n-v18.js?v=18.0.0" -o cf-i18n-v18.js
+            curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 "$base/platform/source-discovery-v18.js?v=18.0.0" -o cf-source-discovery-v18.js
+            curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 "$base/api/sources" -o cf-source-catalog.json
+            curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 "$base/api/telegram/archive/reconcile/status" -o cf-archive-status.json
+            curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 \
+              -H 'Content-Type: application/json' \
+              -X POST "$base/api/platform/governance" \
+              --data "{\"action\":\"identity.link.start\",\"device_name\":\"cf-v18-ledger-${GITHUB_RUN_ID}\"}" \
+              -o cf-device-link.json
             grep -q 'DyrakArmy Interface v17' <<<"$home"
             grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$health"
+            grep -q 'bg: {' cf-i18n-v18.js
+            grep -q 'en: {' cf-i18n-v18.js
+            grep -q 'ru: {' cf-i18n-v18.js
+            grep -q 'de: {' cf-i18n-v18.js
+            grep -q 'sourceDiscoveryV18' cf-source-discovery-v18.js
+            node -e "const p=require('./cf-source-catalog.json');if(!p.ok||!Array.isArray(p.sources)||p.sources.length<12||p.enabled<10)process.exit(1)"
+            node -e "const p=require('./cf-archive-status.json');if(!p.ok||typeof p.missing_jobs!=='number'||!['config','cache','none'].includes(p.channel_source))process.exit(1)"
+            node -e "const p=require('./cf-device-link.json');if(!p.ok||!/^[A-Z0-9]{8}$/.test(p.code||'')||!String(p.command||'').startsWith('/link '))process.exit(1)"
+            echo "cloudflare_v18_assets=true"
+            echo "cloudflare_source_catalog=true"
+            echo "cloudflare_archive_status=true"
+            echo "cloudflare_device_link=true"
           } > hf-cloudflare.log 2>&1
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
@@ -152,7 +203,8 @@ jobs:
             echo "- GitHub commit: \`${GITHUB_SHA}\`"
             echo "- Upload status: \`${upload_status}\`"
             echo "- Hugging Face verification: \`${verify_status}\`"
-            echo "- Cloudflare continuity: \`${cloudflare_status}\`"
+            echo "- Cloudflare continuity + v18 backend: \`${cloudflare_status}\`"
+            echo "- v18 checks: language packs, 12-source catalog, archive status, device-link POST"
             echo "- Target: \`${HF_SPACE_REPO_ID}\`"
             echo "- Mode: \`cloudflare-mirror\`"
             echo
@@ -167,6 +219,8 @@ jobs:
             echo
             echo '```text'
             tail -n 80 hf-verify.log 2>/dev/null || echo 'Verification did not run.'
+            tail -n 20 hf-v18-summary.log 2>/dev/null || true
+            tail -n 20 hf-cloudflare.log 2>/dev/null || true
             echo '```'
             echo "</details>"
           } > hf-ledger-comment.md
