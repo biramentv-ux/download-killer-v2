@@ -31,15 +31,13 @@ fi
 npx wrangler d1 migrations apply sounddrop-db \
   --local \
   --persist-to "$PERSIST_ROOT" \
-  --config wrangler.hf.jsonc \
-  --yes
+  --config wrangler.hf.jsonc
 
 npx wrangler d1 execute sounddrop-db \
   --local \
   --persist-to "$PERSIST_ROOT" \
   --config wrangler.hf.jsonc \
-  --file "$D1_FILE" \
-  --yes
+  --file "$D1_FILE"
 
 if [[ -s "$KV_FILE" ]]; then
   npx wrangler kv bulk put "$KV_FILE" \
