@@ -10,7 +10,7 @@ type HfEnv = Env & {
 };
 
 const DEFAULT_UPSTREAM = 'https://dyrakarmy.eu';
-const MIRROR_PATH_PREFIXES = ['/api/', '/files/', '/download/'];
+const MIRROR_PATH_PREFIXES = ['/api/', '/files/', '/download/', '/games/', '/control/', '/control-v2/'];
 const LOCAL_HEALTH_PATH = '/api/hf-mirror/health';
 
 export function resolveHfBackendMode(env: HfEnv): HfBackendMode {
