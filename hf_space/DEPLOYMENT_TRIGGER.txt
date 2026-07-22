@@ -1,0 +1,4 @@
+DyrakArmy Hugging Face production mirror deployment
+Triggered: 2026-07-22
+Source of truth: GitHub main
+Cloudflare remains active and unchanged during parallel validation.
