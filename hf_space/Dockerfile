@@ -2,6 +2,8 @@ FROM node:22-bookworm-slim
 
 ENV PORT=7860 \
     NODE_ENV=production \
+    HF_BACKEND_MODE=free-public \
+    PUBLIC_BASE_URL=https://dyrakarmy-dyrakarmy-platform.hf.space \
     WRANGLER_SEND_METRICS=false \
     NPM_CONFIG_UPDATE_NOTIFIER=false
 
@@ -27,7 +29,7 @@ USER 1000
 EXPOSE 7860
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
-  CMD curl -fsS "http://127.0.0.1:${PORT}/api/hf-mirror/health" >/dev/null || exit 1
+  CMD curl -fsS "http://127.0.0.1:${PORT}/api/hf-runtime/health" >/dev/null || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/app/hf/start.sh"]
