@@ -1,5 +1,8 @@
+// @ts-expect-error Vitest executes this asset inspection in Node; Worker production types intentionally omit node built-ins.
 import { readFileSync } from 'node:fs';
+// @ts-expect-error Vitest executes this asset inspection in Node; Worker production types intentionally omit node built-ins.
 import { resolve } from 'node:path';
+// @ts-expect-error Vitest executes this asset inspection in Node; Worker production types intentionally omit node built-ins.
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
