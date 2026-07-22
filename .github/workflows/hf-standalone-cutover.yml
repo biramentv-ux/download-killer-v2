@@ -1,0 +1,169 @@
+name: Hugging Face Standalone Cutover Gate
+
+on:
+  pull_request:
+    paths:
+      - worker/**
+      - hf_space/**
+      - hf_redirect_space/**
+      - .github/workflows/hf-standalone-cutover.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install and validate Worker
+        working-directory: worker
+        run: |
+          npm ci --silent
+          npm run typecheck
+          npm test
+          node scripts/full-virtual-simulation.mjs
+
+      - name: Prepare deterministic standalone Space bundle
+        run: |
+          rm -rf .hf-stage .hf-test-data
+          mkdir -p .hf-stage .hf-test-data/dyrakarmy
+          rsync -a --delete \
+            --exclude node_modules \
+            --exclude .wrangler \
+            --exclude .dev.vars \
+            worker/ .hf-stage/worker/
+          cp hf_space/platform_hf.ts .hf-stage/worker/src/platform_hf.ts
+          cp hf_space/wrangler.hf.jsonc .hf-stage/worker/wrangler.hf.jsonc
+          rm -f .hf-stage/worker/src/platform_hf.test.ts
+          cp hf_space/Dockerfile .hf-stage/Dockerfile
+          cp hf_space/start.sh .hf-stage/start.sh
+          cp hf_space/import-cloudflare-state.sh .hf-stage/import-cloudflare-state.sh
+          cp hf_space/render-dev-vars.mjs .hf-stage/render-dev-vars.mjs
+          cp hf_space/standalone-preflight.mjs .hf-stage/standalone-preflight.mjs
+          cp hf_space/standalone-supervisor.mjs .hf-stage/standalone-supervisor.mjs
+          printf '{"test":true}\n' > .hf-test-data/dyrakarmy/.cloudflare-state-imported
+          chmod -R 0777 .hf-test-data
+
+      - name: Build standalone Docker image
+        run: docker build -t dyrakarmy-hf-standalone:test .hf-stage
+
+      - name: Start standalone runtime with persistent volume
+        run: |
+          docker run -d --name dyrakarmy-hf-standalone \
+            -p 17860:7860 \
+            -v "$PWD/.hf-test-data:/data" \
+            -e HF_BACKEND_MODE=standalone \
+            -e HF_STATE_IMPORT_REQUIRED=1 \
+            -e HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE=0 \
+            -e DYRAKARMY_PERSIST_ROOT=/data/dyrakarmy \
+            -e PUBLIC_BASE_URL=https://standalone.example.test \
+            -e CORS_ORIGINS=https://standalone.example.test \
+            -e TELEGRAM_BOT_TOKEN=test-token \
+            -e TELEGRAM_SECRET_TOKEN=test-secret-token \
+            -e DOWNLOADER_API_KEY=test-downloader-key \
+            -e DOWNLOAD_TOKEN_SECRET=test-download-token \
+            -e WEBHOOK_HMAC_SECRET=test-webhook-secret \
+            -e OPS_ADMIN_TOKEN=test-ops-admin \
+            -e RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64=test-signing-key \
+            dyrakarmy-hf-standalone:test
+
+          ready=0
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:17860/api/hf-mirror/health >/tmp/hf-health.json; then
+              ready=1
+              break
+            fi
+            if ! docker inspect -f '{{.State.Running}}' dyrakarmy-hf-standalone 2>/dev/null | grep -q true; then
+              docker logs dyrakarmy-hf-standalone || true
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$ready" -eq 1
+          node -e "const p=require('/tmp/hf-health.json'); if(!p.ok||p.mode!=='standalone'||p.state_authority!=='hugging-face-local') process.exit(1)"
+
+      - name: Validate Web, API, D1 and KV state
+        run: |
+          curl -fsS http://127.0.0.1:17860/ | grep -q 'DyrakArmy Interface v17'
+          curl -fsS http://127.0.0.1:17860/api/sources -o /tmp/sources.json
+          node -e "const p=require('/tmp/sources.json'); if(!p.ok||!Array.isArray(p.sources)||p.sources.length<10) process.exit(1)"
+          curl -fsS -H 'Content-Type: application/json' \
+            -X POST http://127.0.0.1:17860/api/platform/governance \
+            --data '{"action":"identity.link.start","device_name":"hf-standalone-persistence-test"}' \
+            -o /tmp/link-start.json
+          node -e "const p=require('/tmp/link-start.json'); if(!p.ok||!/^[A-Z0-9]{8}$/.test(p.code||'')) process.exit(1); require('fs').writeFileSync('/tmp/link-code',p.code)"
+
+      - name: Restart and verify persistent state
+        run: |
+          docker rm -f dyrakarmy-hf-standalone
+          docker run -d --name dyrakarmy-hf-standalone \
+            -p 17860:7860 \
+            -v "$PWD/.hf-test-data:/data" \
+            -e HF_BACKEND_MODE=standalone \
+            -e HF_STATE_IMPORT_REQUIRED=1 \
+            -e HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE=0 \
+            -e DYRAKARMY_PERSIST_ROOT=/data/dyrakarmy \
+            -e PUBLIC_BASE_URL=https://standalone.example.test \
+            -e CORS_ORIGINS=https://standalone.example.test \
+            -e TELEGRAM_BOT_TOKEN=test-token \
+            -e TELEGRAM_SECRET_TOKEN=test-secret-token \
+            -e DOWNLOADER_API_KEY=test-downloader-key \
+            -e DOWNLOAD_TOKEN_SECRET=test-download-token \
+            -e WEBHOOK_HMAC_SECRET=test-webhook-secret \
+            -e OPS_ADMIN_TOKEN=test-ops-admin \
+            -e RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64=test-signing-key \
+            dyrakarmy-hf-standalone:test
+          ready=0
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:17860/api/hf-mirror/health >/dev/null; then
+              ready=1
+              break
+            fi
+            if ! docker inspect -f '{{.State.Running}}' dyrakarmy-hf-standalone 2>/dev/null | grep -q true; then
+              docker logs dyrakarmy-hf-standalone || true
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$ready" -eq 1
+          code="$(cat /tmp/link-code)"
+          curl -fsS -H 'Content-Type: application/json' \
+            -X POST http://127.0.0.1:17860/api/platform/governance \
+            --data "{\"action\":\"identity.link.status\",\"code\":\"$code\"}" \
+            -o /tmp/link-status.json
+          node -e "const p=require('/tmp/link-status.json'); if(p.status!=='pending') process.exit(1)"
+
+      - name: Capture diagnostics
+        if: always()
+        run: |
+          mkdir -p standalone-diagnostics
+          docker logs dyrakarmy-hf-standalone > standalone-diagnostics/container.log 2>&1 || true
+          docker inspect dyrakarmy-hf-standalone > standalone-diagnostics/container-inspect.json 2>&1 || true
+          find .hf-test-data -maxdepth 8 -type f -printf '%p %s bytes\n' | sort > standalone-diagnostics/persistent-files.txt || true
+          cp /tmp/hf-health.json standalone-diagnostics/ 2>/dev/null || true
+          cp /tmp/sources.json standalone-diagnostics/ 2>/dev/null || true
+          cp /tmp/link-status.json standalone-diagnostics/ 2>/dev/null || true
+          tail -n 250 standalone-diagnostics/container.log || true
+          cat standalone-diagnostics/persistent-files.txt || true
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hf-standalone-cutover-diagnostics
+          path: standalone-diagnostics
+          if-no-files-found: error
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f dyrakarmy-hf-standalone >/dev/null 2>&1 || true

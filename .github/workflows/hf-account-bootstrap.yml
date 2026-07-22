@@ -1,0 +1,164 @@
+name: Hugging Face Standalone Account Bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type APPLY-HF-STANDALONE to create or update Hugging Face resources
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hf-standalone-account-bootstrap
+  cancel-in-progress: false
+
+env:
+  HF_PRIMARY_SPACE: DyrakArmy/dyrakarmy-platform
+  HF_REDIRECT_SPACE: DyrakArmy/dyrakarmy-domain-redirect
+  HF_STATE_BUCKET: DyrakArmy/dyrakarmy-state
+
+jobs:
+  bootstrap:
+    if: inputs.confirm == 'APPLY-HF-STANDALONE'
+    runs-on: ubuntu-latest
+    environment: hugging-face-production
+    env:
+      HF_ADMIN_TOKEN: ${{ secrets.HF_ADMIN_TOKEN }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_SECRET_TOKEN: ${{ secrets.TELEGRAM_SECRET_TOKEN }}
+      TELEGRAM_ADMIN_IDS: ${{ secrets.TELEGRAM_ADMIN_IDS }}
+      TELEGRAM_DOWNLOAD_CHANNEL_ID: ${{ secrets.TELEGRAM_DOWNLOAD_CHANNEL_ID }}
+      DOWNLOADER_API_KEY: ${{ secrets.DOWNLOADER_API_KEY }}
+      DOWNLOAD_TOKEN_SECRET: ${{ secrets.DOWNLOAD_TOKEN_SECRET }}
+      WEBHOOK_HMAC_SECRET: ${{ secrets.WEBHOOK_HMAC_SECRET }}
+      OPS_READ_TOKEN: ${{ secrets.OPS_READ_TOKEN }}
+      OPS_OPERATOR_TOKEN: ${{ secrets.OPS_OPERATOR_TOKEN }}
+      OPS_ADMIN_TOKEN: ${{ secrets.OPS_ADMIN_TOKEN }}
+      OPS_ALERT_CHAT_ID: ${{ secrets.OPS_ALERT_CHAT_ID }}
+      RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64 }}
+      AUDIUS_API_KEY: ${{ secrets.AUDIUS_API_KEY }}
+      JAMENDO_CLIENT_ID: ${{ secrets.JAMENDO_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required production secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            HF_ADMIN_TOKEN
+            TELEGRAM_BOT_TOKEN
+            TELEGRAM_SECRET_TOKEN
+            TELEGRAM_ADMIN_IDS
+            DOWNLOADER_API_KEY
+            DOWNLOAD_TOKEN_SECRET
+            WEBHOOK_HMAC_SECRET
+            OPS_READ_TOKEN
+            OPS_OPERATOR_TOKEN
+            OPS_ADMIN_TOKEN
+            RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64
+          )
+          missing=()
+          for key in "${required[@]}"; do
+            [[ -n "${!key:-}" ]] || missing+=("$key")
+          done
+          if (( ${#missing[@]} )); then
+            printf 'Missing GitHub environment secrets: %s\n' "${missing[*]}" >&2
+            exit 64
+          fi
+
+      - name: Install current Hugging Face CLI
+        run: |
+          curl -LsSf https://hf.co/cli/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Create bucket and redirect Space
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HF_TOKEN="$HF_ADMIN_TOKEN"
+          hf buckets create "$HF_STATE_BUCKET" --private --exist-ok
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ['HF_ADMIN_TOKEN'])
+          api.create_repo(
+              repo_id=os.environ['HF_REDIRECT_SPACE'],
+              repo_type='space',
+              space_sdk='static',
+              private=False,
+              exist_ok=True,
+          )
+          PY
+
+      - name: Attach persistent bucket and upgrade primary Space
+        shell: bash
+        run: |
+          set -euo pipefail
+          hf spaces volumes set "$HF_PRIMARY_SPACE" \
+            -v "hf://buckets/$HF_STATE_BUCKET:/data" \
+            --token "$HF_ADMIN_TOKEN"
+          hf spaces settings "$HF_PRIMARY_SPACE" \
+            --hardware cpu-upgrade \
+            --sleep-time -1 \
+            --token "$HF_ADMIN_TOKEN"
+
+      - name: Configure standalone Space variables
+        shell: bash
+        run: |
+          cat > hf-standalone.env <<'EOF'
+          HF_BACKEND_MODE=standalone
+          HF_CUTOVER_GENERATION=hf-v20
+          HF_STATE_IMPORT_REQUIRED=1
+          HF_IMPORT_ON_START=0
+          HF_STATE_IMPORT_DIR=/data/import/cloudflare
+          HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE=0
+          DYRAKARMY_PERSIST_ROOT=/data/dyrakarmy
+          PUBLIC_BASE_URL=https://dyrakarmy-dyrakarmy-platform.hf.space
+          CORS_ORIGINS=https://dyrakarmy-dyrakarmy-platform.hf.space,https://dyrakarmy.eu,https://www.dyrakarmy.eu,https://dyrakarmy.online,https://www.dyrakarmy.online
+          TELEGRAM_STORAGE_ENABLED=1
+          TELEGRAM_CHANNEL_PUBLISH_ENABLED=1
+          TELEGRAM_CHANNEL_SEND_AUDIO=1
+          EOF
+          hf spaces variables add "$HF_PRIMARY_SPACE" \
+            --env-file hf-standalone.env \
+            --token "$HF_ADMIN_TOKEN"
+
+      - name: Configure primary Space secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          cat > hf-secrets.env <<EOF
+          TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+          TELEGRAM_SECRET_TOKEN=$TELEGRAM_SECRET_TOKEN
+          TELEGRAM_ADMIN_IDS=$TELEGRAM_ADMIN_IDS
+          TELEGRAM_DOWNLOAD_CHANNEL_ID=$TELEGRAM_DOWNLOAD_CHANNEL_ID
+          DOWNLOADER_API_KEY=$DOWNLOADER_API_KEY
+          DOWNLOAD_TOKEN_SECRET=$DOWNLOAD_TOKEN_SECRET
+          WEBHOOK_HMAC_SECRET=$WEBHOOK_HMAC_SECRET
+          OPS_READ_TOKEN=$OPS_READ_TOKEN
+          OPS_OPERATOR_TOKEN=$OPS_OPERATOR_TOKEN
+          OPS_ADMIN_TOKEN=$OPS_ADMIN_TOKEN
+          OPS_ALERT_CHAT_ID=$OPS_ALERT_CHAT_ID
+          RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64=$RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64
+          AUDIUS_API_KEY=$AUDIUS_API_KEY
+          JAMENDO_CLIENT_ID=$JAMENDO_CLIENT_ID
+          EOF
+          hf spaces secrets add "$HF_PRIMARY_SPACE" \
+            --secrets-file hf-secrets.env \
+            --token "$HF_ADMIN_TOKEN"
+          rm -f hf-secrets.env
+
+      - name: Verify account-side configuration without revealing secret values
+        shell: bash
+        run: |
+          set -euo pipefail
+          hf spaces variables ls "$HF_PRIMARY_SPACE" --token "$HF_ADMIN_TOKEN"
+          hf spaces secrets ls "$HF_PRIMARY_SPACE" --token "$HF_ADMIN_TOKEN"
+          hf spaces volumes list "$HF_PRIMARY_SPACE" --token "$HF_ADMIN_TOKEN"
+          hf spaces hardware "$HF_PRIMARY_SPACE" --token "$HF_ADMIN_TOKEN" || true
+          echo 'Account bootstrap complete. State import, Telegram webhook activation and custom domains remain separately gated.'

@@ -1,0 +1,51 @@
+name: Hugging Face Secondary Domain Redirect
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - hf_redirect_space/**
+      - .github/workflows/hf-secondary-domain-redirect.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hf-secondary-domain-redirect
+  cancel-in-progress: true
+
+env:
+  HF_REDIRECT_SPACE_REPO_ID: DyrakArmy/dyrakarmy-domain-redirect
+  HF_REDIRECT_SPACE_URL: https://dyrakarmy-dyrakarmy-domain-redirect.hf.space
+
+jobs:
+  publish:
+    if: vars.HF_REDIRECT_SPACE_SYNC_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Hugging Face CLI
+        run: |
+          curl -LsSf https://hf.co/cli/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Publish redirect Space with Trusted Publisher
+        env:
+          HF_OIDC_RESOURCE: spaces/DyrakArmy/dyrakarmy-domain-redirect
+        run: |
+          hf upload "$HF_REDIRECT_SPACE_REPO_ID" hf_redirect_space . \
+            --repo-type=space \
+            --delete='*' \
+            --commit-message="Sync secondary-domain redirect from GitHub ${GITHUB_SHA::12}"
+
+      - name: Verify path-preserving redirect bundle
+        run: |
+          for attempt in $(seq 1 45); do
+            body="$(curl -fsSL --max-time 20 "$HF_REDIRECT_SPACE_URL/index.html" || true)"
+            if grep -q "location.replace(primary.toString())" <<<"$body"; then exit 0; fi
+            sleep 10
+          done
+          exit 1

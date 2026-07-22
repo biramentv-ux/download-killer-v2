@@ -17,16 +17,16 @@ RUN cd worker \
     && npm cache clean --force
 
 COPY worker ./worker
-COPY start.sh render-dev-vars.mjs ./hf/
+COPY start.sh import-cloudflare-state.sh render-dev-vars.mjs standalone-preflight.mjs standalone-supervisor.mjs ./hf/
 
-RUN chmod +x /app/hf/start.sh \
+RUN chmod +x /app/hf/start.sh /app/hf/import-cloudflare-state.sh \
     && chown -R 1000:1000 /app
 
 USER 1000
 
 EXPOSE 7860
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
   CMD curl -fsS "http://127.0.0.1:${PORT}/api/hf-mirror/health" >/dev/null || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
