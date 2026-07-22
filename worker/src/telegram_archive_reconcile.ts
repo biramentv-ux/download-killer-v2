@@ -29,10 +29,16 @@ type BackfillRow = {
 type ReconcileStatus = {
   enabled: boolean;
   channel_configured: boolean;
+  channel_source: 'config' | 'cache' | 'none';
   completed_jobs: number;
   archived_jobs: number;
   missing_jobs: number;
   pending_backfill: number;
+};
+
+type StorageChannelResolution = {
+  id: string | null;
+  source: 'config' | 'cache' | 'none';
 };
 
 const schemaReady = new WeakMap<object, Promise<void>>();
@@ -115,26 +121,42 @@ export async function runTelegramArchiveReconcile(
 
 export async function getTelegramArchiveReconcileStatus(env: ArchiveReconcileEnv): Promise<ReconcileStatus> {
   await ensureArchiveReconcileSchema(env);
-  const row = await env.DB.prepare(`
-    SELECT
-      (SELECT COUNT(*) FROM download_jobs WHERE status = 'done') AS completed_jobs,
-      (SELECT COUNT(DISTINCT job_id) FROM telegram_media_objects) AS archived_jobs,
-      (SELECT COUNT(*)
-         FROM download_jobs d
-         LEFT JOIN telegram_media_objects m ON m.job_id = d.id
-        WHERE d.status = 'done'
-          AND (d.result_url IS NOT NULL OR d.r2_key IS NOT NULL)
-          AND m.id IS NULL) AS missing_jobs,
-      (SELECT COUNT(*) FROM telegram_archive_backfill) AS pending_backfill
-  `).first<Record<string, number>>();
+  const [row, channel] = await Promise.all([
+    env.DB.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM download_jobs WHERE status = 'done') AS completed_jobs,
+        (SELECT COUNT(DISTINCT job_id) FROM telegram_media_objects) AS archived_jobs,
+        (SELECT COUNT(*)
+           FROM download_jobs d
+           LEFT JOIN telegram_media_objects m ON m.job_id = d.id
+          WHERE d.status = 'done'
+            AND (d.result_url IS NOT NULL OR d.r2_key IS NOT NULL)
+            AND m.id IS NULL) AS missing_jobs,
+        (SELECT COUNT(*) FROM telegram_archive_backfill) AS pending_backfill
+    `).first<Record<string, number>>(),
+    resolveArchiveStorageChannel(env),
+  ]);
   return {
     enabled: storageEnabled(env),
-    channel_configured: Boolean(String(env.TELEGRAM_DOWNLOAD_CHANNEL_ID || '').trim()),
+    channel_configured: Boolean(channel.id),
+    channel_source: channel.source,
     completed_jobs: Number(row?.completed_jobs || 0),
     archived_jobs: Number(row?.archived_jobs || 0),
     missing_jobs: Number(row?.missing_jobs || 0),
     pending_backfill: Number(row?.pending_backfill || 0),
   };
+}
+
+export async function resolveArchiveStorageChannel(env: ArchiveReconcileEnv): Promise<StorageChannelResolution> {
+  const configured = String(env.TELEGRAM_DOWNLOAD_CHANNEL_ID || '').trim();
+  if (configured) return { id: configured, source: 'config' };
+  try {
+    const cached = String(await env.CACHE.get('tg:download_channel_id') || '').trim();
+    if (cached) return { id: cached, source: 'cache' };
+  } catch (error) {
+    console.warn('Unable to resolve cached Telegram storage channel', error);
+  }
+  return { id: null, source: 'none' };
 }
 
 export function buildArchiveReconcileJob(row: BackfillRow): DownloadJob {
