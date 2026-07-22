@@ -1,5 +1,6 @@
 name: Platform v18 Live Diagnostic
 
+# trigger: 2026-07-22T07:05:00Z
 on:
   push:
     branches: [main]
