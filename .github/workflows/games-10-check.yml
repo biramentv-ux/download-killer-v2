@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - worker/**
+      - hf_space/**
       - .github/workflows/games-10-check.yml
   push:
     branches:
       - main
     paths:
       - worker/**
+      - hf_space/**
       - .github/workflows/games-10-check.yml
   workflow_dispatch:
 
@@ -40,6 +42,8 @@ jobs:
         run: npm test
       - name: Run deterministic Games 1-10 simulation
         run: node scripts/games-1-10-simulation.mjs
+      - name: Run deep sequential Games 1-10 validation
+        run: node scripts/games-1-10-deep-validation.mjs
       - name: Wrangler packaging dry-run
         run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-games-10
 
@@ -66,6 +70,7 @@ jobs:
         run: |
           set -euo pipefail
           game='${{ matrix.game }}'
+          grep -q "$game" worker/games-10-validation-manifest.json
           grep -q "$game" worker/public/platform/games-v14.js
           grep -q "$game" worker/public/platform/platform-public.js
           case "$game" in
@@ -75,10 +80,12 @@ jobs:
               ;;
             archive-raid)
               grep -q 'handleArchiveRaidApi' worker/src/platform_v2.ts
+              grep -q 'protected_content_access: false' worker/src/archive_raid.ts
               grep -q "$game" worker/public/sw.js
               ;;
             latency-strike)
               grep -q 'handleLatencyStrikeGameApi' worker/src/platform_v2.ts
+              grep -q 'setGameScore' worker/src/latency_strike_native.ts
               grep -q "$game" worker/public/sw.js
               ;;
             *)
@@ -96,10 +103,7 @@ jobs:
             dyrakarmy-arena) node --check worker/public/games/dyrakarmy-arena/arena.js ;;
             archive-raid) node --check worker/public/games/archive-raid/raid.js ;;
             latency-strike) node --check worker/public/games/latency-strike/game.js ;;
-            *)
-              grep -q '${{ matrix.game }}' worker/src/challenge_games.ts
-              node --check worker/public/games/challenge/challenge.js
-              ;;
+            *) node --check worker/public/games/challenge/challenge.js ;;
           esac
 
   integration-contracts:
@@ -153,3 +157,70 @@ jobs:
             echo 'Unsafe browser URL scheme found in game client.'
             exit 1
           fi
+
+  hf-free-public-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Hugging Face free-public bundle
+        run: |
+          set -euo pipefail
+          rm -rf .hf-stage
+          mkdir -p .hf-stage
+          rsync -a --delete --exclude node_modules --exclude .wrangler --exclude .dev.vars worker/ .hf-stage/worker/
+          cp hf_space/platform_hf.ts .hf-stage/worker/src/platform_hf.ts
+          cp hf_space/wrangler.hf.jsonc .hf-stage/worker/wrangler.hf.jsonc
+          rm -f .hf-stage/worker/src/platform_hf.test.ts
+          cp hf_space/README.md .hf-stage/README.md
+          cp hf_space/Dockerfile .hf-stage/Dockerfile
+          cp hf_space/start.sh .hf-stage/start.sh
+          cp hf_space/import-cloudflare-state.sh .hf-stage/import-cloudflare-state.sh
+          cp hf_space/render-dev-vars.mjs .hf-stage/render-dev-vars.mjs
+          cp hf_space/standalone-preflight.mjs .hf-stage/standalone-preflight.mjs
+          cp hf_space/standalone-supervisor.mjs .hf-stage/standalone-supervisor.mjs
+      - name: Build free-public Docker image
+        run: docker build -t dyrakarmy-hf-free-public:test .hf-stage
+      - name: Start free-public runtime
+        run: |
+          docker run -d --name dyrakarmy-hf-free-public \
+            -p 17860:7860 \
+            -e HF_BACKEND_MODE=free-public \
+            -e PUBLIC_BASE_URL=https://dyrakarmy-dyrakarmy-platform.hf.space \
+            -e CORS_ORIGINS=https://dyrakarmy-dyrakarmy-platform.hf.space \
+            dyrakarmy-hf-free-public:test
+          ready=0
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:17860/api/hf-runtime/health >/tmp/hf-runtime.json; then
+              ready=1
+              break
+            fi
+            if ! docker inspect -f '{{.State.Running}}' dyrakarmy-hf-free-public 2>/dev/null | grep -q true; then
+              docker logs dyrakarmy-hf-free-public || true
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$ready" -eq 1
+          node -e "const p=require('/tmp/hf-runtime.json'); if(!p.ok||p.mode!=='free-public'||p.state_authority!=='hugging-face-ephemeral'||p.cloudflare_dependency!==false) process.exit(1)"
+      - name: Validate every public game sequentially
+        shell: bash
+        run: |
+          set -euo pipefail
+          games=(queue-commander beat-hunter dyrakarmy-arena format-forge server-defender metadata-detective link-runner archive-raid latency-strike bot-vs-human)
+          for game in "${games[@]}"; do
+            echo "Validating $game"
+            curl -fsS "http://127.0.0.1:17860/games/$game/" -o "/tmp/$game.html"
+            test -s "/tmp/$game.html"
+            curl -fsS "http://127.0.0.1:17860/api/games/$game/config" -o "/tmp/$game-config.json"
+            GAME="$game" node -e "const p=require('/tmp/'+process.env.GAME+'-config.json'); if(!p.ok) process.exit(1); const id=p.game||p.slug; if(id!==process.env.GAME) process.exit(1)"
+            curl -fsS "http://127.0.0.1:17860/api/games/$game/leaderboard?limit=5" -o "/tmp/$game-leaderboard.json"
+            GAME="$game" node -e "const p=require('/tmp/'+process.env.GAME+'-leaderboard.json'); if(!p.ok||!Array.isArray(p.entries)) process.exit(1)"
+            echo "PASS $game"
+          done
+      - name: Capture runtime diagnostics
+        if: always()
+        run: docker logs dyrakarmy-hf-free-public || true
+      - name: Cleanup
+        if: always()
+        run: docker rm -f dyrakarmy-hf-free-public >/dev/null 2>&1 || true

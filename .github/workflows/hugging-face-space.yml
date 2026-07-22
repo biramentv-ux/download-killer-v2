@@ -31,6 +31,7 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -54,23 +55,28 @@ jobs:
         working-directory: worker
         run: npm run typecheck
 
-      - name: Run Worker and mirror tests
+      - name: Run Worker and free-public tests
         working-directory: worker
         run: npm test
 
-      - name: Run interface and full virtual simulations
+      - name: Run interface and game simulations
         working-directory: worker
         run: |
           node scripts/landing-v16-simulation.mjs
           node scripts/software-suite-simulation.mjs
+          node scripts/games-1-10-simulation.mjs
+          node scripts/games-1-10-deep-validation.mjs
           node scripts/full-virtual-simulation.mjs
 
       - name: Validate Hugging Face configuration and package
         working-directory: worker
         run: |
-          grep -q 'cloudflare-mirror' src/platform_hf.ts
+          grep -q 'free-public' src/platform_hf.ts
           grep -q 'standalone' src/platform_hf.ts
+          grep -q 'cloudflare_dependency: false' src/platform_hf.ts
+          grep -q 'return false' src/platform_hf.ts
           grep -q '"main": "src/platform_hf.ts"' wrangler.hf.jsonc
+          grep -q '"HF_BACKEND_MODE": "free-public"' wrangler.hf.jsonc
           grep -Fq '"/games/*"' wrangler.hf.jsonc
           grep -Fq '"/files/*"' wrangler.hf.jsonc
           npx wrangler deploy --dry-run --config wrangler.hf.jsonc --outdir .wrangler-hf-dry-run
@@ -96,21 +102,20 @@ jobs:
           cp hf_space/standalone-supervisor.mjs .hf-stage/standalone-supervisor.mjs
           cp hf_space/DEPLOYMENT_TRIGGER.txt .hf-stage/DEPLOYMENT_TRIGGER.txt
           test -f .hf-stage/worker/public/index.html
+          test -f .hf-stage/worker/games-10-validation-manifest.json
           test -f .hf-stage/worker/src/platform_v3.ts
           test -f .hf-stage/worker/src/platform_hf.ts
           test -f .hf-stage/worker/wrangler.hf.jsonc
-          test -f .hf-stage/import-cloudflare-state.sh
-          test -f .hf-stage/standalone-preflight.mjs
-          test -f .hf-stage/standalone-supervisor.mjs
           grep -q 'sdk: docker' .hf-stage/README.md
           grep -q 'app_port: 7860' .hf-stage/README.md
+          grep -q 'suggested_hardware: cpu-basic' .hf-stage/README.md
           grep -q 'DyrakArmy Interface v17' .hf-stage/worker/public/index.html
-          grep -q 'cloudflare-mirror' .hf-stage/worker/src/platform_hf.ts
+          grep -q 'free-public' .hf-stage/worker/src/platform_hf.ts
 
       - name: Build Space container
         run: docker build --tag dyrakarmy-hf-space:${{ github.sha }} .hf-stage
 
-      - name: Run isolated mirror container smoke test
+      - name: Run isolated free-public container smoke test
         run: |
           set -euo pipefail
           image="dyrakarmy-hf-space:${GITHUB_SHA}"
@@ -122,14 +127,20 @@ jobs:
           trap cleanup EXIT
           ready=0
           for attempt in $(seq 1 90); do
-            if curl --compressed -fsS --max-time 10 http://127.0.0.1:17860/api/hf-mirror/health | grep -q 'cloudflare-mirror'; then
+            if curl --compressed -fsS --max-time 10 http://127.0.0.1:17860/api/hf-runtime/health -o /tmp/hf-runtime.json; then
               ready=1
               break
             fi
             sleep 2
           done
           test "$ready" -eq 1
+          node -e "const p=require('/tmp/hf-runtime.json'); if(!p.ok||p.mode!=='free-public'||p.state_authority!=='hugging-face-ephemeral'||p.cloudflare_dependency!==false) process.exit(1)"
           curl --compressed -fsS http://127.0.0.1:17860/ | grep -q 'DyrakArmy Interface v17'
           curl --compressed -fsS http://127.0.0.1:17860/api/health | grep -Eq '"ok"[[:space:]]*:[[:space:]]*true'
           curl --compressed -fsS http://127.0.0.1:17860/api/software/releases | grep -q 'DyrakArmyDesktop.exe'
-          curl --compressed -fsS --max-time 60 http://127.0.0.1:17860/games/queue-commander/ | grep -q 'SHARED GAME ENGINE'
+          for game in queue-commander beat-hunter dyrakarmy-arena format-forge server-defender metadata-detective link-runner archive-raid latency-strike bot-vs-human; do
+            curl --compressed -fsS --max-time 60 "http://127.0.0.1:17860/games/$game/" >/tmp/game.html
+            test -s /tmp/game.html
+            curl --compressed -fsS --max-time 30 "http://127.0.0.1:17860/api/games/$game/config" >/tmp/game.json
+            GAME="$game" node -e "const p=require('/tmp/game.json'); if(!p.ok||(p.game||p.slug)!==process.env.GAME) process.exit(1)"
+          done

@@ -2,8 +2,10 @@ import { spawn } from 'node:child_process';
 import process from 'node:process';
 
 const port = Number(process.env.PORT || 7860);
-const mode = String(process.env.HF_BACKEND_MODE || 'cloudflare-mirror').toLowerCase();
-const persistRoot = process.env.DYRAKARMY_PERSIST_ROOT || (mode === 'standalone' ? '/data/dyrakarmy' : '/tmp/dyrakarmy-mirror');
+const mode = String(process.env.HF_BACKEND_MODE || 'free-public').toLowerCase() === 'standalone'
+  ? 'standalone'
+  : 'free-public';
+const persistRoot = process.env.DYRAKARMY_PERSIST_ROOT || (mode === 'standalone' ? '/data/dyrakarmy' : '/tmp/dyrakarmy-free-public');
 const localBase = `http://127.0.0.1:${port}`;
 const timers = new Set();
 let child;
@@ -19,7 +21,7 @@ function schedule(callback, delay) {
 async function waitForRuntime() {
   for (let attempt = 1; attempt <= 120; attempt += 1) {
     try {
-      const response = await fetch(`${localBase}/api/hf-mirror/health`, { signal: AbortSignal.timeout(5000) });
+      const response = await fetch(`${localBase}/api/hf-runtime/health`, { signal: AbortSignal.timeout(5000) });
       if (response.ok) return;
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 1000));

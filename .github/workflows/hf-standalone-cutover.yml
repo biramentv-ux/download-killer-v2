@@ -31,6 +31,7 @@ jobs:
           npm ci --silent
           npm run typecheck
           npm test
+          node scripts/games-1-10-deep-validation.mjs
           node scripts/full-virtual-simulation.mjs
 
       - name: Prepare deterministic standalone Space bundle
@@ -79,7 +80,7 @@ jobs:
 
           ready=0
           for attempt in $(seq 1 90); do
-            if curl -fsS http://127.0.0.1:17860/api/hf-mirror/health >/tmp/hf-health.json; then
+            if curl -fsS http://127.0.0.1:17860/api/hf-runtime/health >/tmp/hf-health.json; then
               ready=1
               break
             fi
@@ -90,7 +91,7 @@ jobs:
             sleep 2
           done
           test "$ready" -eq 1
-          node -e "const p=require('/tmp/hf-health.json'); if(!p.ok||p.mode!=='standalone'||p.state_authority!=='hugging-face-local') process.exit(1)"
+          node -e "const p=require('/tmp/hf-health.json'); if(!p.ok||p.mode!=='standalone'||p.state_authority!=='hugging-face-persistent'||p.cloudflare_dependency!==false) process.exit(1)"
 
       - name: Validate Web, API, D1 and KV state
         run: |
@@ -125,7 +126,7 @@ jobs:
             dyrakarmy-hf-standalone:test
           ready=0
           for attempt in $(seq 1 90); do
-            if curl -fsS http://127.0.0.1:17860/api/hf-mirror/health >/dev/null; then
+            if curl -fsS http://127.0.0.1:17860/api/hf-runtime/health >/dev/null; then
               ready=1
               break
             fi

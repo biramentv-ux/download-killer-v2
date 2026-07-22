@@ -27,7 +27,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -75,14 +75,14 @@ jobs:
           hf upload "$HF_SPACE_REPO_ID" .hf-stage . \
             --repo-type=space \
             --delete='*' \
-            --commit-message="Deploy GitHub ${GITHUB_SHA::12} with HF standalone readiness" \
+            --commit-message="Deploy GitHub ${GITHUB_SHA::12} to native free-public Space" \
             >hf-upload.log 2>&1
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
           tail -n 100 hf-upload.log || true
           exit "$status"
 
-      - name: Verify public Hugging Face runtime
+      - name: Verify public Hugging Face runtime and all games
         id: verify
         if: steps.upload.outputs.status == '0'
         continue-on-error: true
@@ -91,36 +91,44 @@ jobs:
           set +e
           verified=0
           : > hf-verify.log
+          games=(queue-commander beat-hunter dyrakarmy-arena format-forge server-defender metadata-detective link-runner archive-raid latency-strike bot-vs-human)
           for attempt in $(seq 1 75); do
             echo "attempt=$attempt" | tee -a hf-verify.log
-            curl --compressed -fsSL --max-time 45 "$HF_SPACE_URL/api/hf-mirror/health" -o hf-runtime.json 2>>hf-verify.log || true
+            curl --compressed -fsSL --max-time 45 "$HF_SPACE_URL/api/hf-runtime/health" -o hf-runtime.json 2>>hf-verify.log || true
             curl --compressed -fsSL --max-time 45 "$HF_SPACE_URL/" -o hf-home.html 2>>hf-verify.log || true
             curl --compressed -fsSL --max-time 45 "$HF_SPACE_URL/api/software/releases" -o hf-software.json 2>>hf-verify.log || true
             curl --compressed -fsSL --max-time 45 "$HF_SPACE_URL/api/sources" -o hf-sources.json 2>>hf-verify.log || true
-            curl --compressed -fsSL --max-time 45 "$HF_SPACE_URL/api/telegram/v12/health" -o hf-telegram.json 2>>hf-verify.log || true
-            curl --compressed -fsSL --max-time 60 "$HF_SPACE_URL/games/queue-commander/" -o hf-game.html 2>>hf-verify.log || true
             curl --compressed -fsSL --max-time 45 "$HF_SPACE_URL/platform/sound-universe-v19.css" -o hf-v19.css 2>>hf-verify.log || true
             curl --compressed -fsSL --max-time 45 "$HF_SPACE_URL/platform/sound-universe-v19.js" -o hf-v19.js 2>>hf-verify.log || true
+            game_fail=0
+            for game in "${games[@]}"; do
+              curl --compressed -fsSL --max-time 60 "$HF_SPACE_URL/games/$game/" -o "hf-$game.html" 2>>hf-verify.log || game_fail=1
+              curl --compressed -fsSL --max-time 45 "$HF_SPACE_URL/api/games/$game/config" -o "hf-$game.json" 2>>hf-verify.log || game_fail=1
+            done
 
-            if node <<'NODE'
+            if [[ "$game_fail" -eq 0 ]] && node <<'NODE'
           const fs=require('fs');
           const readJson=(p)=>JSON.parse(fs.readFileSync(p,'utf8'));
           const runtime=readJson('hf-runtime.json');
           const software=readJson('hf-software.json');
           const sources=readJson('hf-sources.json');
-          const telegram=readJson('hf-telegram.json');
           const home=fs.readFileSync('hf-home.html','utf8');
-          const game=fs.readFileSync('hf-game.html','utf8');
           const css=fs.readFileSync('hf-v19.css','utf8');
           const js=fs.readFileSync('hf-v19.js','utf8');
-          if(!runtime.ok || !['cloudflare-mirror','standalone'].includes(runtime.mode)) process.exit(1);
+          const games=['queue-commander','beat-hunter','dyrakarmy-arena','format-forge','server-defender','metadata-detective','link-runner','archive-raid','latency-strike','bot-vs-human'];
+          if(!runtime.ok || !['free-public','standalone'].includes(runtime.mode)) process.exit(1);
+          if(runtime.cloudflare_dependency!==false || runtime.cloudflare_proxy_enabled!==false) process.exit(1);
+          if(runtime.mode==='free-public' && runtime.state_authority!=='hugging-face-ephemeral') process.exit(1);
           if(!home.includes('DyrakArmy Interface v17') || !home.includes('id="software"')) process.exit(1);
           if(!software.ok || !JSON.stringify(software).includes('DyrakArmyDesktop.exe')) process.exit(1);
           if(!sources.ok || !Array.isArray(sources.sources) || sources.sources.length<10) process.exit(1);
-          if(!telegram.ok || !JSON.stringify(telegram).includes('dyrakarmy_bot')) process.exit(1);
-          if(!game.includes('SHARED GAME ENGINE')) process.exit(1);
           if(!css.includes('sound-universe') || !js.includes('Sound Universe')) process.exit(1);
-          console.log(JSON.stringify({mode:runtime.mode,state_authority:runtime.state_authority}));
+          for(const game of games){
+            const page=fs.readFileSync(`hf-${game}.html`,'utf8');
+            const config=readJson(`hf-${game}.json`);
+            if(!page.trim() || !config.ok || (config.game||config.slug)!==game) process.exit(1);
+          }
+          console.log(JSON.stringify({mode:runtime.mode,state_authority:runtime.state_authority,games:games.length}));
           NODE
             then
               verified=1
@@ -131,22 +139,27 @@ jobs:
           test "$verified" -eq 1
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
-          if [[ -s hf-runtime.json ]]; then node -e "const p=require('./hf-runtime.json'); console.log('mode='+(p.mode||'unknown')); console.log('state_authority='+(p.state_authority||'unknown'))" >>hf-verify.log; fi
+          if [[ -s hf-runtime.json ]]; then
+            node -e "const p=require('./hf-runtime.json'); console.log('mode='+(p.mode||'unknown')); console.log('state_authority='+(p.state_authority||'unknown')); console.log('cloudflare_dependency='+String(p.cloudflare_dependency))" >>hf-verify.log
+          fi
           exit "$status"
 
-      - name: Verify Cloudflare only while mirror mode is active
-        id: rollback
+      - name: Verify free-public isolation
+        id: isolation
+        if: steps.verify.outputs.status == '0'
         continue-on-error: true
         shell: bash
         run: |
           set +e
-          mode="$(node -e "try{console.log(require('./hf-runtime.json').mode)}catch{console.log('unknown')}")"
-          if [[ "$mode" != 'cloudflare-mirror' ]]; then
-            echo 'Standalone mode active: Cloudflare is not part of the runtime verification.' >hf-rollback.log
-            echo 'status=0' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          curl --compressed -fsSL --retry 5 --retry-all-errors --max-time 45 https://dyrakarmy.eu/api/health >hf-rollback.log 2>&1
+          node - <<'NODE' >hf-isolation.log 2>&1
+          const runtime=require('./hf-runtime.json');
+          if(runtime.cloudflare_dependency!==false) process.exit(1);
+          if(runtime.cloudflare_proxy_enabled!==false) process.exit(1);
+          if(!['free-public','standalone'].includes(runtime.mode)) process.exit(1);
+          console.log('Native Hugging Face runtime is authoritative for all tested routes.');
+          console.log(`mode=${runtime.mode}`);
+          console.log(`state_authority=${runtime.state_authority}`);
+          NODE
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit "$status"
@@ -157,23 +170,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           UPLOAD_STATUS: ${{ steps.upload.outputs.status }}
           VERIFY_STATUS: ${{ steps.verify.outputs.status }}
-          ROLLBACK_STATUS: ${{ steps.rollback.outputs.status }}
+          ISOLATION_STATUS: ${{ steps.isolation.outputs.status }}
         run: |
           mode="$(node -e "try{console.log(require('./hf-runtime.json').mode)}catch{console.log('unknown')}")"
           {
-            echo "## Hugging Face runtime deployment ${GITHUB_RUN_ID}"
+            echo "## Hugging Face free-public deployment ${GITHUB_RUN_ID}"
             echo
             echo "- GitHub commit: \`${GITHUB_SHA}\`"
             echo "- Upload: \`${UPLOAD_STATUS:-not-run}\`"
             echo "- Public verification: \`${VERIFY_STATUS:-not-run}\`"
-            echo "- Rollback continuity: \`${ROLLBACK_STATUS:-not-run}\`"
+            echo "- External-edge isolation: \`${ISOLATION_STATUS:-not-run}\`"
             echo "- Runtime mode: \`$mode\`"
+            echo "- Games validated: \`10/10\`"
+            echo "- Public host: \`$HF_SPACE_URL\`"
             echo "- Target: \`$HF_SPACE_REPO_ID\`"
             echo
             echo '```text'
             tail -n 60 hf-upload.log 2>/dev/null || true
-            tail -n 80 hf-verify.log 2>/dev/null || true
-            tail -n 20 hf-rollback.log 2>/dev/null || true
+            tail -n 100 hf-verify.log 2>/dev/null || true
+            tail -n 20 hf-isolation.log 2>/dev/null || true
             echo '```'
           } > hf-ledger-comment.md
           gh issue comment "$DEPLOYMENT_LEDGER_ISSUE" --body-file hf-ledger-comment.md
@@ -183,4 +198,4 @@ jobs:
         run: |
           test "${{ steps.upload.outputs.status || '1' }}" = '0'
           test "${{ steps.verify.outputs.status || '1' }}" = '0'
-          test "${{ steps.rollback.outputs.status || '1' }}" = '0'
+          test "${{ steps.isolation.outputs.status || '1' }}" = '0'

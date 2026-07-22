@@ -1,140 +1,69 @@
 import platformV3 from './platform_v3';
 import type { DownloadJob, Env, JobHistoryEvent } from './types';
 
-type HfBackendMode = 'cloudflare-mirror' | 'standalone';
-
+type HfBackendMode = 'free-public' | 'standalone';
 type HfEnv = Env & {
   HF_BACKEND_MODE?: string;
-  HF_CLOUDFLARE_UPSTREAM?: string;
-  HF_MIRROR_FALLBACK_LOCAL?: string;
+  HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE?: string;
+  PUBLIC_BASE_URL?: string;
 };
 
-const DEFAULT_UPSTREAM = 'https://dyrakarmy.eu';
-const MIRROR_PATH_PREFIXES = ['/api/', '/files/', '/download/', '/games/', '/control/', '/control-v2/'];
-const LOCAL_HEALTH_PATH = '/api/hf-mirror/health';
+const NATIVE_SPACE_URL = 'https://dyrakarmy-dyrakarmy-platform.hf.space';
+const HEALTH_PATHS = new Set(['/api/hf-runtime/health', '/api/hf-mirror/health']);
 
 export function resolveHfBackendMode(env: HfEnv): HfBackendMode {
-  return String(env.HF_BACKEND_MODE || 'cloudflare-mirror').toLowerCase() === 'standalone'
+  return String(env.HF_BACKEND_MODE || 'free-public').toLowerCase() === 'standalone'
     ? 'standalone'
-    : 'cloudflare-mirror';
+    : 'free-public';
 }
 
 export function resolveHfUpstream(env: HfEnv): URL {
-  const candidate = String(env.HF_CLOUDFLARE_UPSTREAM || DEFAULT_UPSTREAM).trim();
+  const candidate = String(env.PUBLIC_BASE_URL || NATIVE_SPACE_URL).trim();
   try {
     const url = new URL(candidate);
-    if (url.protocol !== 'https:') return new URL(DEFAULT_UPSTREAM);
+    if (url.protocol !== 'https:') return new URL(NATIVE_SPACE_URL);
     url.pathname = '/';
     url.search = '';
     url.hash = '';
     return url;
   } catch {
-    return new URL(DEFAULT_UPSTREAM);
+    return new URL(NATIVE_SPACE_URL);
   }
 }
 
-export function shouldProxyHfRequest(request: Request, env: HfEnv): boolean {
-  if (resolveHfBackendMode(env) !== 'cloudflare-mirror') return false;
-  const pathname = new URL(request.url).pathname;
-  if (pathname === LOCAL_HEALTH_PATH) return false;
-  if (pathname === '/telegram/webhook') return true;
-  return MIRROR_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+export function shouldProxyHfRequest(_request: Request, _env: HfEnv): boolean {
+  return false;
 }
 
-function mirrorHealth(env: HfEnv): Response {
+function runtimeHealth(request: Request, env: HfEnv): Response {
   const mode = resolveHfBackendMode(env);
-  return Response.json(
-    {
-      ok: true,
-      service: 'dyrakarmy-hugging-face-mirror',
-      mode,
-      upstream: resolveHfUpstream(env).origin,
-      state_authority: mode === 'cloudflare-mirror' ? 'cloudflare' : 'hugging-face-local',
-      telegram_webhook_authority: mode === 'cloudflare-mirror' ? 'cloudflare' : 'hugging-face',
-      cloudflare_untouched: true,
-      split_brain_protection: String(env.HF_MIRROR_FALLBACK_LOCAL || '0') !== '1',
+  const persistent = mode === 'standalone';
+  return Response.json({
+    ok: true,
+    service: 'dyrakarmy-hugging-face-runtime',
+    mode,
+    public_url: resolveHfUpstream(env).origin || new URL(request.url).origin,
+    state_authority: persistent ? 'hugging-face-persistent' : 'hugging-face-ephemeral',
+    storage: persistent ? 'persistent-volume' : 'ephemeral-disk',
+    free_public_host: mode === 'free-public',
+    cloudflare_dependency: false,
+    cloudflare_proxy_enabled: false,
+    telegram_webhook_authority: persistent && String(env.HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE || '0') === '1'
+      ? 'hugging-face'
+      : 'disabled',
+    split_brain_protection: true,
+  }, {
+    headers: {
+      'Cache-Control': 'no-store',
+      'X-DyrakArmy-HF-Mode': mode,
     },
-    {
-      headers: {
-        'Cache-Control': 'no-store',
-        'X-DyrakArmy-HF-Mode': mode,
-      },
-    },
-  );
-}
-
-function buildMirrorRequest(request: Request, env: HfEnv): Request {
-  const sourceUrl = new URL(request.url);
-  const upstream = resolveHfUpstream(env);
-  upstream.pathname = sourceUrl.pathname;
-  upstream.search = sourceUrl.search;
-
-  const headers = new Headers(request.headers);
-  const clientOrigin = headers.get('Origin');
-  headers.delete('Host');
-  headers.delete('CF-Connecting-IP');
-  headers.delete('CF-IPCountry');
-  headers.delete('CF-Ray');
-  headers.delete('X-Forwarded-For');
-  headers.delete('X-Forwarded-Host');
-  headers.delete('X-Forwarded-Proto');
-  if (clientOrigin) headers.set('X-DyrakArmy-Client-Origin', clientOrigin);
-  headers.set('Accept-Encoding', 'identity');
-  headers.set('Origin', upstream.origin);
-  headers.set('Referer', `${upstream.origin}/`);
-  headers.set('X-DyrakArmy-HF-Mirror', '1');
-
-  const init: RequestInit = {
-    method: request.method,
-    headers,
-    redirect: 'manual',
-  };
-  if (request.method !== 'GET' && request.method !== 'HEAD') init.body = request.body;
-  return new Request(upstream.toString(), init);
-}
-
-async function proxyToCloudflare(request: Request, env: HfEnv): Promise<Response> {
-  try {
-    const response = await fetch(buildMirrorRequest(request, env));
-    const headers = new Headers(response.headers);
-    headers.delete('Content-Length');
-    headers.set('X-DyrakArmy-HF-Mirror', 'cloudflare-upstream');
-    headers.set('X-DyrakArmy-HF-Upstream-Status', String(response.status));
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
-  } catch (error) {
-    if (String(env.HF_MIRROR_FALLBACK_LOCAL || '0') === '1') {
-      return platformV3.fetch(request, env, {} as ExecutionContext);
-    }
-    console.error('Hugging Face mirror upstream unavailable', error);
-    return Response.json(
-      {
-        ok: false,
-        error: {
-          code: 'HF_MIRROR_UPSTREAM_UNAVAILABLE',
-          message: 'The Cloudflare production backend is temporarily unavailable.',
-        },
-      },
-      {
-        status: 502,
-        headers: {
-          'Cache-Control': 'no-store',
-          'Retry-After': '15',
-          'X-DyrakArmy-HF-Mirror': 'upstream-error',
-        },
-      },
-    );
-  }
+  });
 }
 
 export default {
   async fetch(request: Request, env: HfEnv, context: ExecutionContext): Promise<Response> {
     const pathname = new URL(request.url).pathname;
-    if (pathname === LOCAL_HEALTH_PATH) return mirrorHealth(env);
-    if (shouldProxyHfRequest(request, env)) return proxyToCloudflare(request, env);
+    if (HEALTH_PATHS.has(pathname)) return runtimeHealth(request, env);
     return platformV3.fetch(request, env, context);
   },
 
@@ -143,10 +72,7 @@ export default {
     env: HfEnv,
     context: ExecutionContext,
   ): Promise<void> {
-    if (resolveHfBackendMode(env) === 'standalone') {
-      return platformV3.queue(batch, env, context);
-    }
-    for (const message of batch.messages) message.ack();
+    return platformV3.queue(batch, env, context);
   },
 
   async scheduled(
@@ -154,8 +80,6 @@ export default {
     env: HfEnv,
     context: ExecutionContext,
   ): Promise<void> {
-    if (resolveHfBackendMode(env) === 'standalone') {
-      return platformV3.scheduled(controller, env, context);
-    }
+    return platformV3.scheduled(controller, env, context);
   },
 } satisfies ExportedHandler<HfEnv, DownloadJob | JobHistoryEvent>;

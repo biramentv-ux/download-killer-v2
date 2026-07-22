@@ -1,0 +1,111 @@
+{
+  "schema": "eu.dyrakarmy.games-10-validation.v1",
+  "version": "1.0.0",
+  "shared_contract": {
+    "shared_telegram_identity": true,
+    "shared_profile": true,
+    "shared_xp_and_rank": true,
+    "practice_mode": true,
+    "ranked_mode": true,
+    "server_side_scoring": true,
+    "consume_once_sessions": true,
+    "weekly_leaderboard": true,
+    "control_center_feature_flag": true,
+    "telegram_command": true,
+    "pwa_route": true
+  },
+  "games": [
+    {
+      "number": 1,
+      "slug": "queue-commander",
+      "title": "Queue Commander",
+      "command": "queuegame",
+      "engine": "challenge",
+      "mode": "priority",
+      "functions": ["priority", "retry-after", "backoff", "dedupe", "dead-letter", "idempotency", "fairness", "lease-timeout"]
+    },
+    {
+      "number": 2,
+      "slug": "beat-hunter",
+      "title": "Beat Hunter",
+      "command": "beat",
+      "engine": "challenge",
+      "mode": "rhythm",
+      "functions": ["four-on-the-floor", "backbeat", "phrasing", "beatgrid", "breakdown", "hot-cue", "swing", "clipping"],
+      "safety": ["synthetic-clues-only", "no-protected-audio"]
+    },
+    {
+      "number": 3,
+      "slug": "dyrakarmy-arena",
+      "title": "DyrakArmy Arena",
+      "command": "arena",
+      "engine": "arena",
+      "mode": "team-competition",
+      "functions": ["daily-questions", "team-create", "team-join", "team-leave", "weekly-leaderboard", "season-leaderboard", "shared-rank", "practice"]
+    },
+    {
+      "number": 4,
+      "slug": "format-forge",
+      "title": "Format Forge",
+      "command": "formatgame",
+      "engine": "challenge",
+      "mode": "format",
+      "functions": ["aac-m4a", "flac", "wav", "opus", "mp3", "bitrate", "transcode-loss", "sample-rate"]
+    },
+    {
+      "number": 5,
+      "slug": "server-defender",
+      "title": "Server Defender",
+      "command": "defender",
+      "engine": "challenge",
+      "mode": "defense",
+      "functions": ["ssrf", "secret-storage", "webhook-validation", "cors-allowlist", "prepared-statements", "rate-limit", "nosniff", "secret-redaction"]
+    },
+    {
+      "number": 6,
+      "slug": "metadata-detective",
+      "title": "Metadata Detective",
+      "command": "detective",
+      "engine": "challenge",
+      "mode": "detective",
+      "functions": ["title", "year", "album-artist", "cover", "track-number", "unicode", "bpm", "isrc"]
+    },
+    {
+      "number": 7,
+      "slug": "link-runner",
+      "title": "Link Runner",
+      "command": "linkrunner",
+      "engine": "challenge",
+      "mode": "route",
+      "functions": ["https", "redirect-revalidation", "scheme-allowlist", "short-url-resolution", "query-redaction", "redirect-loop", "dns-rebinding", "url-normalization"]
+    },
+    {
+      "number": 8,
+      "slug": "archive-raid",
+      "title": "Archive Raid",
+      "command": "raid",
+      "engine": "archive",
+      "mode": "collectible-raid",
+      "functions": ["scan", "extract", "breach", "five-rooms", "rarity-rolls", "collectible-cards", "inventory", "daily-claim", "cosmetic-rewards"],
+      "safety": ["protected-content-access-false", "no-decryption", "virtual-cosmetics-only"]
+    },
+    {
+      "number": 9,
+      "slug": "latency-strike",
+      "title": "Latency Strike",
+      "command": "game",
+      "engine": "latency",
+      "mode": "reaction",
+      "functions": ["five-rounds", "queued-processing-ready", "reaction-timing", "false-start-penalty", "xp", "ranks", "rewards", "weekly-leaderboard", "native-telegram-game"]
+    },
+    {
+      "number": 10,
+      "slug": "bot-vs-human",
+      "title": "Bot vs Human",
+      "command": "botvhuman",
+      "engine": "challenge",
+      "mode": "classification",
+      "functions": ["rate-pattern", "periodicity", "privacy-minimization", "proportional-challenge", "false-positive-control", "retention-limit", "server-side-decision", "shared-reward"]
+    }
+  ]
+}
