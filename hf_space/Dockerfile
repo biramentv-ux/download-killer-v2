@@ -17,9 +17,9 @@ RUN cd worker \
     && npm cache clean --force
 
 COPY worker ./worker
-COPY start.sh render-dev-vars.mjs standalone-preflight.mjs standalone-supervisor.mjs ./hf/
+COPY start.sh import-cloudflare-state.sh render-dev-vars.mjs standalone-preflight.mjs standalone-supervisor.mjs ./hf/
 
-RUN chmod +x /app/hf/start.sh \
+RUN chmod +x /app/hf/start.sh /app/hf/import-cloudflare-state.sh \
     && chown -R 1000:1000 /app
 
 USER 1000
