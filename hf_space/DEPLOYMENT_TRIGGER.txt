@@ -1,4 +1,5 @@
 DyrakArmy Hugging Face production mirror deployment
-Triggered: 2026-07-22
+Retriggered after Trusted Publisher configuration: 2026-07-22
 Source of truth: GitHub main
+Canonical publisher: .github/workflows/hf-publish-ledger.yml
 Cloudflare remains active and unchanged during parallel validation.
