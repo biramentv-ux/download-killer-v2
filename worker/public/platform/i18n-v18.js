@@ -98,7 +98,7 @@
   function apply(language = currentLanguage(), persist = false) {
     const lang = SUPPORTED.includes(language) ? language : 'bg';
     if (persist) localStorage.setItem(STORAGE_KEY, lang);
-    document.documentElement.lang = lang;
+    if (document.documentElement.lang != lang) document.documentElement.lang = lang;
     document.documentElement.dataset.language = lang;
     const select = document.querySelector('#languageSelect');
     if (select && select.value !== lang) select.value = lang;
