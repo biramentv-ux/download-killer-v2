@@ -51,14 +51,24 @@ jobs:
           cp hf_space/platform_hf.test.ts worker/src/platform_hf.test.ts
           cp hf_space/wrangler.hf.jsonc worker/wrangler.hf.jsonc
 
-      - name: Validate Worker, mirror and migration contracts
+      - name: Typecheck Hugging Face runtime
+        working-directory: worker
+        run: npm run typecheck
+
+      - name: Run Worker and mirror tests
+        working-directory: worker
+        run: npm test
+
+      - name: Run interface and full virtual simulations
         working-directory: worker
         run: |
-          npm run typecheck
-          npm test
           node scripts/landing-v16-simulation.mjs
           node scripts/software-suite-simulation.mjs
           node scripts/full-virtual-simulation.mjs
+
+      - name: Validate Hugging Face configuration and package
+        working-directory: worker
+        run: |
           grep -q 'cloudflare-mirror' src/platform_hf.ts
           grep -q '"main": "src/platform_hf.ts"' wrangler.hf.jsonc
           grep -Fq '"/games/*"' wrangler.hf.jsonc
