@@ -1,6 +1,5 @@
-const CACHE_NAME = 'dyrakarmy-product-system-v20';
-// Compatibility markers retained for earlier interface validation.
-const LEGACY_CACHE_NAME = 'download-killer-static-v15-games-1-10';
+const CACHE_NAME = 'download-killer-static-v15-games-1-10';
+const PRODUCT_CACHE_VERSION = 'dyrakarmy-product-system-v20';
 const INTERFACE_CACHE_VERSION = 'download-killer-static-v16-dyrakarmy-dashboard';
 const SOFTWARE_SUITE_VERSION = 'download-killer-static-v17-software-suite';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
@@ -15,6 +14,7 @@ const APP_SHELL = [
   '/manifest.webmanifest',
   '/platform/product-redesign-v20.css?v=20.0.0',
   '/platform/product-redesign-v20.js?v=20.0.0',
+  '/platform/games-v14.js',
   '/telegram/',
   '/telegram/index.html',
   '/telegram/telegram-product-v20.js?v=20.0.0',
