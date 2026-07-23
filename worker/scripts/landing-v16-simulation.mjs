@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
-const [html, css, script, sw, manifest, controlHtml, controlCss, controlSw] = await Promise.all([
+const [html, css, script, sw, manifest, controlHtml, controlCss, controlSw, productCss, productScript] = await Promise.all([
   read('public/index.html'),
   read('public/platform/landing-v16.css'),
   read('public/platform/landing-v16.js'),
@@ -11,6 +11,8 @@ const [html, css, script, sw, manifest, controlHtml, controlCss, controlSw] = aw
   read('public/control-v2/index.html'),
   read('public/control-v2/control-v2.css'),
   read('public/control-v2/sw.js'),
+  read('public/platform/product-redesign-v20.css'),
+  read('public/platform/product-redesign-v20.js'),
 ]);
 
 const requiredIds = [
@@ -22,7 +24,7 @@ const requiredIds = [
   'jobFeed', 'clearJobsBtn', 'refreshStatusBtn', 'edgeStatus', 'originStatus',
   'formatStatus', 'latencyStatus', 'historyList', 'copyBotHandleBtn', 'year',
 ];
-for (const id of requiredIds) assert.match(html, new RegExp(`id=["']${id}["']`), `missing #${id}`);
+for (const id of requiredIds) assert.match(html, new RegExp(`id=["']${id}["']`), `missing compatibility marker #${id}`);
 
 assert.match(html, /<title>DyrakArmy Platform<\/title>/);
 assert.match(html, /DyrakArmy Interface v(?:16|17)/);
@@ -57,22 +59,18 @@ assert.match(script, /serviceWorker\.register\('\/sw\.js'\)/);
 assert.doesNotMatch(script, /eval\(|new Function\(/);
 
 assert.match(sw, /download-killer-static-v16-dyrakarmy-dashboard/);
-for (const asset of ['/platform/landing-v16.css', '/platform/landing-v16.js', '/control-v2/']) {
+for (const asset of ['/control-v2/', '/platform/product-redesign-v20.css?v=20.0.0', '/platform/product-redesign-v20.js?v=20.0.0']) {
   assert.match(sw, new RegExp(asset.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 }
 
 const parsedManifest = JSON.parse(manifest);
 assert.match(parsedManifest.name, /^DyrakArmy Unified Platform v(?:16|17)$/);
-assert.equal(parsedManifest.theme_color, '#050914');
+assert.ok(['#050914', '#03040b'].includes(parsedManifest.theme_color));
 assert.ok(parsedManifest.shortcuts.some((shortcut) => shortcut.url === '/control-v2/'));
 assert.ok(parsedManifest.shortcuts.some((shortcut) => shortcut.url === '/control/'));
 assert.ok(parsedManifest.shortcuts.some((shortcut) => shortcut.url === '/#games'));
-if (parsedManifest.name.endsWith('v17')) {
-  assert.ok(parsedManifest.shortcuts.some((shortcut) => shortcut.url === '/#software'));
-  assert.match(html, /id=["']software["']/);
-  assert.match(html, /\/platform\/software-suite\.css/);
-  assert.match(html, /\/platform\/software-suite\.js/);
-}
+assert.ok(parsedManifest.shortcuts.some((shortcut) => shortcut.url === '/#software'));
+assert.match(html, /id=["']software["']/);
 
 assert.match(controlHtml, /DyrakArmy Control Center v2/);
 assert.match(controlHtml, /brand-logo/);
@@ -82,11 +80,21 @@ assert.match(controlCss, /\.brand-logo/);
 assert.match(controlCss, /max-width:\s*760px/);
 assert.match(controlSw, /dyrakarmy-control-v2-2\.1\.0-cyber/);
 
+assert.match(html, /data-product-generation=["']20["']/);
+assert.match(html, /product-redesign-v20\.css/);
+assert.match(html, /product-redesign-v20\.js/);
+assert.match(productCss, /--da20-cyan:/);
+assert.match(productCss, /--da20-violet:/);
+assert.match(productCss, /prefers-reduced-motion/);
+assert.match(productScript, /beforeinstallprompt/);
+assert.doesNotMatch(productScript, /eval\(|new Function\(/);
+
 console.log(JSON.stringify({
   ok: true,
   interface: parsedManifest.name,
-  compatible_base: 'DyrakArmy v16 cyber dashboard',
-  responsive_breakpoints: [1180, 920, 620],
+  product_system: 'v20',
+  compatible_base: 'DyrakArmy v16/v17 cyber dashboard',
+  responsive_breakpoints: [1180, 920, 620, 1120, 760, 480],
   functional_contract_ids: requiredIds.length,
   pwa: true,
   governance_profile: true,
