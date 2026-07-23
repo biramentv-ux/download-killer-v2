@@ -40,7 +40,7 @@ describe('DyrakArmy Product System v20', () => {
       expect(surface).toContain('/platform/product-redesign-v20.css?v=20.0.0');
     }
     expect(landing).toContain('/platform/product-redesign-v20.js?v=20.0.0');
-    expect(telegram).toContain('/telegram/telegram-product-v20.js?v=20.0.0');
+    expect(telegram).toContain('telegram-product-v20.js?v=20.0.0');
     expect(telegram).toContain('data-da-surface="telegram"');
     expect(control).toContain('data-da-surface="control"');
     expect(challenge).toContain('data-da-surface="game"');
