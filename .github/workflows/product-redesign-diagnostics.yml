@@ -1,0 +1,64 @@
+name: Product Redesign Diagnostics
+
+on:
+  pull_request:
+    paths:
+      - worker/public/**
+      - worker/src/**/*.test.ts
+      - worker/scripts/**
+      - .github/workflows/product-redesign-diagnostics.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - name: Install dependencies
+        working-directory: worker
+        run: npm ci
+      - name: Capture all diagnostics
+        shell: bash
+        run: |
+          set +e
+          mkdir -p diagnostics
+          cd worker
+          npm test > ../diagnostics/worker-tests.log 2>&1
+          echo "$?" > ../diagnostics/worker-tests.status
+          npm run typecheck > ../diagnostics/typecheck.log 2>&1
+          echo "$?" > ../diagnostics/typecheck.status
+          for script in \
+            product-redesign-v20-simulation.mjs \
+            landing-v16-simulation.mjs \
+            software-suite-simulation.mjs \
+            games-1-10-simulation.mjs \
+            games-1-10-deep-validation.mjs \
+            full-virtual-simulation.mjs \
+            hf-local-downloader-contract.mjs; do
+            node "scripts/$script" > "../diagnostics/$script.log" 2>&1
+            echo "$?" > "../diagnostics/$script.status"
+          done
+          node --check public/platform/product-redesign-v20.js > ../diagnostics/product-js-syntax.log 2>&1
+          echo "$?" > ../diagnostics/product-js-syntax.status
+          node --check public/telegram/telegram-product-v20.js > ../diagnostics/telegram-js-syntax.log 2>&1
+          echo "$?" > ../diagnostics/telegram-js-syntax.status
+          exit 0
+      - name: Show status summary
+        run: |
+          for file in diagnostics/*.status; do printf '%s=' "$(basename "$file")"; cat "$file"; done
+          for file in diagnostics/*.log; do echo "===== $file ====="; tail -n 80 "$file"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: product-redesign-v20-diagnostics
+          path: diagnostics
+          if-no-files-found: error
+          retention-days: 30
