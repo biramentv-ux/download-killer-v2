@@ -15,6 +15,7 @@ const APP_SHELL = [
   '/platform/product-redesign-v20.css?v=20.0.0',
   '/platform/product-redesign-v20.js?v=20.0.0',
   '/platform/games-v14.js',
+  '/platform/platform-public.js',
   '/telegram/',
   '/telegram/index.html',
   '/telegram/telegram-product-v20.js?v=20.0.0',
