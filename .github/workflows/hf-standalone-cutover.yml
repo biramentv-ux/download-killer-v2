@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - worker/**
+      - downloader/**
       - hf_space/**
       - hf_redirect_space/**
       - .github/workflows/hf-standalone-cutover.yml
@@ -15,7 +16,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
 
@@ -43,6 +44,10 @@ jobs:
             --exclude .wrangler \
             --exclude .dev.vars \
             worker/ .hf-stage/worker/
+          rsync -a --delete \
+            --exclude __pycache__ \
+            --exclude .pytest_cache \
+            downloader/ .hf-stage/downloader/
           cp hf_space/platform_hf.ts .hf-stage/worker/src/platform_hf.ts
           cp hf_space/wrangler.hf.jsonc .hf-stage/worker/wrangler.hf.jsonc
           rm -f .hf-stage/worker/src/platform_hf.test.ts
@@ -52,6 +57,7 @@ jobs:
           cp hf_space/render-dev-vars.mjs .hf-stage/render-dev-vars.mjs
           cp hf_space/standalone-preflight.mjs .hf-stage/standalone-preflight.mjs
           cp hf_space/standalone-supervisor.mjs .hf-stage/standalone-supervisor.mjs
+          test -f .hf-stage/downloader/app/main.py
           printf '{"test":true}\n' > .hf-test-data/dyrakarmy/.cloudflare-state-imported
           chmod -R 0777 .hf-test-data
 
@@ -66,6 +72,7 @@ jobs:
             -e HF_BACKEND_MODE=standalone \
             -e HF_STATE_IMPORT_REQUIRED=1 \
             -e HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE=0 \
+            -e HF_LOCAL_DOWNLOADER_ENABLED=1 \
             -e DYRAKARMY_PERSIST_ROOT=/data/dyrakarmy \
             -e PUBLIC_BASE_URL=https://standalone.example.test \
             -e CORS_ORIGINS=https://standalone.example.test \
@@ -79,7 +86,7 @@ jobs:
             dyrakarmy-hf-standalone:test
 
           ready=0
-          for attempt in $(seq 1 90); do
+          for attempt in $(seq 1 120); do
             if curl -fsS http://127.0.0.1:17860/api/hf-runtime/health >/tmp/hf-health.json; then
               ready=1
               break
@@ -91,7 +98,8 @@ jobs:
             sleep 2
           done
           test "$ready" -eq 1
-          node -e "const p=require('/tmp/hf-health.json'); if(!p.ok||p.mode!=='standalone'||p.state_authority!=='hugging-face-persistent'||p.cloudflare_dependency!==false) process.exit(1)"
+          node -e "const p=require('/tmp/hf-health.json'); if(!p.ok||p.mode!=='standalone'||p.state_authority!=='hugging-face-persistent'||p.cloudflare_dependency!==false||!p.downloader?.ok||p.downloader?.mode!=='local-container') process.exit(1)"
+          docker exec dyrakarmy-hf-standalone sh -lc 'test "$(curl -sS -o /dev/null -w "%{http_code}" -H "X-API-Key: $DOWNLOADER_API_KEY" http://127.0.0.1:8081/internal/files/not-found)" = "404"'
 
       - name: Validate Web, API, D1 and KV state
         run: |
@@ -113,6 +121,7 @@ jobs:
             -e HF_BACKEND_MODE=standalone \
             -e HF_STATE_IMPORT_REQUIRED=1 \
             -e HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE=0 \
+            -e HF_LOCAL_DOWNLOADER_ENABLED=1 \
             -e DYRAKARMY_PERSIST_ROOT=/data/dyrakarmy \
             -e PUBLIC_BASE_URL=https://standalone.example.test \
             -e CORS_ORIGINS=https://standalone.example.test \
@@ -125,7 +134,7 @@ jobs:
             -e RELEASE_SIGNING_PRIVATE_KEY_PKCS8_BASE64=test-signing-key \
             dyrakarmy-hf-standalone:test
           ready=0
-          for attempt in $(seq 1 90); do
+          for attempt in $(seq 1 120); do
             if curl -fsS http://127.0.0.1:17860/api/hf-runtime/health >/dev/null; then
               ready=1
               break
@@ -143,6 +152,7 @@ jobs:
             --data "{\"action\":\"identity.link.status\",\"code\":\"$code\"}" \
             -o /tmp/link-status.json
           node -e "const p=require('/tmp/link-status.json'); if(p.status!=='pending') process.exit(1)"
+          docker exec dyrakarmy-hf-standalone sh -lc 'test -d "$DOWNLOADER_STORAGE_DIR" && test -d "$DOWNLOADER_WORK_DIR"'
 
       - name: Capture diagnostics
         if: always()
