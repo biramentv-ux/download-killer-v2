@@ -30,7 +30,7 @@ beforeEach(() => {
   mocks.queue.mockClear();
   mocks.scheduled.mockClear();
   mocks.downloaderFetch.mockReset();
-  mocks.downloaderFetch.mockImplementation(async (input: RequestInfo | URL) => {
+  mocks.downloaderFetch.mockImplementation(async (input: unknown) => {
     const url = String(input);
     if (url.endsWith('/health')) return Response.json({ ok: true, service: 'downloader' });
     if (url.includes('/internal/files/__hf_auth_probe__')) {
