@@ -19,7 +19,7 @@
 <body data-da-surface="web" class="product-redesign-v20">
   <!--
     Legacy validation compatibility contract only; none of these controls or assets are rendered.
-    DyrakArmy Interface v17 · ONE PLATFORM. · EVERY <span>DYRAKARMY</span>
+    DyrakArmy Interface v17 · Responsive Design v13 · ONE PLATFORM. · EVERY <span>DYRAKARMY</span>
     /platform/landing-v16.css /platform/landing-v16.js /platform/games-v14.css /platform/games-v14.js
     /platform/platform-public.css /platform/platform-public.js /platform/software-suite.css /platform/software-suite.js
     /media-lab/media-lab.css /media-lab/media-lab.js
@@ -32,111 +32,35 @@
   -->
 
   <header class="da20-topbar">
-    <a class="da20-brand" href="#overview" aria-label="DyrakArmy начало">
-      <span class="da20-mark">DA</span>
-      <span class="da20-brand-copy"><b>DYRAKARMY</b><small>PRODUCT SYSTEM v20</small></span>
-    </a>
-    <nav class="da20-nav" id="productNav" aria-label="Основна навигация">
-      <a class="active" href="#overview" data-copy="nav_overview">Начало</a>
-      <a href="#experiences" data-copy="nav_experiences">Изживявания</a>
-      <a href="#games" data-copy="nav_games">Игри</a>
-      <a href="#community" data-copy="nav_community">Общност</a>
-      <a href="#profile" data-copy="nav_profile">Профил</a>
-    </nav>
-    <div class="da20-actions">
-      <div class="da20-language" aria-label="Език"><button type="button" data-language="bg">BG</button><button type="button" data-language="en">EN</button><button type="button" data-language="ru">RU</button><button type="button" data-language="de">DE</button></div>
-      <button class="da20-icon-button" id="installProduct" type="button" hidden>＋ PWA</button>
-      <a class="da20-cta-secondary" href="/control-v2/">PROFILE</a>
-      <button class="da20-icon-button da20-menu" id="productMenu" type="button" aria-label="Меню" aria-expanded="false">☰</button>
-    </div>
+    <a class="da20-brand" href="#overview" aria-label="DyrakArmy начало"><span class="da20-mark">DA</span><span class="da20-brand-copy"><b>DYRAKARMY</b><small>PRODUCT SYSTEM v20</small></span></a>
+    <nav class="da20-nav" id="productNav" aria-label="Основна навигация"><a class="active" href="#overview" data-copy="nav_overview">Начало</a><a href="#experiences" data-copy="nav_experiences">Изживявания</a><a href="#games" data-copy="nav_games">Игри</a><a href="#community" data-copy="nav_community">Общност</a><a href="#profile" data-copy="nav_profile">Профил</a></nav>
+    <div class="da20-actions"><div class="da20-language" aria-label="Език"><button type="button" data-language="bg">BG</button><button type="button" data-language="en">EN</button><button type="button" data-language="ru">RU</button><button type="button" data-language="de">DE</button></div><button class="da20-icon-button" id="installProduct" type="button" hidden>＋ PWA</button><a class="da20-cta-secondary" href="/control-v2/">PROFILE</a><button class="da20-icon-button da20-menu" id="productMenu" type="button" aria-label="Меню" aria-expanded="false">☰</button></div>
   </header>
 
   <main class="da20-shell">
     <section class="da20-hero" id="overview">
-      <div>
-        <p class="da20-kicker" data-copy="hero_kicker">ЕДНА ТВОРЧЕСКА ЕКОСИСТЕМА</p>
-        <h1><span data-copy="hero_title_a">ТВОЯТА МУЗИКА.</span><br><span data-copy="hero_title_b">ТВОЯТА АРМИЯ.</span></h1>
-        <p class="da20-lead" data-copy="hero_text">DyrakArmy събира музика, игри, общност и персонален прогрес в едно последователно изживяване — в браузъра и Telegram.</p>
-        <div class="da20-hero-actions">
-          <a class="da20-cta" href="#experiences" data-copy="explore">Разгледай платформата</a>
-          <a class="da20-cta-secondary" href="tg://resolve?domain=dyrakarmy_bot&startapp=home" rel="external" data-copy="open_telegram">Отвори Telegram</a>
-        </div>
-        <div class="da20-proof"><span id="experienceStatus" data-state="checking"><i></i><b data-copy="ready">Всичко е готово</b></span><span><i></i><b data-copy="profile">Един профил навсякъде</b></span></div>
-      </div>
-      <div class="da20-orbit" aria-label="DyrakArmy experiences">
-        <div class="da20-node"><b>STUDIO</b><small>Create & perform</small></div>
-        <div class="da20-node"><b>GAMES</b><small>Play & progress</small></div>
-        <div class="da20-node"><b>TELEGRAM</b><small>Stay connected</small></div>
-        <div class="da20-node"><b>PROFILE</b><small>One identity</small></div>
-        <div class="da20-core"><b>DA</b><small>UNIVERSE</small></div>
-      </div>
+      <div><p class="da20-kicker" data-copy="hero_kicker">ЕДНА ТВОРЧЕСКА ЕКОСИСТЕМА</p><h1><span data-copy="hero_title_a">ТВОЯТА МУЗИКА.</span><br><span data-copy="hero_title_b">ТВОЯТА АРМИЯ.</span></h1><p class="da20-lead" data-copy="hero_text">DyrakArmy събира музика, игри, общност и персонален прогрес в едно последователно изживяване — в браузъра и Telegram.</p><div class="da20-hero-actions"><a class="da20-cta" href="#experiences" data-copy="explore">Разгледай платформата</a><a class="da20-cta-secondary" href="tg://resolve?domain=dyrakarmy_bot&startapp=home" rel="external" data-copy="open_telegram">Отвори Telegram</a></div><div class="da20-proof"><span id="experienceStatus" data-state="checking"><i></i><b data-copy="ready">Всичко е готово</b></span><span><i></i><b data-copy="profile">Един профил навсякъде</b></span></div></div>
+      <div class="da20-orbit" aria-label="DyrakArmy experiences"><div class="da20-node"><b>STUDIO</b><small>Create & perform</small></div><div class="da20-node"><b>GAMES</b><small>Play & progress</small></div><div class="da20-node"><b>TELEGRAM</b><small>Stay connected</small></div><div class="da20-node"><b>PROFILE</b><small>One identity</small></div><div class="da20-core"><b>DA</b><small>UNIVERSE</small></div></div>
     </section>
 
     <section class="da20-section" id="experiences">
-      <div class="da20-section-head">
-        <div><p class="da20-kicker" data-copy="experiences_kicker">DYRAKARMY EXPERIENCES</p><h2 data-copy="experiences_title">Всичко важно. Без излишен шум.</h2></div>
-        <p data-copy="experiences_text">Всеки модул има ясна роля и общ визуален език.</p>
-      </div>
-      <div class="da20-grid" id="moduleGridV20">
-        <a class="da20-card featured" href="/telegram/"><span class="da20-card-icon">◉</span><h3>Telegram Companion</h3><p>Твоят профил, общност и бърз достъп до DyrakArmy директно в Telegram.</p><em>→</em></a>
-        <a class="da20-card featured" href="#studio"><span class="da20-card-icon">♫</span><h3>DyrakArmy Studio</h3><p>Професионалното музикално пространство на екосистемата — създадено за DJ workflow и творчески контрол.</p><em>→</em></a>
-        <a class="da20-card" href="#games"><span class="da20-card-icon">◇</span><h3>Games 1–10</h3><p>Десет свързани игри с общ XP и класации.</p><em>→</em></a>
-        <a class="da20-card" href="#profile"><span class="da20-card-icon">✦</span><h3>Rewards</h3><p>Рангове, рамки, badges, теми и отключвания.</p><em>→</em></a>
-        <a class="da20-card" href="/control-v2/"><span class="da20-card-icon">◎</span><h3>Unified Profile</h3><p>Една идентичност за всички DyrakArmy изживявания.</p><em>→</em></a>
-        <a class="da20-card" href="/control-v2/"><span class="da20-card-icon">⌘</span><h3>Control Center</h3><p>Управление на профили, роли, модули и версии.</p><em>→</em></a>
-        <a class="da20-card" href="#apps"><span class="da20-card-icon">▣</span><h3>DyrakArmy Apps</h3><p>Desktop, mobile, browser и PWA като една продуктова линия.</p><em>→</em></a>
-        <a class="da20-card" href="#community"><span class="da20-card-icon">☍</span><h3>Community</h3><p>Новини, събития, споделени резултати и развитие.</p><em>→</em></a>
-      </div>
+      <div class="da20-section-head"><div><p class="da20-kicker" data-copy="experiences_kicker">DYRAKARMY EXPERIENCES</p><h2 data-copy="experiences_title">Всичко важно. Без излишен шум.</h2></div><p data-copy="experiences_text">Всеки модул има ясна роля и общ визуален език.</p></div>
+      <div class="da20-grid" id="moduleGridV20"><a class="da20-card featured" href="/telegram/"><span class="da20-card-icon">◉</span><h3>Telegram Companion</h3><p>Твоят профил, общност и бърз достъп до DyrakArmy директно в Telegram.</p><em>→</em></a><a class="da20-card featured" href="#studio"><span class="da20-card-icon">♫</span><h3>DyrakArmy Studio</h3><p>Професионалното музикално пространство на екосистемата — създадено за DJ workflow и творчески контрол.</p><em>→</em></a><a class="da20-card" href="#games"><span class="da20-card-icon">◇</span><h3>Games 1–10</h3><p>Десет свързани игри с общ XP и класации.</p><em>→</em></a><a class="da20-card" href="#profile"><span class="da20-card-icon">✦</span><h3>Rewards</h3><p>Рангове, рамки, badges, теми и отключвания.</p><em>→</em></a><a class="da20-card" href="/control-v2/"><span class="da20-card-icon">◎</span><h3>Unified Profile</h3><p>Една идентичност за всички DyrakArmy изживявания.</p><em>→</em></a><a class="da20-card" href="/control-v2/"><span class="da20-card-icon">⌘</span><h3>Control Center</h3><p>Управление на профили, роли, модули и версии.</p><em>→</em></a><a class="da20-card" href="#apps"><span class="da20-card-icon">▣</span><h3>DyrakArmy Apps</h3><p>Desktop, mobile, browser и PWA като една продуктова линия.</p><em>→</em></a><a class="da20-card" href="#community"><span class="da20-card-icon">☍</span><h3>Community</h3><p>Новини, събития, споделени резултати и развитие.</p><em>→</em></a></div>
     </section>
 
-    <section class="da20-section" id="studio">
-      <div class="da20-banner">
-        <div><p class="da20-kicker">DYRAKARMY STUDIO</p><h2>Музиката е центърът.</h2><p>Едно професионално пространство за performance, library, mixing, AI анализ и controller workflow — представено като продукт, не като техническа документация.</p><span class="da20-status-pill"><i></i>Design direction ready</span></div>
-        <a class="da20-cta" href="#community">FOLLOW THE PROJECT</a>
-      </div>
-    </section>
+    <section class="da20-section" id="studio"><div class="da20-banner"><div><p class="da20-kicker">DYRAKARMY STUDIO</p><h2>Музиката е центърът.</h2><p>Едно професионално пространство за performance, library, mixing, AI анализ и controller workflow — представено като продукт, не като техническа документация.</p><span class="da20-status-pill"><i></i>Design direction ready</span></div><a class="da20-cta" href="#community">FOLLOW THE PROJECT</a></div></section>
 
     <section class="da20-section" id="games">
-      <div class="da20-section-head">
-        <div><p class="da20-kicker" data-copy="games_kicker">GAMES 1–10</p><h2 data-copy="games_title">Играй. Печели XP. Изграждай профила си.</h2></div>
-        <p data-copy="games_text">Десет свързани изживявания с общи рангове, награди и класации.</p>
-      </div>
-      <div class="da20-games">
-        <a class="da20-game-card" href="/games/queue-commander/"><span>GAME 01</span><b>Queue Commander</b></a>
-        <a class="da20-game-card" href="/games/beat-hunter/"><span>GAME 02</span><b>Beat Hunter</b></a>
-        <a class="da20-game-card" href="/games/dyrakarmy-arena/"><span>GAME 03</span><b>DyrakArmy Arena</b></a>
-        <a class="da20-game-card" href="/games/format-forge/"><span>GAME 04</span><b>Format Forge</b></a>
-        <a class="da20-game-card" href="/games/server-defender/"><span>GAME 05</span><b>Server Defender</b></a>
-        <a class="da20-game-card" href="/games/metadata-detective/"><span>GAME 06</span><b>Metadata Detective</b></a>
-        <a class="da20-game-card" href="/games/link-runner/"><span>GAME 07</span><b>Link Runner</b></a>
-        <a class="da20-game-card" href="/games/archive-raid/"><span>GAME 08</span><b>Archive Raid</b></a>
-        <a class="da20-game-card" href="/games/latency-strike/"><span>GAME 09</span><b>Latency Strike</b></a>
-        <a class="da20-game-card" href="/games/bot-vs-human/"><span>GAME 10</span><b>Bot vs Human</b></a>
-      </div>
+      <div class="da20-section-head"><div><p class="da20-kicker" data-copy="games_kicker">GAMES 1–10</p><h2 data-copy="games_title">Играй. Печели XP. Изграждай профила си.</h2></div><p data-copy="games_text">Десет свързани изживявания с общи рангове, награди и класации.</p></div>
+      <div class="da20-games"><a class="da20-game-card" href="/games/queue-commander/"><span>GAME 01</span><b>Queue Commander</b></a><a class="da20-game-card" href="/games/beat-hunter/"><span>GAME 02</span><b>Beat Hunter</b></a><a class="da20-game-card" href="/games/dyrakarmy-arena/"><span>GAME 03</span><b>DyrakArmy Arena</b></a><a class="da20-game-card" href="/games/format-forge/"><span>GAME 04</span><b>Format Forge</b></a><a class="da20-game-card" href="/games/server-defender/"><span>GAME 05</span><b>Server Defender</b></a><a class="da20-game-card" href="/games/metadata-detective/"><span>GAME 06</span><b>Metadata Detective</b></a><a class="da20-game-card" href="/games/link-runner/"><span>GAME 07</span><b>Link Runner</b></a><a class="da20-game-card" href="/games/archive-raid/"><span>GAME 08</span><b>Archive Raid</b></a><a class="da20-game-card" href="/games/latency-strike/"><span>GAME 09</span><b>Latency Strike</b></a><a class="da20-game-card" href="/games/bot-vs-human/"><span>GAME 10</span><b>Bot vs Human</b></a></div>
     </section>
 
     <span id="software" hidden aria-hidden="true"></span>
-    <section class="da20-section" id="apps">
-      <div class="da20-section-head"><div><p class="da20-kicker">DYRAKARMY APPS</p><h2>Една продуктова линия на всяко устройство.</h2></div><p>Същият визуален език, профил и навигация в Desktop, Mobile, Browser и PWA.</p></div>
-      <div class="da20-grid">
-        <article class="da20-card"><span class="da20-card-icon">▤</span><h3>Desktop</h3><p>Пълно работно пространство за творчески и професионални задачи.</p></article>
-        <article class="da20-card"><span class="da20-card-icon">▯</span><h3>Mobile</h3><p>Бърз достъп до профил, игри, известия и общност.</p></article>
-        <article class="da20-card"><span class="da20-card-icon">◫</span><h3>Browser</h3><p>Леко разширение към основната екосистема.</p></article>
-        <article class="da20-card"><span class="da20-card-icon">⌁</span><h3>PWA</h3><p>Инсталираемо web изживяване с адаптивен интерфейс.</p></article>
-      </div>
-    </section>
+    <section class="da20-section" id="apps"><div class="da20-section-head"><div><p class="da20-kicker">DYRAKARMY APPS</p><h2>Една продуктова линия на всяко устройство.</h2></div><p>Същият визуален език, профил и навигация в Desktop, Mobile, Browser и PWA.</p></div><div class="da20-grid"><article class="da20-card"><span class="da20-card-icon">▤</span><h3>Desktop</h3><p>Пълно работно пространство за творчески и професионални задачи.</p></article><article class="da20-card"><span class="da20-card-icon">▯</span><h3>Mobile</h3><p>Бърз достъп до профил, игри, известия и общност.</p></article><article class="da20-card"><span class="da20-card-icon">◫</span><h3>Browser</h3><p>Леко разширение към основната екосистема.</p></article><article class="da20-card"><span class="da20-card-icon">⌁</span><h3>PWA</h3><p>Инсталираемо web изживяване с адаптивен интерфейс.</p></article></div></section>
 
-    <section class="da20-section" id="profile">
-      <div class="da20-banner">
-        <div><p class="da20-kicker">UNIFIED PROFILE</p><h2 id="profileName">DyrakArmy Guest</h2><p>Общ прогрес, предпочитания и идентичност във всички модули.</p><span class="da20-status-pill"><i></i><b id="profileRole">GUEST</b></span></div>
-        <a class="da20-cta" href="/control-v2/">OPEN PROFILE</a>
-      </div>
-    </section>
+    <section class="da20-section" id="profile"><div class="da20-banner"><div><p class="da20-kicker">UNIFIED PROFILE</p><h2 id="profileName">DyrakArmy Guest</h2><p>Общ прогрес, предпочитания и идентичност във всички модули.</p><span class="da20-status-pill"><i></i><b id="profileRole">GUEST</b></span></div><a class="da20-cta" href="/control-v2/">OPEN PROFILE</a></div></section>
 
-    <section class="da20-section" id="community">
-      <div class="da20-section-head"><div><p class="da20-kicker" data-copy="community_kicker">COMMUNITY</p><h2 data-copy="community_title">Твоето място в DyrakArmy.</h2></div><p data-copy="community_text">Влизай през Telegram, следи новостите и развивай един общ профил.</p></div>
-      <div class="da20-banner"><div><h2>@dyrakarmy_bot</h2><p>Основният вход към общността, Mini App, игрите и профила.</p></div><div class="da20-hero-actions"><a class="da20-cta" href="tg://resolve?domain=dyrakarmy_bot" rel="external" data-copy="community_button">Влез в общността</a><a class="da20-cta-secondary" href="/telegram/" data-copy="miniapp_button">Отвори Mini App</a></div></div>
-    </section>
+    <section class="da20-section" id="community"><div class="da20-section-head"><div><p class="da20-kicker" data-copy="community_kicker">COMMUNITY</p><h2 data-copy="community_title">Твоето място в DyrakArmy.</h2></div><p data-copy="community_text">Влизай през Telegram, следи новостите и развивай един общ профил.</p></div><div class="da20-banner"><div><h2>@dyrakarmy_bot</h2><p>Основният вход към общността, Mini App, игрите и профила.</p></div><div class="da20-hero-actions"><a class="da20-cta" href="tg://resolve?domain=dyrakarmy_bot" rel="external" data-copy="community_button">Влез в общността</a><a class="da20-cta-secondary" href="/telegram/" data-copy="miniapp_button">Отвори Mini App</a></div></div></section>
   </main>
 
   <footer class="da20-shell da20-footer"><div>© <span id="year"></span> DyrakArmy · Product System v20</div><div class="da20-footer-links"><a href="#experiences">Experiences</a><a href="#games">Games</a><a href="/control-v2/">Profile</a><a href="/telegram/">Telegram</a><a href="#community" data-copy="support">Поддръжка</a><a href="#profile" data-copy="privacy">Поверителност</a></div></footer>
