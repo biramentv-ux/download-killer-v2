@@ -5,8 +5,19 @@ type HfBackendMode = 'free-public' | 'standalone';
 type HfEnv = Env & {
   HF_BACKEND_MODE?: string;
   HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE?: string;
+  HF_LOCAL_DOWNLOADER_ENABLED?: string;
+  HF_LOCAL_DOWNLOADER_PORT?: string;
   PUBLIC_BASE_URL?: string;
 };
+
+interface LocalDownloaderHealth {
+  enabled: boolean;
+  ok: boolean;
+  mode: 'local-container' | 'disabled';
+  status: number;
+  endpoint?: string;
+  error?: string;
+}
 
 const NATIVE_SPACE_URL = 'https://dyrakarmy-dyrakarmy-platform.hf.space';
 const HEALTH_PATHS = new Set(['/api/hf-runtime/health', '/api/hf-mirror/health']);
@@ -35,11 +46,48 @@ export function shouldProxyHfRequest(_request: Request, _env: HfEnv): boolean {
   return false;
 }
 
-function runtimeHealth(request: Request, env: HfEnv): Response {
+function resolveLocalDownloaderPort(env: HfEnv): number {
+  const parsed = Number.parseInt(String(env.HF_LOCAL_DOWNLOADER_PORT || '8081'), 10);
+  return Number.isFinite(parsed) && parsed >= 1024 && parsed <= 65535 ? parsed : 8081;
+}
+
+export async function probeHfLocalDownloader(env: HfEnv): Promise<LocalDownloaderHealth> {
+  const enabled = String(env.HF_LOCAL_DOWNLOADER_ENABLED || '1') !== '0';
+  if (!enabled) return { enabled: false, ok: true, mode: 'disabled', status: 0 };
+
+  const endpoint = `http://127.0.0.1:${resolveLocalDownloaderPort(env)}/health`;
+  try {
+    const response = await fetch(endpoint, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(3000),
+    });
+    return {
+      enabled: true,
+      ok: response.ok,
+      mode: 'local-container',
+      status: response.status,
+      endpoint: '127.0.0.1',
+      ...(response.ok ? {} : { error: `HTTP ${response.status}` }),
+    };
+  } catch (error) {
+    return {
+      enabled: true,
+      ok: false,
+      mode: 'local-container',
+      status: 0,
+      endpoint: '127.0.0.1',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function runtimeHealth(request: Request, env: HfEnv): Promise<Response> {
   const mode = resolveHfBackendMode(env);
   const persistent = mode === 'standalone';
+  const downloader = await probeHfLocalDownloader(env);
+  const ok = downloader.ok;
   return Response.json({
-    ok: true,
+    ok,
     service: 'dyrakarmy-hugging-face-runtime',
     mode,
     public_url: resolveHfUpstream(env).origin || new URL(request.url).origin,
@@ -48,11 +96,13 @@ function runtimeHealth(request: Request, env: HfEnv): Response {
     free_public_host: mode === 'free-public',
     cloudflare_dependency: false,
     cloudflare_proxy_enabled: false,
+    downloader,
     telegram_webhook_authority: persistent && String(env.HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE || '0') === '1'
       ? 'hugging-face'
       : 'disabled',
     split_brain_protection: true,
   }, {
+    status: ok ? 200 : 503,
     headers: {
       'Cache-Control': 'no-store',
       'X-DyrakArmy-HF-Mode': mode,
