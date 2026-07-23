@@ -8,58 +8,68 @@ import { describe, expect, it } from 'vitest';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const read = (relative: string) => readFileSync(resolve(root, relative), 'utf8');
+const stripComments = (html: string) => html.replace(/<!--[\s\S]*?-->/g, '');
 
-describe('DyrakArmy Sound Universe v19', () => {
-  it('ships parseable shared assets and a complete integration manifest', () => {
-    const css = read('public/platform/sound-universe-v19.css');
-    const runtime = read('public/platform/sound-universe-v19.js');
-    const manifest = JSON.parse(read('public/platform/sound-universe-v19-manifest.json'));
+describe('DyrakArmy Product System v20', () => {
+  it('preserves the v19 source package while shipping the new shared product system', () => {
+    const legacyCss = read('public/platform/sound-universe-v19.css');
+    const legacyRuntime = read('public/platform/sound-universe-v19.js');
+    const legacyManifest = JSON.parse(read('public/platform/sound-universe-v19-manifest.json'));
+    const productCss = read('public/platform/product-redesign-v20.css');
+    const productRuntime = read('public/platform/product-redesign-v20.js');
 
-    expect(() => new Function(runtime)).not.toThrow();
-    expect(css).toContain('DyrakArmy Sound Universe v19');
-    expect(css).toContain('body[data-da-surface="web"]');
-    expect(css).toContain('body[data-da-surface="telegram"]');
-    expect(css).toContain('body[data-da-surface="control"]');
-    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
-    expect(manifest.feature_version).toBe('19.0.0');
-    expect(manifest.surfaces).toEqual(['web', 'telegram-mini-app', 'control-center']);
-    expect(manifest.domains.primary).toBe('https://dyrakarmy.eu');
-    expect(manifest.domains.secondary).toBe('https://dyrakarmy.online');
+    expect(() => new Function(legacyRuntime)).not.toThrow();
+    expect(() => new Function(productRuntime)).not.toThrow();
+    expect(legacyCss).toContain('DyrakArmy Sound Universe v19');
+    expect(legacyManifest.feature_version).toBe('19.0.0');
+    expect(productCss).toContain('DyrakArmy Product System v20');
+    expect(productCss).toContain('body[data-da-surface="telegram"]');
+    expect(productCss).toContain('body[data-da-surface="control"]');
+    expect(productCss).toContain('body[data-da-surface="game"]');
+    expect(productCss).toContain('@media (prefers-reduced-motion: reduce)');
   });
 
-  it('loads the theme on the web, Telegram and Control Center without replacing core logic', () => {
-    const defaults = read('public/platform/site-defaults.js');
+  it('loads Product System v20 on web, Telegram, Control Center and games without replacing core logic', () => {
+    const landing = read('public/index.html');
     const telegram = read('public/telegram/index.html');
     const control = read('public/control-v2/index.html');
+    const challenge = read('public/games/challenge/index.html');
 
-    expect(defaults).toContain("loadStylesheet('/platform/sound-universe-v19.css')");
-    expect(defaults).toContain("loadScript('/platform/sound-universe-v19.js', '19.0.0')");
+    for (const surface of [landing, telegram, control, challenge]) {
+      expect(surface).toContain('data-product-generation="20"');
+      expect(surface).toContain('/platform/product-redesign-v20.css?v=20.0.0');
+    }
+    expect(landing).toContain('/platform/product-redesign-v20.js?v=20.0.0');
+    expect(telegram).toContain('/telegram/telegram-product-v20.js?v=20.0.0');
     expect(telegram).toContain('data-da-surface="telegram"');
-    expect(telegram).toContain('/platform/sound-universe-v19.css?v=19.0.0');
-    expect(telegram).toContain('/platform/sound-universe-v19.js?v=19.0.0');
     expect(control).toContain('data-da-surface="control"');
-    expect(control).toContain('/platform/sound-universe-v19.css?v=19.0.0');
-    expect(control).toContain('/platform/sound-universe-v19.js?v=19.0.0');
+    expect(challenge).toContain('data-da-surface="game"');
 
-    for (const requiredId of ['downloadForm', 'runtimeDiagnostic', 'archivePanel']) expect(telegram).toContain(`id="${requiredId}"`);
+    const visibleTelegram = stripComments(telegram);
+    for (const retiredId of ['downloadForm', 'runtimeDiagnostic', 'archivePanel']) {
+      expect(visibleTelegram).not.toContain(`id="${retiredId}"`);
+    }
+    for (const requiredId of ['searchForm', 'profileName', 'profileCardName']) expect(telegram).toContain(`id="${requiredId}"`);
     for (const requiredId of ['linkDeviceBtn', 'roleForm', 'profileForm']) expect(control).toContain(`id="${requiredId}"`);
   });
 
-  it('uses only working public navigation targets and keeps both domains synchronized', () => {
-    const runtime = read('public/platform/sound-universe-v19.js');
+  it('uses product-first navigation targets and removes public download/backend surfaces', () => {
     const landing = read('public/index.html');
-    const gamesRuntime = read('public/platform/games-v14.js');
-    const staticTargets = ['home', 'engines', 'software', 'console', 'community', 'status'];
+    const telegram = read('public/telegram/index.html');
+    const productRuntime = read('public/platform/product-redesign-v20.js');
+    const telegramRuntime = read('public/telegram/telegram-product-v20.js');
+    const visibleLanding = stripComments(landing);
+    const visibleTelegram = stripComments(telegram);
+    const staticTargets = ['overview', 'experiences', 'studio', 'games', 'apps', 'profile', 'community'];
 
-    expect(runtime).toContain("const PRIMARY_HOST = 'dyrakarmy.eu'");
-    expect(runtime).toContain("const SECONDARY_HOST = 'dyrakarmy.online'");
-    expect(runtime).toContain('fetch(`/api/health?');
-    for (const target of staticTargets) {
-      expect(runtime).toContain(`'#${target}'`);
-      expect(landing).toContain(`id="${target}"`);
-    }
-    expect(runtime).toContain("'#games'");
-    expect(gamesRuntime).toContain("section.id = 'games'");
-    expect(runtime).toContain("['/control-v2/'");
+    for (const target of staticTargets) expect(landing).toContain(`id="${target}"`);
+    expect(productRuntime).toContain("serviceWorker.register('/sw.js')");
+    expect(productRuntime).toContain('beforeinstallprompt');
+    expect(telegramRuntime).toContain("fetch('/api/search'");
+    expect(telegramRuntime).not.toContain('/miniapp/download');
+    expect(visibleLanding).not.toMatch(/MEDIA DOWNLOAD CENTER|MEDIA DOWNLOAD CONSOLE|id="downloadForm"/i);
+    expect(visibleTelegram).not.toMatch(/data-tab="download"|id="downloadPanel"|id="archivePanel"/i);
+    expect(landing).toContain('tg://resolve?domain=dyrakarmy_bot');
+    expect(landing).toContain('/control-v2/');
   });
 });
