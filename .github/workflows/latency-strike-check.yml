@@ -10,6 +10,7 @@ on:
       - worker/src/latency_strike_native.test.ts
       - worker/src/platform_v2.ts
       - worker/public/games/latency-strike/**
+      - worker/public/platform/product-redesign-v20.css
       - worker/public/sw.js
       - worker/public/manifest.webmanifest
       - worker/scripts/setup-telegram-platform.mjs
@@ -26,6 +27,7 @@ on:
       - worker/src/latency_strike_native.test.ts
       - worker/src/platform_v2.ts
       - worker/public/games/latency-strike/**
+      - worker/public/platform/product-redesign-v20.css
       - worker/public/sw.js
       - worker/public/manifest.webmanifest
       - worker/scripts/setup-telegram-platform.mjs
@@ -60,12 +62,14 @@ jobs:
           node --check public/games/latency-strike/native-bridge.js
           node --check public/sw.js
           node --check scripts/setup-telegram-platform.mjs
-      - name: Validate complete integration contract
+      - name: Validate complete integration and Product System contract
         run: |
-          grep -q 'Latency Strike v1' public/games/latency-strike/index.html
+          grep -q 'data-product-generation="20"' public/games/latency-strike/index.html
+          grep -q 'data-da-surface="game"' public/games/latency-strike/index.html
+          grep -q '/platform/product-redesign-v20.css?v=20.0.0' public/games/latency-strike/index.html
           grep -q 'https://telegram.org/js/games.js' public/games/latency-strike/index.html
           grep -q 'native-bridge.js?v=1.0.0' public/games/latency-strike/index.html
-          grep -q '@media(max-width:480px)' public/games/latency-strike/game.css
+          grep -q 'body\[data-da-surface="game"\]' public/platform/product-redesign-v20.css
           grep -q '/api/games/latency-strike/session' src/latency_strike.ts
           grep -q '/api/games/latency-strike/score' src/latency_strike.ts
           grep -q '/api/games/latency-strike/equip' src/latency_strike.ts
