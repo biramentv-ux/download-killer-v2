@@ -128,3 +128,13 @@ Spotify track ID: 0xCX7a8DSq9idNOaAVI375
 ```
 
 The Bulgarian spelling variation `Темна` / `Тъмна` must remain a high-similarity match, while alternate versions receive penalties.
+
+## CI gate
+
+`.github/workflows/spotify-resolver-check.yml` runs three independent checks:
+
+1. complete Worker TypeScript typecheck;
+2. dedicated Worker resolver and Telegram tests;
+3. Python syntax validation and downloader resolver tests.
+
+All logs and exit statuses are uploaded as `spotify-resolver-diagnostics`, including when a check fails. The general Hugging Face migration workflow separately builds and starts the complete Docker Space image.
