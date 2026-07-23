@@ -1,16 +1,16 @@
 {
-  "status": "confirmed",
-  "workflow_conclusion": "success",
+  "status": "failure",
+  "workflow_conclusion": "failure",
   "environment": "production",
   "deployment_mode": "github-actions-auto-deploy",
-  "workflow_head_commit": "67aee8c13ec26dc0f28aa07e4795c6cf24aea59d",
+  "workflow_head_commit": "f4ca13c7ecd0e47a6460a73a73b61f308e1ba6d7",
   "confirmed_source_commit": "1174ac2ddda1acdce386603d82de1f71e4f07f48",
   "source_pr": 18,
   "workflow": "Deploy Web Platform",
-  "workflow_run_id": "29991688207",
-  "workflow_run_number": "217",
-  "workflow_run_url": "https://github.com/biramentv-ux/download-killer-v2/actions/runs/29991688207",
-  "recorded_at_utc": "2026-07-23T08:38:14Z",
+  "workflow_run_id": "30052674843",
+  "workflow_run_number": "231",
+  "workflow_run_url": "https://github.com/biramentv-ux/download-killer-v2/actions/runs/30052674843",
+  "recorded_at_utc": "2026-07-23T23:17:37Z",
   "canonical_domain": "https://dyrakarmy.eu",
   "worker_fallback": "https://sounddrop.biramentv.workers.dev"
 }
