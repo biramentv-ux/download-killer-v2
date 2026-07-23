@@ -1,5 +1,6 @@
-DyrakArmy Hugging Face production mirror deployment
-Retriggered after Trusted Publisher configuration: 2026-07-22
+DyrakArmy Hugging Face deployment trigger
+Generation: hf-free-public-v22-local-downloader
+Date: 2026-07-23
 Source of truth: GitHub main
 Canonical publisher: .github/workflows/hf-publish-ledger.yml
-Cloudflare remains active and unchanged during parallel validation.
+Purpose: replace the external Render API-key dependency with a private authenticated localhost downloader for Telegram.
