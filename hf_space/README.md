@@ -12,7 +12,7 @@ license: mit
 
 # DyrakArmy Unified Platform
 
-Free public Docker Space for the complete DyrakArmy Web/PWA, Software Toolkit, Control Center and Games 1–10.
+Free public Docker Space for the complete DyrakArmy Web/PWA, Software Toolkit, Control Center, Telegram integration and Games 1–10.
 
 ## Public host
 
@@ -28,6 +28,8 @@ The canonical source is `biramentv-ux/download-killer-v2`. Verified pushes to `m
 
 ```text
 HF_BACKEND_MODE=free-public
+HF_LOCAL_DOWNLOADER_ENABLED=1
+HF_LOCAL_DOWNLOADER_PORT=8081
 PUBLIC_BASE_URL=https://dyrakarmy-dyrakarmy-platform.hf.space
 DYRAKARMY_PERSIST_ROOT=/tmp/dyrakarmy-free-public
 HF_STATE_IMPORT_REQUIRED=0
@@ -35,8 +37,11 @@ HF_IMPORT_ON_START=0
 HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE=0
 ```
 
-The Docker container runs the complete TypeScript Worker locally on port `7860`:
+The Docker container runs:
 
+- the public TypeScript Worker on port `7860`;
+- a private FastAPI/yt-dlp/FFmpeg downloader on `127.0.0.1:8081`;
+- an automatically generated in-container `DOWNLOADER_API_KEY` shared only by those two processes;
 - public Web/PWA and Control Center;
 - all Games 1–10 pages and APIs;
 - local D1-compatible SQLite;
@@ -46,7 +51,40 @@ The Docker container runs the complete TypeScript Worker locally on port `7860`:
 - ranked gameplay when valid Telegram Space Secrets are configured;
 - server-side scoring, one-time sessions, shared XP and leaderboards.
 
+The downloader port is never published by Docker. Telegram downloads no longer depend on a matching API key in a separate Render service, so an external `401 Invalid API key` cannot open the downloader circuit in the default Hugging Face profile.
+
 No application route is proxied to Cloudflare in `free-public` mode.
+
+## Runtime health and downloader authentication
+
+```text
+GET /api/hf-runtime/health
+```
+
+The health endpoint performs two checks:
+
+1. the private downloader `/health` endpoint must respond successfully;
+2. an authenticated request to a protected downloader endpoint must return `404`, proving that the generated key was accepted while the probe file does not exist.
+
+Expected contract:
+
+```json
+{
+  "ok": true,
+  "mode": "free-public",
+  "state_authority": "hugging-face-ephemeral",
+  "cloudflare_dependency": false,
+  "downloader": {
+    "ok": true,
+    "mode": "local-container",
+    "status": 200,
+    "auth_status": 404,
+    "endpoint": "127.0.0.1"
+  }
+}
+```
+
+A missing or rejected downloader key changes runtime health to HTTP `503`; the deployment gate then fails before Telegram receives user traffic.
 
 ## Games 1–10
 
@@ -65,31 +103,16 @@ Every game is covered by the sequential integration manifest, deterministic scor
 
 ## Free-tier limitations
 
-CPU Basic is suitable for the public game and interface deployment, but free Spaces may sleep when unused. The local disk under `/tmp` is ephemeral, so data can reset after a restart, rebuild or host replacement.
+CPU Basic is suitable for the public game, interface and low-volume Telegram downloader deployment, but free Spaces may sleep when unused. The local disk under `/tmp` is ephemeral, so data and downloaded files can reset after a restart, rebuild or host replacement.
 
 This means:
 
-- public pages and practice games remain deployable for free;
+- public pages, practice games and active-session Telegram downloads remain deployable for free;
+- the first request after sleep may be slower while the Space wakes;
 - local ranked profiles, XP and leaderboards are not guaranteed to survive restarts;
 - a Telegram webhook is disabled by default because a sleeping free Space is not an always-on webhook authority;
 - persistent production state requires an external free database/service or a paid persistent volume in a future phase.
 
-The runtime reports this explicitly at:
-
-```text
-GET /api/hf-runtime/health
-```
-
-Expected zero-cost contract:
-
-```json
-{
-  "mode": "free-public",
-  "state_authority": "hugging-face-ephemeral",
-  "cloudflare_dependency": false
-}
-```
-
 ## Optional persistent mode
 
-The existing `standalone` profile remains available only as an optional future mode when a writable `/data` volume and production secrets are present. The current deployment target is `free-public`; it does not purchase hardware, storage or custom-domain features.
+The existing `standalone` profile remains available only as an optional future mode when a writable `/data` volume and production secrets are present. In that mode the downloader files and work directory are also placed under `/data/dyrakarmy/downloader`. The current deployment target is `free-public`; it does not purchase hardware, storage or custom-domain features.
