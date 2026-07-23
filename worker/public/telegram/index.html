@@ -1,161 +1,95 @@
 <!doctype html>
-<html lang="bg">
+<html lang="bg" data-product-generation="20">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#050713">
-  <meta name="description" content="Download Killer Telegram Mini App v12 with shared queue, diagnostics, history and Telegram archive.">
-  <meta name="dk-build" content="12.2.0">
-  <title>Download Killer Mini App v12</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#03040b">
+  <meta name="description" content="DyrakArmy Telegram Mini App — музика, игри, профил и общност.">
+  <meta name="dk-build" content="20.0.0">
+  <title>DyrakArmy Mini App</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./telegram.css?v=12.2.0">
-  <link rel="stylesheet" href="./telegram-v12.css?v=12.2.0">
-  <link rel="stylesheet" href="/platform/sound-universe-v19.css?v=19.0.0">
+  <link rel="stylesheet" href="/platform/product-redesign-v20.css?v=20.0.0">
   <script src="https://telegram.org/js/telegram-web-app.js?59"></script>
-  <script src="./telegram-runtime-v12.js?v=12.2.0"></script>
+  <script src="./telegram-product-v20.js?v=20.0.0" defer></script>
 </head>
 <body data-da-surface="telegram">
-  <canvas id="pulseCanvas" aria-hidden="true"></canvas>
-  <div class="noise" aria-hidden="true"></div>
-
-  <header class="app-header">
-    <a class="brand" href="/telegram/?v=12.2.0">
-      <span class="brand-mark"><i></i><i></i><i></i></span>
-      <span><strong>Download</strong> Killer</span>
-      <em data-miniapp-version>v12.2.0</em>
+  <header class="da20-topbar">
+    <a class="da20-brand" href="/telegram/" aria-label="DyrakArmy Mini App">
+      <span class="da20-mark">DA</span>
+      <span class="da20-brand-copy"><b>DYRAKARMY</b><small>TELEGRAM COMPANION</small></span>
     </a>
-    <div class="header-actions">
-      <span class="connection" id="connectionState" data-state="checking"><i></i><b data-i18n="checking">Проверка</b></span>
-      <button id="languageBtn" type="button">BG</button>
+    <div class="da20-actions">
+      <span class="da20-status-pill" id="connectionState" data-state="checking"><i></i><b data-copy="checking">Проверка</b></span>
+      <button class="da20-icon-button" id="languageBtn" type="button">BG</button>
     </div>
   </header>
 
-  <main>
-    <section class="hero reveal">
-      <div class="hero-copy">
-        <span class="eyebrow">MINI APP 12 · TELEGRAM · SHARED QUEUE</span>
-        <h1><span data-i18n="hero_a">Търси.</span><span data-i18n="hero_b">Избери качество.</span><strong data-i18n="hero_c">Получи файла в чата.</strong></h1>
-        <p data-i18n="hero_text">Една обща система за сайта и @dyrakarmy_bot. Готовите файлове се индексират в Telegram канал и при повторна заявка се използват без ново качване.</p>
-        <div class="build-line">
-          <span class="build-chip">BUILD <strong data-miniapp-version>v12.2.0</strong></span>
-          <span class="build-chip">DOMAIN <strong id="runtimeEndpoint">dyrakarmy.eu</strong></span>
-          <span class="build-chip">MODE <strong>TELEGRAM WEBAPP</strong></span>
-        </div>
-        <div class="profile-chip" id="profileChip">
-          <div class="avatar" id="profileAvatar">DK</div>
-          <div><b id="profileName" data-i18n="guest">Гост</b><small id="profileMeta">Telegram Mini App</small></div>
-        </div>
+  <main class="da20-shell">
+    <section class="da20-mini-hero">
+      <div>
+        <p class="da20-kicker" data-copy="hero_kicker">DYRAKARMY В TELEGRAM</p>
+        <h1 data-copy="hero_title">Твоят свят. В един жест.</h1>
+        <p data-copy="hero_text">Откривай музика, влизай в игрите и развивай общия си DyrakArmy профил.</p>
       </div>
-      <div class="storage-orbit" aria-hidden="true">
-        <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div>
-        <div class="storage-core"><span>DK</span><small>MINI APP 12</small></div>
-        <div class="satellite sat-a"><b>WEB</b><small>QUEUE</small></div>
-        <div class="satellite sat-b"><b>BOT</b><small>CHAT</small></div>
-        <div class="satellite sat-c"><b>D1</b><small>INDEX</small></div>
-        <div class="satellite sat-d"><b>FILE_ID</b><small>REUSE</small></div>
+      <div class="da20-profile-chip">
+        <span class="da20-profile-avatar" id="profileAvatar">DA</span>
+        <div><b id="profileName" data-copy="guest">Гост</b><small id="profileMeta">Telegram Mini App</small></div>
       </div>
     </section>
 
-    <section class="runtime-diagnostic" id="runtimeDiagnostic" data-state="online" hidden>
-      <div class="diagnostic-icon">!</div>
-      <div><b id="runtimeDiagnosticTitle">Проверка на връзката</b><span id="runtimeDiagnosticDetail">Свързване с Cloudflare Worker…</span></div>
-      <div class="diagnostic-actions">
-        <button id="runtimeRetryBtn" type="button">Обнови без кеш</button>
-        <button id="runtimeHealthBtn" type="button">Провери API</button>
-      </div>
+    <section class="da20-command-grid" aria-label="Бърз достъп">
+      <button class="da20-command" type="button" data-open-tab="explore"><span>⌕</span><b data-copy="explore">Открий</b></button>
+      <button class="da20-command" type="button" data-open-tab="games"><span>◇</span><b data-copy="games">Игри</b></button>
+      <button class="da20-command" type="button" data-open-tab="profile"><span>◎</span><b data-copy="profile">Профил</b></button>
+      <a class="da20-command" href="tg://resolve?domain=dyrakarmy_bot" rel="external"><span>◉</span><b data-copy="community">Общност</b></a>
+      <a class="da20-command" href="/control-v2/"><span>⌘</span><b data-copy="control">Управление</b></a>
     </section>
 
-    <section class="command-center reveal">
-      <div class="command-center-head">
-        <div><h2>Команден център</h2><p>Бърз достъп до основните функции на Mini App.</p></div>
-        <span class="build-chip">PRIMARY <strong>BG</strong></span>
-      </div>
-      <div class="command-grid">
-        <button class="command-card" type="button" data-open-tab="download"><i>↓</i><b>Свали URL</b><small>Формат, качество и обща опашка</small></button>
-        <button class="command-card" type="button" data-open-tab="search"><i>⌕</i><b>Търсене</b><small>Песен, изпълнител или албум</small></button>
-        <button class="command-card" type="button" data-open-tab="queue"><i>≋</i><b>Опашка</b><small>Активни задачи и прогрес</small></button>
-        <button class="command-card" type="button" data-open-tab="history"><i>◴</i><b>История</b><small>Готови и предишни задачи</small></button>
-        <button class="command-card" type="button" data-open-tab="archive"><i>☁</i><b>Архив</b><small>Telegram file_id и повторна употреба</small></button>
-      </div>
-    </section>
-
-    <section class="metric-strip reveal">
-      <article><span id="metricQueue">0</span><small data-i18n="active_jobs">активни задачи</small></article>
-      <article><span id="metricHistory">0</span><small data-i18n="history_jobs">в историята</small></article>
-      <article><span id="metricFiles">0</span><small data-i18n="stored_files">Telegram файла</small></article>
-      <article><span id="metricStorage">0 MB</span><small data-i18n="storage_size">архивен размер</small></article>
-    </section>
-
-    <nav class="tabs reveal" aria-label="Mini App sections">
-      <button class="active" data-tab="download"><span>↓</span><b data-i18n="tab_download">Сваляне</b></button>
-      <button data-tab="search"><span>⌕</span><b data-i18n="tab_search">Търсене</b></button>
-      <button data-tab="queue"><span>≋</span><b data-i18n="tab_queue">Опашка</b></button>
-      <button data-tab="history"><span>◴</span><b data-i18n="tab_history">История</b></button>
-      <button data-tab="archive"><span>☁</span><b data-i18n="tab_archive">Архив</b></button>
+    <nav class="da20-tabs" aria-label="Mini App секции">
+      <button class="active" type="button" data-tab="explore" data-copy="tab_explore">Открий</button>
+      <button type="button" data-tab="games" data-copy="tab_games">Игри</button>
+      <button type="button" data-tab="profile" data-copy="tab_profile">Профил</button>
     </nav>
 
-    <section class="tab-panel active reveal" id="downloadPanel" data-panel="download">
-      <div class="section-heading">
-        <div><span class="step">01</span><h2 data-i18n="download_title">Свали от публичен URL</h2></div>
-        <p data-i18n="download_text">Постави линк, избери формат и качество. След приключване ботът ще изпрати файла директно в този Telegram чат.</p>
+    <section class="da20-panel active" data-panel="explore">
+      <div class="da20-section-head">
+        <div><p class="da20-kicker">MUSIC DISCOVERY</p><h2 data-copy="search_title">Намери музика</h2></div>
+        <p data-copy="search_text">Търси по песен, изпълнител или албум и отвори избрания резултат в неговия официален източник.</p>
       </div>
-      <div class="work-grid">
-        <form class="glass control-card" id="downloadForm">
-          <label class="field wide">
-            <span data-i18n="url_label">Публичен URL</span>
-            <div class="input-shell"><span>↗</span><input id="mediaUrl" type="url" required placeholder="https://open.spotify.com/track/..."><button id="pasteBtn" type="button" data-i18n="paste">Постави</button></div>
-          </label>
-          <div class="field-row">
-            <label class="field"><span data-i18n="source">Източник</span><select id="sourceSelect"><option value="all">Auto</option><option value="spotify">Spotify</option><option value="youtube">YouTube</option><option value="soundcloud">SoundCloud</option><option value="deezer">Deezer</option><option value="apple">Apple Music</option><option value="podcast">Podcast / RSS</option></select></label>
-            <label class="field"><span data-i18n="format">Формат</span><select id="formatSelect"><option value="mp3">MP3</option><option value="m4a">M4A</option><option value="ogg">OGG</option><option value="opus">OPUS</option><option value="flac">FLAC</option><option value="wav">WAV</option></select></label>
-            <label class="field"><span data-i18n="quality">Качество</span><select id="qualitySelect"><option value="320">320 kbps</option><option value="256">256 kbps</option><option value="192">192 kbps</option><option value="128">128 kbps</option><option value="96">96 kbps</option><option value="best">Best</option><option value="lossless">Lossless</option></select></label>
-          </div>
-          <div class="legal-note"><i>i</i><span data-i18n="legal">Използвай само съдържание, което имаш право да изтеглиш или обработиш.</span></div>
-          <button class="primary-button" id="queueBtn" type="submit"><span data-i18n="queue_action">Добави в опашката</span><b>→</b></button>
-        </form>
-        <div class="glass live-card">
-          <div class="card-head"><div><span class="pulse"></span><b data-i18n="live_activity">Live активност</b></div><button id="clearLiveBtn" type="button" data-i18n="clear">Изчисти</button></div>
-          <div class="live-list" id="liveList"><div class="empty-state"><div class="radar"><i></i><i></i><i></i></div><b data-i18n="no_live">Няма активна задача</b><span data-i18n="no_live_text">Следващата задача ще се появи тук.</span></div></div>
-        </div>
-      </div>
+      <form class="da20-search" id="searchForm">
+        <input id="musicSearch" type="search" required placeholder="Изпълнител – песен" autocomplete="off">
+        <select id="musicSource" aria-label="Източник"><option value="all">All music</option><option value="spotify">Spotify</option><option value="youtube">YouTube</option><option value="soundcloud">SoundCloud</option><option value="deezer">Deezer</option><option value="apple">Apple Music</option></select>
+        <button type="submit" data-copy="search_button">Търси</button>
+      </form>
+      <div class="da20-result-list" id="searchResults"><div class="da20-empty" data-copy="empty">Започни с име на песен или изпълнител.</div></div>
     </section>
 
-    <section class="tab-panel reveal" id="searchPanel" data-panel="search">
-      <div class="section-heading"><div><span class="step">02</span><h2 data-i18n="search_title">Търсене по име</h2></div><p data-i18n="search_text">Намери песен, избери резултат и го изпрати към общата опашка.</p></div>
-      <div class="glass search-card">
-        <form id="searchForm" class="search-form"><input id="searchInput" type="search" placeholder="Изпълнител – песен" required><select id="searchSource"><option value="all">Всички</option><option value="spotify">Spotify</option><option value="youtube">YouTube</option><option value="soundcloud">SoundCloud</option><option value="deezer">Deezer</option><option value="apple">Apple Music</option></select><button type="submit" data-i18n="search_button">Търси</button></form>
-        <div class="result-list" id="searchResults"><div class="empty-inline" data-i18n="search_empty">Въведи име на песен или изпълнител.</div></div>
+    <section class="da20-panel" data-panel="games">
+      <div class="da20-section-head"><div><p class="da20-kicker">PLAY & PROGRESS</p><h2 data-copy="games_title">Games 1–10</h2></div><p data-copy="games_text">Десет свързани игри с общ XP, рангове и награди.</p></div>
+      <div class="da20-mini-games">
+        <a class="da20-mini-game" href="/games/queue-commander/"><b>Queue Commander</b><span>01 →</span></a>
+        <a class="da20-mini-game" href="/games/beat-hunter/"><b>Beat Hunter</b><span>02 →</span></a>
+        <a class="da20-mini-game" href="/games/dyrakarmy-arena/"><b>DyrakArmy Arena</b><span>03 →</span></a>
+        <a class="da20-mini-game" href="/games/format-forge/"><b>Format Forge</b><span>04 →</span></a>
+        <a class="da20-mini-game" href="/games/server-defender/"><b>Server Defender</b><span>05 →</span></a>
+        <a class="da20-mini-game" href="/games/metadata-detective/"><b>Metadata Detective</b><span>06 →</span></a>
+        <a class="da20-mini-game" href="/games/link-runner/"><b>Link Runner</b><span>07 →</span></a>
+        <a class="da20-mini-game" href="/games/archive-raid/"><b>Archive Raid</b><span>08 →</span></a>
+        <a class="da20-mini-game" href="/games/latency-strike/"><b>Latency Strike</b><span>09 →</span></a>
+        <a class="da20-mini-game" href="/games/bot-vs-human/"><b>Bot vs Human</b><span>10 →</span></a>
       </div>
     </section>
 
-    <section class="tab-panel reveal" id="queuePanel" data-panel="queue">
-      <div class="section-heading"><div><span class="step">03</span><h2 data-i18n="queue_title">Активна опашка</h2></div><button class="secondary-button" id="refreshQueueBtn" type="button" data-i18n="refresh">Обнови</button></div>
-      <div class="card-list" id="queueList"></div>
-    </section>
-
-    <section class="tab-panel reveal" id="historyPanel" data-panel="history">
-      <div class="section-heading"><div><span class="step">04</span><h2 data-i18n="history_title">История на задачите</h2></div><button class="secondary-button" id="refreshHistoryBtn" type="button" data-i18n="refresh">Обнови</button></div>
-      <div class="card-list" id="historyList"></div>
-    </section>
-
-    <section class="tab-panel reveal" id="archivePanel" data-panel="archive">
-      <div class="section-heading"><div><span class="step">05</span><h2 data-i18n="archive_title">Telegram файлов архив</h2></div><button class="secondary-button" id="refreshArchiveBtn" type="button" data-i18n="refresh">Обнови</button></div>
-      <div class="archive-grid">
-        <article class="glass stat-card"><span data-i18n="archive_files">Файлове</span><strong id="archiveFiles">0</strong><small>file_id / copyMessage</small></article>
-        <article class="glass stat-card"><span data-i18n="archive_unique">Уникални</span><strong id="archiveUnique">0</strong><small>content hash index</small></article>
-        <article class="glass stat-card"><span data-i18n="archive_bytes">Общ размер</span><strong id="archiveBytes">0 MB</strong><small>D1 metadata</small></article>
-        <article class="glass stat-card"><span data-i18n="archive_mode">Режим</span><strong id="archiveMode">—</strong><small>Telegram channel</small></article>
+    <section class="da20-panel" data-panel="profile">
+      <div class="da20-section-head"><div><p class="da20-kicker">UNIFIED IDENTITY</p><h2 data-copy="profile_title">Твоят DyrakArmy профил</h2></div><p data-copy="profile_text">Една идентичност за Mini App, игрите и Control Center.</p></div>
+      <div class="da20-banner">
+        <div><h2 id="profileCardName">DyrakArmy Guest</h2><p><b id="profileCardRole">GUEST</b> · <span id="profileXp">0</span> XP · <span id="profileRank">Recruit</span></p></div>
+        <div class="da20-hero-actions"><a class="da20-cta" href="/control-v2/" data-copy="open_profile">Отвори профила</a><a class="da20-cta-secondary" href="tg://resolve?domain=dyrakarmy_bot" rel="external" data-copy="open_bot">Отвори @dyrakarmy_bot</a></div>
       </div>
-      <div class="glass archive-explainer"><div class="archive-flow"><span>DOWNLOADER</span><i>→</i><span>STORAGE CHANNEL</span><i>→</i><span>D1 INDEX</span><i>→</i><span>copyMessage</span></div><p data-i18n="archive_text">Първото успешно сваляне се публикува в частен Telegram канал. Следващите потребители получават копие на същия Telegram файл, без ново качване.</p></div>
     </section>
   </main>
-
-  <aside class="outside-banner hidden" id="outsideBanner"><div><b data-i18n="outside_title">Отвори в Telegram</b><span data-i18n="outside_text">За персонална опашка и директно изпращане на файлове стартирай Mini App през бота.</span></div><a id="openBotLink" href="https://t.me/dyrakarmy_bot?startapp=home" data-i18n="open_bot">Отвори @dyrakarmy_bot</a></aside>
-  <div class="toast-region" id="toastRegion" aria-live="polite"></div>
-  <footer><a href="/">Download Killer Platform</a><span>·</span><a id="botFooterLink" href="https://t.me/dyrakarmy_bot">@dyrakarmy_bot</a><small data-miniapp-version>v12.2.0</small></footer>
-  <script src="./telegram.js?v=12.2.0" defer></script>
-  <script src="/platform/sound-universe-v19.js?v=19.0.0" defer></script>
 </body>
 </html>
