@@ -5,8 +5,20 @@ type HfBackendMode = 'free-public' | 'standalone';
 type HfEnv = Env & {
   HF_BACKEND_MODE?: string;
   HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE?: string;
+  HF_LOCAL_DOWNLOADER_ENABLED?: string;
+  HF_LOCAL_DOWNLOADER_PORT?: string;
   PUBLIC_BASE_URL?: string;
 };
+
+interface LocalDownloaderHealth {
+  enabled: boolean;
+  ok: boolean;
+  mode: 'local-container' | 'disabled';
+  status: number;
+  auth_status: number;
+  endpoint?: string;
+  error?: string;
+}
 
 const NATIVE_SPACE_URL = 'https://dyrakarmy-dyrakarmy-platform.hf.space';
 const HEALTH_PATHS = new Set(['/api/hf-runtime/health', '/api/hf-mirror/health']);
@@ -35,11 +47,88 @@ export function shouldProxyHfRequest(_request: Request, _env: HfEnv): boolean {
   return false;
 }
 
-function runtimeHealth(request: Request, env: HfEnv): Response {
+function resolveLocalDownloaderPort(env: HfEnv): number {
+  const parsed = Number.parseInt(String(env.HF_LOCAL_DOWNLOADER_PORT || '8081'), 10);
+  return Number.isFinite(parsed) && parsed >= 1024 && parsed <= 65535 ? parsed : 8081;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 3000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function probeHfLocalDownloader(env: HfEnv): Promise<LocalDownloaderHealth> {
+  const enabled = String(env.HF_LOCAL_DOWNLOADER_ENABLED || '1') !== '0';
+  if (!enabled) return { enabled: false, ok: true, mode: 'disabled', status: 0, auth_status: 0 };
+
+  const base = `http://127.0.0.1:${resolveLocalDownloaderPort(env)}`;
+  try {
+    const response = await fetchWithTimeout(`${base}/health`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      return {
+        enabled: true,
+        ok: false,
+        mode: 'local-container',
+        status: response.status,
+        auth_status: 0,
+        endpoint: '127.0.0.1',
+        error: `health HTTP ${response.status}`,
+      };
+    }
+
+    const apiKey = String(env.DOWNLOADER_API_KEY || '').trim();
+    if (!apiKey) {
+      return {
+        enabled: true,
+        ok: false,
+        mode: 'local-container',
+        status: response.status,
+        auth_status: 401,
+        endpoint: '127.0.0.1',
+        error: 'DOWNLOADER_API_KEY is missing',
+      };
+    }
+
+    const authResponse = await fetchWithTimeout(`${base}/internal/files/__hf_auth_probe__`, {
+      headers: { Accept: 'application/json', 'X-API-Key': apiKey },
+    });
+    const authOk = authResponse.status === 404;
+    return {
+      enabled: true,
+      ok: authOk,
+      mode: 'local-container',
+      status: response.status,
+      auth_status: authResponse.status,
+      endpoint: '127.0.0.1',
+      ...(authOk ? {} : { error: `auth probe HTTP ${authResponse.status}` }),
+    };
+  } catch (error) {
+    return {
+      enabled: true,
+      ok: false,
+      mode: 'local-container',
+      status: 0,
+      auth_status: 0,
+      endpoint: '127.0.0.1',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function runtimeHealth(request: Request, env: HfEnv): Promise<Response> {
   const mode = resolveHfBackendMode(env);
   const persistent = mode === 'standalone';
+  const downloader = await probeHfLocalDownloader(env);
+  const ok = downloader.ok;
   return Response.json({
-    ok: true,
+    ok,
     service: 'dyrakarmy-hugging-face-runtime',
     mode,
     public_url: resolveHfUpstream(env).origin || new URL(request.url).origin,
@@ -48,11 +137,13 @@ function runtimeHealth(request: Request, env: HfEnv): Response {
     free_public_host: mode === 'free-public',
     cloudflare_dependency: false,
     cloudflare_proxy_enabled: false,
+    downloader,
     telegram_webhook_authority: persistent && String(env.HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE || '0') === '1'
       ? 'hugging-face'
       : 'disabled',
     split_brain_protection: true,
   }, {
+    status: ok ? 200 : 503,
     headers: {
       'Cache-Control': 'no-store',
       'X-DyrakArmy-HF-Mode': mode,

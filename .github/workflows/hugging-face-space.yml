@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - worker/**
+      - downloader/**
       - hf_space/**
       - .github/workflows/hugging-face-space.yml
       - HUGGING_FACE_MIGRATION.md
@@ -11,6 +12,7 @@ on:
     branches: [main]
     paths:
       - worker/**
+      - downloader/**
       - hf_space/**
       - .github/workflows/hugging-face-space.yml
       - HUGGING_FACE_MIGRATION.md
@@ -31,7 +33,7 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
 
@@ -59,13 +61,20 @@ jobs:
         working-directory: worker
         run: npm test
 
-      - name: Run interface and game simulations
+      - name: Run downloader tests
+        run: |
+          python3 -m venv .venv-downloader
+          .venv-downloader/bin/pip install --quiet -r downloader/requirements.txt
+          .venv-downloader/bin/python -m pytest downloader/tests -q
+
+      - name: Run interface, game and downloader contracts
         working-directory: worker
         run: |
           node scripts/landing-v16-simulation.mjs
           node scripts/software-suite-simulation.mjs
           node scripts/games-1-10-simulation.mjs
           node scripts/games-1-10-deep-validation.mjs
+          node scripts/hf-local-downloader-contract.mjs
           node scripts/full-virtual-simulation.mjs
 
       - name: Validate Hugging Face configuration and package
@@ -74,9 +83,12 @@ jobs:
           grep -q 'free-public' src/platform_hf.ts
           grep -q 'standalone' src/platform_hf.ts
           grep -q 'cloudflare_dependency: false' src/platform_hf.ts
+          grep -q 'probeHfLocalDownloader' src/platform_hf.ts
           grep -q 'return false' src/platform_hf.ts
           grep -q '"main": "src/platform_hf.ts"' wrangler.hf.jsonc
           grep -q '"HF_BACKEND_MODE": "free-public"' wrangler.hf.jsonc
+          grep -q '"HF_LOCAL_DOWNLOADER_ENABLED": "1"' wrangler.hf.jsonc
+          grep -q 'http://127.0.0.1:8081' wrangler.hf.jsonc
           grep -Fq '"/games/*"' wrangler.hf.jsonc
           grep -Fq '"/files/*"' wrangler.hf.jsonc
           npx wrangler deploy --dry-run --config wrangler.hf.jsonc --outdir .wrangler-hf-dry-run
@@ -90,6 +102,10 @@ jobs:
             --exclude .wrangler \
             --exclude .dev.vars \
             worker/ .hf-stage/worker/
+          rsync -a --delete \
+            --exclude __pycache__ \
+            --exclude .pytest_cache \
+            downloader/ .hf-stage/downloader/
           cp hf_space/platform_hf.ts .hf-stage/worker/src/platform_hf.ts
           cp hf_space/wrangler.hf.jsonc .hf-stage/worker/wrangler.hf.jsonc
           rm -f .hf-stage/worker/src/platform_hf.test.ts
@@ -106,6 +122,8 @@ jobs:
           test -f .hf-stage/worker/src/platform_v3.ts
           test -f .hf-stage/worker/src/platform_hf.ts
           test -f .hf-stage/worker/wrangler.hf.jsonc
+          test -f .hf-stage/downloader/app/main.py
+          test -f .hf-stage/downloader/requirements.txt
           grep -q 'sdk: docker' .hf-stage/README.md
           grep -q 'app_port: 7860' .hf-stage/README.md
           grep -q 'suggested_hardware: cpu-basic' .hf-stage/README.md
@@ -119,14 +137,17 @@ jobs:
         run: |
           set -euo pipefail
           image="dyrakarmy-hf-space:${GITHUB_SHA}"
-          docker run -d --name dyrakarmy-hf-smoke -p 17860:7860 "$image"
+          docker run -d --name dyrakarmy-hf-smoke \
+            -p 17860:7860 \
+            -e DOWNLOADER_API_KEY=test-hf-local-downloader-key \
+            "$image"
           cleanup() {
             docker logs dyrakarmy-hf-smoke || true
             docker rm -f dyrakarmy-hf-smoke >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
           ready=0
-          for attempt in $(seq 1 90); do
+          for attempt in $(seq 1 120); do
             if curl --compressed -fsS --max-time 10 http://127.0.0.1:17860/api/hf-runtime/health -o /tmp/hf-runtime.json; then
               ready=1
               break
@@ -134,7 +155,11 @@ jobs:
             sleep 2
           done
           test "$ready" -eq 1
-          node -e "const p=require('/tmp/hf-runtime.json'); if(!p.ok||p.mode!=='free-public'||p.state_authority!=='hugging-face-ephemeral'||p.cloudflare_dependency!==false) process.exit(1)"
+          node -e "const p=require('/tmp/hf-runtime.json'); if(!p.ok||p.mode!=='free-public'||p.state_authority!=='hugging-face-ephemeral'||p.cloudflare_dependency!==false||!p.downloader?.ok||p.downloader?.mode!=='local-container'||p.downloader?.auth_status!==404) process.exit(1)"
+          docker exec dyrakarmy-hf-smoke sh -lc 'test -n "$DOWNLOADER_API_KEY"'
+          docker exec dyrakarmy-hf-smoke sh -lc 'curl -fsS http://127.0.0.1:8081/health >/dev/null'
+          docker exec dyrakarmy-hf-smoke sh -lc 'test "$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:8081/internal/files/not-found)" = "401"'
+          docker exec dyrakarmy-hf-smoke sh -lc 'test "$(curl -sS -o /dev/null -w "%{http_code}" -H "X-API-Key: $DOWNLOADER_API_KEY" http://127.0.0.1:8081/internal/files/not-found)" = "404"'
           curl --compressed -fsS http://127.0.0.1:17860/ | grep -q 'DyrakArmy Interface v17'
           curl --compressed -fsS http://127.0.0.1:17860/api/health | grep -Eq '"ok"[[:space:]]*:[[:space:]]*true'
           curl --compressed -fsS http://127.0.0.1:17860/api/software/releases | grep -q 'DyrakArmyDesktop.exe'

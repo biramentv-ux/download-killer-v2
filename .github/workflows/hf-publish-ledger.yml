@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - worker/**
+      - downloader/**
       - hf_space/**
       - .github/workflows/hf-publish-ledger.yml
   workflow_dispatch:
@@ -27,7 +28,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
 
@@ -40,6 +41,10 @@ jobs:
             --exclude .wrangler \
             --exclude .dev.vars \
             worker/ .hf-stage/worker/
+          rsync -a --delete \
+            --exclude __pycache__ \
+            --exclude .pytest_cache \
+            downloader/ .hf-stage/downloader/
           cp hf_space/platform_hf.ts .hf-stage/worker/src/platform_hf.ts
           cp hf_space/wrangler.hf.jsonc .hf-stage/worker/wrangler.hf.jsonc
           rm -f .hf-stage/worker/src/platform_hf.test.ts
@@ -51,6 +56,8 @@ jobs:
           cp hf_space/standalone-preflight.mjs .hf-stage/standalone-preflight.mjs
           cp hf_space/standalone-supervisor.mjs .hf-stage/standalone-supervisor.mjs
           cp hf_space/DEPLOYMENT_TRIGGER.txt .hf-stage/DEPLOYMENT_TRIGGER.txt
+          test -f .hf-stage/downloader/app/main.py
+          test -f .hf-stage/downloader/requirements.txt
 
       - name: Install Hugging Face CLI
         run: |
@@ -75,7 +82,7 @@ jobs:
           hf upload "$HF_SPACE_REPO_ID" .hf-stage . \
             --repo-type=space \
             --delete='*' \
-            --commit-message="Deploy GitHub ${GITHUB_SHA::12} to native free-public Space" \
+            --commit-message="Deploy GitHub ${GITHUB_SHA::12} with private local downloader" \
             >hf-upload.log 2>&1
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
@@ -92,7 +99,7 @@ jobs:
           verified=0
           : > hf-verify.log
           games=(queue-commander beat-hunter dyrakarmy-arena format-forge server-defender metadata-detective link-runner archive-raid latency-strike bot-vs-human)
-          for attempt in $(seq 1 75); do
+          for attempt in $(seq 1 90); do
             echo "attempt=$attempt" | tee -a hf-verify.log
             curl --compressed -fsSL --max-time 45 "$HF_SPACE_URL/api/hf-runtime/health" -o hf-runtime.json 2>>hf-verify.log || true
             curl --compressed -fsSL --max-time 45 "$HF_SPACE_URL/" -o hf-home.html 2>>hf-verify.log || true
@@ -119,6 +126,7 @@ jobs:
           if(!runtime.ok || !['free-public','standalone'].includes(runtime.mode)) process.exit(1);
           if(runtime.cloudflare_dependency!==false || runtime.cloudflare_proxy_enabled!==false) process.exit(1);
           if(runtime.mode==='free-public' && runtime.state_authority!=='hugging-face-ephemeral') process.exit(1);
+          if(!runtime.downloader?.ok || runtime.downloader?.mode!=='local-container' || runtime.downloader?.auth_status!==404) process.exit(1);
           if(!home.includes('DyrakArmy Interface v17') || !home.includes('id="software"')) process.exit(1);
           if(!software.ok || !JSON.stringify(software).includes('DyrakArmyDesktop.exe')) process.exit(1);
           if(!sources.ok || !Array.isArray(sources.sources) || sources.sources.length<10) process.exit(1);
@@ -128,7 +136,7 @@ jobs:
             const config=readJson(`hf-${game}.json`);
             if(!page.trim() || !config.ok || (config.game||config.slug)!==game) process.exit(1);
           }
-          console.log(JSON.stringify({mode:runtime.mode,state_authority:runtime.state_authority,games:games.length}));
+          console.log(JSON.stringify({mode:runtime.mode,state_authority:runtime.state_authority,downloader:runtime.downloader,games:games.length}));
           NODE
             then
               verified=1
@@ -140,7 +148,7 @@ jobs:
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
           if [[ -s hf-runtime.json ]]; then
-            node -e "const p=require('./hf-runtime.json'); console.log('mode='+(p.mode||'unknown')); console.log('state_authority='+(p.state_authority||'unknown')); console.log('cloudflare_dependency='+String(p.cloudflare_dependency))" >>hf-verify.log
+            node -e "const p=require('./hf-runtime.json'); console.log('mode='+(p.mode||'unknown')); console.log('state_authority='+(p.state_authority||'unknown')); console.log('downloader_mode='+(p.downloader?.mode||'unknown')); console.log('downloader_auth_status='+String(p.downloader?.auth_status)); console.log('cloudflare_dependency='+String(p.cloudflare_dependency))" >>hf-verify.log
           fi
           exit "$status"
 
@@ -156,9 +164,13 @@ jobs:
           if(runtime.cloudflare_dependency!==false) process.exit(1);
           if(runtime.cloudflare_proxy_enabled!==false) process.exit(1);
           if(!['free-public','standalone'].includes(runtime.mode)) process.exit(1);
+          if(!runtime.downloader?.ok || runtime.downloader?.endpoint!=='127.0.0.1' || runtime.downloader?.auth_status!==404) process.exit(1);
           console.log('Native Hugging Face runtime is authoritative for all tested routes.');
+          console.log('Telegram downloader is private, local and authenticated.');
           console.log(`mode=${runtime.mode}`);
           console.log(`state_authority=${runtime.state_authority}`);
+          console.log(`downloader_mode=${runtime.downloader.mode}`);
+          console.log(`downloader_auth_status=${runtime.downloader.auth_status}`);
           NODE
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
@@ -173,6 +185,7 @@ jobs:
           ISOLATION_STATUS: ${{ steps.isolation.outputs.status }}
         run: |
           mode="$(node -e "try{console.log(require('./hf-runtime.json').mode)}catch{console.log('unknown')}")"
+          downloader="$(node -e "try{const p=require('./hf-runtime.json');console.log((p.downloader?.mode||'unknown')+':auth-'+String(p.downloader?.auth_status||'unknown'))}catch{console.log('unknown')}")"
           {
             echo "## Hugging Face free-public deployment ${GITHUB_RUN_ID}"
             echo
@@ -181,6 +194,7 @@ jobs:
             echo "- Public verification: \`${VERIFY_STATUS:-not-run}\`"
             echo "- External-edge isolation: \`${ISOLATION_STATUS:-not-run}\`"
             echo "- Runtime mode: \`$mode\`"
+            echo "- Telegram downloader: \`$downloader\`"
             echo "- Games validated: \`10/10\`"
             echo "- Public host: \`$HF_SPACE_URL\`"
             echo "- Target: \`$HF_SPACE_REPO_ID\`"

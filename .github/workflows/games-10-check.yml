@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - worker/**
+      - downloader/**
       - hf_space/**
       - .github/workflows/games-10-check.yml
   push:
@@ -11,6 +12,7 @@ on:
       - main
     paths:
       - worker/**
+      - downloader/**
       - hf_space/**
       - .github/workflows/games-10-check.yml
   workflow_dispatch:
@@ -160,7 +162,7 @@ jobs:
 
   hf-free-public-live:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - name: Prepare Hugging Face free-public bundle
@@ -169,6 +171,7 @@ jobs:
           rm -rf .hf-stage
           mkdir -p .hf-stage
           rsync -a --delete --exclude node_modules --exclude .wrangler --exclude .dev.vars worker/ .hf-stage/worker/
+          rsync -a --delete --exclude __pycache__ --exclude .pytest_cache downloader/ .hf-stage/downloader/
           cp hf_space/platform_hf.ts .hf-stage/worker/src/platform_hf.ts
           cp hf_space/wrangler.hf.jsonc .hf-stage/worker/wrangler.hf.jsonc
           rm -f .hf-stage/worker/src/platform_hf.test.ts
@@ -179,6 +182,7 @@ jobs:
           cp hf_space/render-dev-vars.mjs .hf-stage/render-dev-vars.mjs
           cp hf_space/standalone-preflight.mjs .hf-stage/standalone-preflight.mjs
           cp hf_space/standalone-supervisor.mjs .hf-stage/standalone-supervisor.mjs
+          test -f .hf-stage/downloader/app/main.py
       - name: Build free-public Docker image
         run: docker build -t dyrakarmy-hf-free-public:test .hf-stage
       - name: Start free-public runtime
@@ -186,11 +190,12 @@ jobs:
           docker run -d --name dyrakarmy-hf-free-public \
             -p 17860:7860 \
             -e HF_BACKEND_MODE=free-public \
+            -e DOWNLOADER_API_KEY=test-hf-local-downloader-key \
             -e PUBLIC_BASE_URL=https://dyrakarmy-dyrakarmy-platform.hf.space \
             -e CORS_ORIGINS=https://dyrakarmy-dyrakarmy-platform.hf.space \
             dyrakarmy-hf-free-public:test
           ready=0
-          for attempt in $(seq 1 90); do
+          for attempt in $(seq 1 120); do
             if curl -fsS http://127.0.0.1:17860/api/hf-runtime/health >/tmp/hf-runtime.json; then
               ready=1
               break
@@ -202,7 +207,9 @@ jobs:
             sleep 2
           done
           test "$ready" -eq 1
-          node -e "const p=require('/tmp/hf-runtime.json'); if(!p.ok||p.mode!=='free-public'||p.state_authority!=='hugging-face-ephemeral'||p.cloudflare_dependency!==false) process.exit(1)"
+          node -e "const p=require('/tmp/hf-runtime.json'); if(!p.ok||p.mode!=='free-public'||p.state_authority!=='hugging-face-ephemeral'||p.cloudflare_dependency!==false||!p.downloader?.ok||p.downloader?.mode!=='local-container'||p.downloader?.auth_status!==404) process.exit(1)"
+          docker exec dyrakarmy-hf-free-public sh -lc 'test -n "$DOWNLOADER_API_KEY"'
+          docker exec dyrakarmy-hf-free-public sh -lc 'test "$(curl -sS -o /dev/null -w "%{http_code}" -H "X-API-Key: $DOWNLOADER_API_KEY" http://127.0.0.1:8081/internal/files/not-found)" = "404"'
       - name: Validate every public game sequentially
         shell: bash
         run: |
