@@ -1,0 +1,4 @@
+Contract version: v22
+Public Worker: 7860
+Private downloader: 127.0.0.1:8081
+Expected authenticated probe: HTTP 404
