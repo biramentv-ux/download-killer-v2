@@ -137,7 +137,10 @@ jobs:
         run: |
           set -euo pipefail
           image="dyrakarmy-hf-space:${GITHUB_SHA}"
-          docker run -d --name dyrakarmy-hf-smoke -p 17860:7860 "$image"
+          docker run -d --name dyrakarmy-hf-smoke \
+            -p 17860:7860 \
+            -e DOWNLOADER_API_KEY=test-hf-local-downloader-key \
+            "$image"
           cleanup() {
             docker logs dyrakarmy-hf-smoke || true
             docker rm -f dyrakarmy-hf-smoke >/dev/null 2>&1 || true
