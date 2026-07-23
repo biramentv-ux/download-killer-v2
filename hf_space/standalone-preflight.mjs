@@ -8,6 +8,7 @@ const mode = String(process.env.HF_BACKEND_MODE || 'free-public').toLowerCase() 
 const persistent = mode === 'standalone';
 const persistRoot = process.env.DYRAKARMY_PERSIST_ROOT || (persistent ? '/data/dyrakarmy' : '/tmp/dyrakarmy-free-public');
 const publicBase = String(process.env.PUBLIC_BASE_URL || 'https://dyrakarmy-dyrakarmy-platform.hf.space').trim();
+const localDownloaderEnabled = String(process.env.HF_LOCAL_DOWNLOADER_ENABLED || '1') !== '0';
 
 await mkdir(persistRoot, { recursive: true });
 await access(persistRoot, constants.R_OK | constants.W_OK);
@@ -21,6 +22,24 @@ if ((await readFile(probePath, 'utf8')) !== probeValue) {
 
 if (!/^https:\/\//i.test(publicBase)) {
   throw new Error('PUBLIC_BASE_URL must be an HTTPS URL.');
+}
+
+if (localDownloaderEnabled) {
+  await access('/app/downloader/app/main.py', constants.R_OK);
+  await access('/opt/dyrakarmy-downloader/bin/python', constants.R_OK | constants.X_OK);
+  const apiKey = String(process.env.DOWNLOADER_API_KEY || '').trim();
+  if (apiKey.length < 16) {
+    throw new Error('Local downloader is blocked. DOWNLOADER_API_KEY is missing or too short.');
+  }
+  const configuredOrigins = String(process.env.DOWNLOADER_ORIGINS_JSON || '');
+  if (!configuredOrigins.includes('127.0.0.1')) {
+    throw new Error('Local downloader is blocked. Worker origin is not bound to localhost.');
+  }
+  for (const directory of [process.env.DOWNLOADER_STORAGE_DIR, process.env.DOWNLOADER_WORK_DIR]) {
+    if (!directory) throw new Error('Local downloader storage bindings are incomplete.');
+    await mkdir(directory, { recursive: true });
+    await access(directory, constants.R_OK | constants.W_OK);
+  }
 }
 
 if (persistent) {
@@ -55,6 +74,7 @@ console.log(JSON.stringify({
   public_base_url: publicBase,
   persist_root: persistRoot,
   state_persistence: persistent ? 'persistent' : 'ephemeral',
+  local_downloader: localDownloaderEnabled ? 'private-localhost' : 'disabled',
   paid_hardware_required: false,
   custom_domain_required: false,
   cloudflare_dependency: false,
