@@ -9,6 +9,10 @@ import { handleSoftwareTelegramWebhook } from './software_telegram';
 import { withResilientGovernanceCache } from './resilient_governance_cache';
 import { handleSourceDiscoveryApi } from './source_discovery';
 import {
+  handleSpotifyResolverApi,
+  handleSpotifyTelegramResolverWebhook,
+} from './spotify_resolver';
+import {
   handleTelegramArchiveReconcileApi,
   runTelegramArchiveReconcile,
 } from './telegram_archive_reconcile';
@@ -29,6 +33,10 @@ type ExtendedEnv = Env & {
   AUDIUS_API_KEY?: string;
   JAMENDO_CLIENT_ID?: string;
   SOURCE_SEARCH_LIMIT?: string;
+  SPOTIFY_CLIENT_ID?: string;
+  SPOTIFY_CLIENT_SECRET?: string;
+  SPOTIFY_RESOLVER_AUTO_THRESHOLD?: string;
+  SPOTIFY_RESOLVER_REVIEW_THRESHOLD?: string;
   TELEGRAM_STORAGE_ENABLED?: string;
   TELEGRAM_DOWNLOAD_CHANNEL_ID?: string;
   TELEGRAM_ARCHIVE_RECONCILE_BATCH?: string;
@@ -37,6 +45,9 @@ type ExtendedEnv = Env & {
 
 export default {
   async fetch(request: Request, env: ExtendedEnv, context: ExecutionContext): Promise<Response> {
+    const spotifyResolverResponse = await handleSpotifyResolverApi(request, env);
+    if (spotifyResolverResponse) return spotifyResolverResponse;
+
     const sourceDiscoveryResponse = await handleSourceDiscoveryApi(request, env);
     if (sourceDiscoveryResponse) return sourceDiscoveryResponse;
 
@@ -57,6 +68,7 @@ export default {
     if (governanceResponse) return governanceResponse;
 
     const url = new URL(request.url);
+    let downstreamRequest = request;
     if (url.pathname === '/telegram/webhook' && request.method === 'POST') {
       const linkResponse = await handlePlatformGovernanceTelegramWebhook(request.clone(), governanceEnv);
       if (linkResponse) return linkResponse;
@@ -66,9 +78,21 @@ export default {
         env,
       );
       if (softwareResponse) return softwareResponse;
+
+      // Spotify URLs are resolved before the legacy bot creates a job. High-confidence
+      // authorized matches are rewritten to their external audio URL; all other matches
+      // receive a Spotify playback/review response and do not create a failed job.
+      const spotifyTelegram = await handleSpotifyTelegramResolverWebhook(
+        request.clone() as unknown as Request,
+        env,
+      );
+      if (spotifyTelegram?.response) return spotifyTelegram.response;
+      if (spotifyTelegram?.request) {
+        downstreamRequest = spotifyTelegram.request as unknown as typeof request;
+      }
     }
 
-    return platformV2.fetch(request, env, context);
+    return platformV2.fetch(downstreamRequest, env, context);
   },
 
   async queue(

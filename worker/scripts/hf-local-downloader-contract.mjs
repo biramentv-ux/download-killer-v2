@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const read = (file) => readFile(file, 'utf8');
-const [dockerfile, start, supervisor, vars, worker, tests, config, publish] = await Promise.all([
+const [dockerfile, start, supervisor, vars, worker, tests, config, publish, spotifyResolver] = await Promise.all([
   read('../hf_space/Dockerfile'),
   read('../hf_space/start.sh'),
   read('../hf_space/standalone-supervisor.mjs'),
@@ -13,6 +13,7 @@ const [dockerfile, start, supervisor, vars, worker, tests, config, publish] = aw
   read('../hf_space/platform_hf.test.ts'),
   read('../hf_space/wrangler.hf.jsonc'),
   read('../.github/workflows/hf-publish-ledger.yml'),
+  read('src/spotify_resolver.ts'),
 ]);
 
 assert.match(dockerfile, /ffmpeg/);
@@ -47,10 +48,14 @@ assert.match(worker, /auth_status: authResponse\.status/);
 assert.match(worker, /status: ok \? 200 : 503/);
 
 assert.match(tests, /returns 503 when the downloader rejects the generated key/);
-assert.match(config, /hf-free-public-v22-local-downloader/);
+assert.match(config, /hf-free-public-v23-spotify-resolver/);
+assert.match(config, /"SPOTIFY_RESOLVER_AUTO_THRESHOLD": "88"/);
+assert.match(config, /"SPOTIFY_RESOLVER_REVIEW_THRESHOLD": "76"/);
 assert.match(config, /http:\/\/127\.0\.0\.1:8081/);
 assert.doesNotMatch(config, /dyrakarmy-downloader-primary\.onrender\.com/);
+assert.match(spotifyResolver, /handleSpotifyTelegramResolverWebhook/);
+assert.match(spotifyResolver, /authorized_external_sources_only/);
 assert.match(publish, /runtime\.downloader\?\.auth_status!==404/);
 assert.match(publish, /Telegram downloader is private, local and authenticated/);
 
-console.log('Hugging Face private local downloader contract: PASS');
+console.log('Hugging Face private local downloader and Spotify resolver contract: PASS');

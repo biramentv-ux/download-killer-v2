@@ -1,0 +1,111 @@
+name: Spotify Resolver Integration
+
+on:
+  pull_request:
+    paths:
+      - downloader/app/safe_main.py
+      - downloader/app/spotify_resolver.py
+      - downloader/tests/test_spotify_resolver.py
+      - worker/src/spotify_resolver.ts
+      - worker/src/spotify_resolver.test.ts
+      - worker/src/platform_v3.ts
+      - worker/spotify-resolver-profile.json
+      - hf_space/wrangler.hf.jsonc
+      - .github/workflows/spotify-resolver-check.yml
+  push:
+    branches: [main]
+    paths:
+      - downloader/app/safe_main.py
+      - downloader/app/spotify_resolver.py
+      - downloader/tests/test_spotify_resolver.py
+      - worker/src/spotify_resolver.ts
+      - worker/src/spotify_resolver.test.ts
+      - worker/src/platform_v3.ts
+      - worker/spotify-resolver-profile.json
+      - hf_space/wrangler.hf.jsonc
+      - .github/workflows/spotify-resolver-check.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: downloader/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          npm ci --prefix worker --silent
+          python -m pip install --quiet -r downloader/requirements.txt
+
+      - name: Run resolver checks and preserve diagnostics
+        id: checks
+        shell: bash
+        run: |
+          set +e
+          mkdir -p spotify-resolver-diagnostics
+
+          (
+            cd worker
+            npm run typecheck
+          ) >spotify-resolver-diagnostics/typecheck.log 2>&1
+          type_status=$?
+
+          (
+            cd worker
+            npm test -- --run src/spotify_resolver.test.ts
+          ) >spotify-resolver-diagnostics/worker-tests.log 2>&1
+          worker_status=$?
+
+          (
+            cd downloader
+            python -m py_compile app/spotify_resolver.py app/safe_main.py
+            pytest -q tests/test_spotify_resolver.py
+          ) >spotify-resolver-diagnostics/downloader-tests.log 2>&1
+          downloader_status=$?
+
+          printf '%s\n' "$type_status" > spotify-resolver-diagnostics/typecheck.status
+          printf '%s\n' "$worker_status" > spotify-resolver-diagnostics/worker-tests.status
+          printf '%s\n' "$downloader_status" > spotify-resolver-diagnostics/downloader-tests.status
+          echo "type_status=$type_status" >> "$GITHUB_OUTPUT"
+          echo "worker_status=$worker_status" >> "$GITHUB_OUTPUT"
+          echo "downloader_status=$downloader_status" >> "$GITHUB_OUTPUT"
+
+      - name: Show diagnostic tails
+        if: always()
+        run: |
+          echo '--- TypeScript ---'
+          tail -n 120 spotify-resolver-diagnostics/typecheck.log || true
+          echo '--- Worker tests ---'
+          tail -n 120 spotify-resolver-diagnostics/worker-tests.log || true
+          echo '--- Downloader tests ---'
+          tail -n 120 spotify-resolver-diagnostics/downloader-tests.log || true
+
+      - name: Upload Spotify resolver diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotify-resolver-diagnostics
+          path: spotify-resolver-diagnostics
+          if-no-files-found: error
+
+      - name: Enforce result
+        if: always()
+        run: |
+          test '${{ steps.checks.outputs.type_status || '1' }}' = '0'
+          test '${{ steps.checks.outputs.worker_status || '1' }}' = '0'
+          test '${{ steps.checks.outputs.downloader_status || '1' }}' = '0'

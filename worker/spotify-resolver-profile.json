@@ -1,0 +1,27 @@
+{
+  "schema": "eu.dyrakarmy.spotify-resolver.v1",
+  "version": "1.0.0",
+  "thresholds": {
+    "automatic": 88,
+    "review": 76
+  },
+  "signals": {
+    "title": 45,
+    "artist": 30,
+    "duration": 15,
+    "rights_trust": 10
+  },
+  "automatic_requirements": [
+    "downloadable-external-source",
+    "explicit-rights-metadata",
+    "confidence-at-least-88"
+  ],
+  "fallback": "spotify-playback-without-failed-job",
+  "regression_track": {
+    "spotify_id": "0xCX7a8DSq9idNOaAVI375",
+    "title": "Темна ли е мъгла паднала",
+    "artists": ["Slavi Trifonov", "Ku-Ku Band", "Nina Nikolina"],
+    "duration_ms": 228226,
+    "accepted_title_variant": "Тъмна ли е мъгла паднала"
+  }
+}

@@ -33,7 +33,7 @@
   },
   "vars": {
     "HF_BACKEND_MODE": "free-public",
-    "HF_CUTOVER_GENERATION": "hf-free-public-v22-local-downloader",
+    "HF_CUTOVER_GENERATION": "hf-free-public-v23-spotify-resolver",
     "HF_STATE_IMPORT_REQUIRED": "0",
     "HF_IMPORT_ON_START": "0",
     "HF_STATE_IMPORT_DIR": "/data/import/archive",
@@ -57,6 +57,8 @@
     "TELEGRAM_MINIAPP_AUTH_MAX_AGE_SECONDS": "900",
     "PLATFORM_SESSION_TTL_SECONDS": "1209600",
     "SOURCE_SEARCH_LIMIT": "36",
+    "SPOTIFY_RESOLVER_AUTO_THRESHOLD": "88",
+    "SPOTIFY_RESOLVER_REVIEW_THRESHOLD": "76",
     "DOWNLOAD_URL_ALLOWLIST": "youtube.com,*.youtube.com,youtu.be,spotify.com,*.spotify.com,spotify.link,soundcloud.com,*.soundcloud.com,deezer.com,*.deezer.com,music.apple.com,*.music.apple.com,podcasts.apple.com,*.podcasts.apple.com,itunes.apple.com,*.itunes.apple.com,rss.com,*.rss.com,anchor.fm,*.anchor.fm,simplecast.com,*.simplecast.com,buzzsprout.com,*.buzzsprout.com,podbean.com,*.podbean.com,libsyn.com,*.libsyn.com,megaphone.fm,*.megaphone.fm,omny.fm,*.omny.fm,transistor.fm,*.transistor.fm,archive.org,*.archive.org,commons.wikimedia.org,upload.wikimedia.org,audius.co,*.audius.co,audius.music,*.audius.music,jamendo.com,*.jamendo.com,storage.jamendo.com,*.storage.jamendo.com,dyrakarmy-dyrakarmy-platform.hf.space",
     "URL_BLOCKLIST": "localhost,*.localhost,*.local,*.onion",
     "CORS_ORIGINS": "https://dyrakarmy-dyrakarmy-platform.hf.space,http://localhost:7860",
