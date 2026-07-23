@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   platformFetch: vi.fn(async () => new Response('local-runtime', { status: 200 })),
   queue: vi.fn(async () => undefined),
   scheduled: vi.fn(async () => undefined),
-  downloaderFetch: vi.fn(async () => Response.json({ ok: true, service: 'downloader' })),
+  downloaderFetch: vi.fn(),
 }));
 
 vi.mock('./platform_v3', () => ({
@@ -30,7 +30,14 @@ beforeEach(() => {
   mocks.queue.mockClear();
   mocks.scheduled.mockClear();
   mocks.downloaderFetch.mockReset();
-  mocks.downloaderFetch.mockResolvedValue(Response.json({ ok: true, service: 'downloader' }));
+  mocks.downloaderFetch.mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith('/health')) return Response.json({ ok: true, service: 'downloader' });
+    if (url.includes('/internal/files/__hf_auth_probe__')) {
+      return Response.json({ detail: 'File not found' }, { status: 404 });
+    }
+    return new Response('not found', { status: 404 });
+  });
   vi.stubGlobal('fetch', mocks.downloaderFetch);
 });
 
@@ -54,21 +61,36 @@ describe('Hugging Face free-public runtime', () => {
     }
   });
 
-  it('probes only the private localhost downloader endpoint', async () => {
-    const result = await probeHfLocalDownloader({ HF_LOCAL_DOWNLOADER_PORT: '8081' } as never);
+  it('probes health and authenticated access only on localhost', async () => {
+    const result = await probeHfLocalDownloader({
+      HF_LOCAL_DOWNLOADER_PORT: '8081',
+      DOWNLOADER_API_KEY: 'runtime-key',
+    } as never);
     expect(result.ok).toBe(true);
     expect(result.mode).toBe('local-container');
     expect(result.endpoint).toBe('127.0.0.1');
-    expect(mocks.downloaderFetch).toHaveBeenCalledWith(
+    expect(result.auth_status).toBe(404);
+    expect(mocks.downloaderFetch).toHaveBeenCalledTimes(2);
+    expect(mocks.downloaderFetch).toHaveBeenNthCalledWith(
+      1,
       'http://127.0.0.1:8081/health',
       expect.objectContaining({ headers: { Accept: 'application/json' } }),
     );
+    expect(mocks.downloaderFetch).toHaveBeenNthCalledWith(
+      2,
+      'http://127.0.0.1:8081/internal/files/__hf_auth_probe__',
+      expect.objectContaining({ headers: { Accept: 'application/json', 'X-API-Key': 'runtime-key' } }),
+    );
   });
 
-  it('exposes the free-public health contract with a ready local downloader', async () => {
+  it('exposes the free-public health contract with a ready authenticated downloader', async () => {
     const response = await handler.fetch(
       new Request('https://space.example/api/hf-runtime/health'),
-      { HF_BACKEND_MODE: 'free-public', HF_LOCAL_DOWNLOADER_ENABLED: '1' } as never,
+      {
+        HF_BACKEND_MODE: 'free-public',
+        HF_LOCAL_DOWNLOADER_ENABLED: '1',
+        DOWNLOADER_API_KEY: 'runtime-key',
+      } as never,
       context,
     );
     const payload = await response.json() as Record<string, unknown>;
@@ -83,20 +105,57 @@ describe('Hugging Face free-public runtime', () => {
     expect(payload.telegram_webhook_authority).toBe('disabled');
     expect(downloader.ok).toBe(true);
     expect(downloader.mode).toBe('local-container');
+    expect(downloader.auth_status).toBe(404);
     expect(mocks.platformFetch).not.toHaveBeenCalled();
   });
 
-  it('returns 503 when the private downloader is not ready', async () => {
+  it('returns 503 when the private downloader process is not ready', async () => {
     mocks.downloaderFetch.mockResolvedValueOnce(new Response('down', { status: 503 }));
     const response = await handler.fetch(
       new Request('https://space.example/api/hf-runtime/health'),
-      { HF_BACKEND_MODE: 'free-public', HF_LOCAL_DOWNLOADER_ENABLED: '1' } as never,
+      {
+        HF_BACKEND_MODE: 'free-public',
+        HF_LOCAL_DOWNLOADER_ENABLED: '1',
+        DOWNLOADER_API_KEY: 'runtime-key',
+      } as never,
       context,
     );
     const payload = await response.json() as { ok?: boolean; downloader?: { status?: number } };
     expect(response.status).toBe(503);
     expect(payload.ok).toBe(false);
     expect(payload.downloader?.status).toBe(503);
+  });
+
+  it('returns 503 when the downloader key is missing', async () => {
+    const response = await handler.fetch(
+      new Request('https://space.example/api/hf-runtime/health'),
+      { HF_BACKEND_MODE: 'free-public', HF_LOCAL_DOWNLOADER_ENABLED: '1' } as never,
+      context,
+    );
+    const payload = await response.json() as { ok?: boolean; downloader?: { auth_status?: number; error?: string } };
+    expect(response.status).toBe(503);
+    expect(payload.ok).toBe(false);
+    expect(payload.downloader?.auth_status).toBe(401);
+    expect(payload.downloader?.error).toContain('DOWNLOADER_API_KEY');
+  });
+
+  it('returns 503 when the downloader rejects the generated key', async () => {
+    mocks.downloaderFetch
+      .mockResolvedValueOnce(Response.json({ ok: true }))
+      .mockResolvedValueOnce(Response.json({ detail: 'Invalid API key' }, { status: 401 }));
+    const response = await handler.fetch(
+      new Request('https://space.example/api/hf-runtime/health'),
+      {
+        HF_BACKEND_MODE: 'free-public',
+        HF_LOCAL_DOWNLOADER_ENABLED: '1',
+        DOWNLOADER_API_KEY: 'wrong-key',
+      } as never,
+      context,
+    );
+    const payload = await response.json() as { ok?: boolean; downloader?: { auth_status?: number } };
+    expect(response.status).toBe(503);
+    expect(payload.ok).toBe(false);
+    expect(payload.downloader?.auth_status).toBe(401);
   });
 
   it('supports explicitly disabling the bundled downloader', async () => {
@@ -115,7 +174,7 @@ describe('Hugging Face free-public runtime', () => {
   it('retains the old health path as a compatibility alias', async () => {
     const response = await handler.fetch(
       new Request('https://space.example/api/hf-mirror/health'),
-      { HF_BACKEND_MODE: 'free-public' } as never,
+      { HF_BACKEND_MODE: 'free-public', DOWNLOADER_API_KEY: 'runtime-key' } as never,
       context,
     );
     const payload = await response.json() as { mode?: string };
@@ -145,7 +204,11 @@ describe('Hugging Face free-public runtime', () => {
   it('reports persistent authority only for explicit standalone mode', async () => {
     const response = await handler.fetch(
       new Request('https://space.example/api/hf-runtime/health'),
-      { HF_BACKEND_MODE: 'standalone', HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE: '1' } as never,
+      {
+        HF_BACKEND_MODE: 'standalone',
+        HF_TELEGRAM_WEBHOOK_AUTOCONFIGURE: '1',
+        DOWNLOADER_API_KEY: 'runtime-key',
+      } as never,
       context,
     );
     const payload = await response.json() as Record<string, unknown>;
