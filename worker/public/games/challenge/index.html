@@ -1,1 +1,34 @@
-<!doctype html><html lang="bg"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#070914"><title>DyrakArmy Challenge</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/games/challenge/challenge.css?v=1.0.0"><script src="https://telegram.org/js/telegram-web-app.js"></script><script src="/games/challenge/challenge.js?v=1.0.0" defer></script></head><body><script>document.body.dataset.game=location.pathname.split('/').filter(Boolean).pop()||'';</script><header class="topbar"><a class="brand" href="/"><b>DK</b><span>DYRAKARMY CHALLENGE<small>SHARED GAME ENGINE</small></span></a><div class="identity" id="identity"><i></i><span>Practice</span></div></header><main class="shell"><section class="hero"><div><span class="eyebrow" id="gameNumber">GAME / 10</span><h1><span id="gameTitle">DyrakArmy Game</span><br><em id="gameTitleAccent">CHALLENGE</em></h1><p id="gameDescription"></p></div><div class="stats"><article><small>Общ XP</small><strong id="sharedXp">0</strong></article><article><small>Ранг</small><strong id="sharedRank">Recruit</strong></article><article><small>Best</small><strong id="bestScore">0</strong></article><article><small>Опити</small><strong id="attempts">0/3</strong></article></div></section><section class="game-card"><div class="start-view" id="startView"><div><span class="game-icon" id="gameIcon">🎮</span><h2>Дневно предизвикателство</h2><p><b id="roundCount">6</b> рунда, <b id="attemptLimit">3</b> ranked опита и неограничен practice.</p></div><div class="actions"><button class="primary" id="rankedBtn" type="button">Ranked игра</button><button class="secondary" id="practiceBtn" type="button">Practice</button></div></div><div class="question-view" id="questionView" hidden><div class="progress" id="progress"></div><span class="eyebrow" id="questionCounter"></span><h2 id="questionPrompt"></h2><div class="options" id="options"></div></div><div class="result-view" id="resultView" hidden><span class="eyebrow" id="resultMode"></span><h2 id="resultTitle"></h2><p id="resultText"></p><div class="result-grid"><article><small>Точки</small><strong id="resultScore">0</strong></article><article><small>XP</small><strong id="resultXp">0</strong></article><article><small>Точност</small><strong id="resultAccuracy">0%</strong></article><article><small>Combo</small><strong id="resultCombo">0</strong></article></div><div class="reward locked" id="rewardBox"><b id="rewardLabel">Perfect-run reward</b><span id="rewardStatus">Заключена</span></div><button class="primary" id="againBtn" type="button">Играй отново</button></div></section><section class="leaderboard"><h3>Седмична класация</h3><div class="leader-list" id="leaderList"></div></section></main><div class="toast" id="toast" role="status" aria-live="polite"></div></body></html>
+<!doctype html>
+<html lang="bg" data-product-generation="20">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#03040b">
+  <title>DyrakArmy Challenge</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/games/challenge/challenge.css?v=1.0.0">
+  <link rel="stylesheet" href="/platform/product-redesign-v20.css?v=20.0.0">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/games/challenge/challenge.js?v=1.0.0" defer></script>
+</head>
+<body data-da-surface="game">
+  <script>document.body.dataset.game=location.pathname.split('/').filter(Boolean).pop()||'';</script>
+  <header class="topbar">
+    <a class="brand" href="/"><b>DA</b><span>DYRAKARMY GAMES<small>SHARED CHALLENGE EXPERIENCE</small></span></a>
+    <div class="identity" id="identity"><i></i><span>Practice</span></div>
+  </header>
+  <main class="shell">
+    <section class="hero">
+      <div><span class="eyebrow" id="gameNumber">GAME / 10</span><h1><span id="gameTitle">DyrakArmy Game</span><br><em id="gameTitleAccent">CHALLENGE</em></h1><p id="gameDescription"></p></div>
+      <div class="stats"><article><small>Общ XP</small><strong id="sharedXp">0</strong></article><article><small>Ранг</small><strong id="sharedRank">Recruit</strong></article><article><small>Best</small><strong id="bestScore">0</strong></article><article><small>Опити</small><strong id="attempts">0/3</strong></article></div>
+    </section>
+    <section class="game-card">
+      <div class="start-view" id="startView"><div><span class="game-icon" id="gameIcon">🎮</span><h2>Днешното предизвикателство</h2><p><b id="roundCount">6</b> кратки рунда, ranked опити и свободен practice режим.</p></div><div class="actions"><button class="primary" id="rankedBtn" type="button">Ranked игра</button><button class="secondary" id="practiceBtn" type="button">Practice</button></div></div>
+      <div class="question-view" id="questionView" hidden><div class="progress" id="progress"></div><span class="eyebrow" id="questionCounter"></span><h2 id="questionPrompt"></h2><div class="options" id="options"></div></div>
+      <div class="result-view" id="resultView" hidden><span class="eyebrow" id="resultMode"></span><h2 id="resultTitle"></h2><p id="resultText"></p><div class="result-grid"><article><small>Точки</small><strong id="resultScore">0</strong></article><article><small>XP</small><strong id="resultXp">0</strong></article><article><small>Точност</small><strong id="resultAccuracy">0%</strong></article><article><small>Combo</small><strong id="resultCombo">0</strong></article></div><div class="reward locked" id="rewardBox"><b id="rewardLabel">Perfect-run reward</b><span id="rewardStatus">Заключена</span></div><button class="primary" id="againBtn" type="button">Играй отново</button></div>
+    </section>
+    <section class="leaderboard"><h3>Седмична класация</h3><div class="leader-list" id="leaderList"></div></section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
