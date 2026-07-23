@@ -8,6 +8,7 @@ type HfEnv = Env & {
   HF_LOCAL_DOWNLOADER_ENABLED?: string;
   HF_LOCAL_DOWNLOADER_PORT?: string;
   PUBLIC_BASE_URL?: string;
+  DOWNLOADER_API_KEY?: string;
 };
 
 interface LocalDownloaderHealth {
@@ -15,6 +16,7 @@ interface LocalDownloaderHealth {
   ok: boolean;
   mode: 'local-container' | 'disabled';
   status: number;
+  auth_status: number;
   endpoint?: string;
   error?: string;
 }
@@ -53,21 +55,52 @@ function resolveLocalDownloaderPort(env: HfEnv): number {
 
 export async function probeHfLocalDownloader(env: HfEnv): Promise<LocalDownloaderHealth> {
   const enabled = String(env.HF_LOCAL_DOWNLOADER_ENABLED || '1') !== '0';
-  if (!enabled) return { enabled: false, ok: true, mode: 'disabled', status: 0 };
+  if (!enabled) return { enabled: false, ok: true, mode: 'disabled', status: 0, auth_status: 0 };
 
-  const endpoint = `http://127.0.0.1:${resolveLocalDownloaderPort(env)}/health`;
+  const base = `http://127.0.0.1:${resolveLocalDownloaderPort(env)}`;
   try {
-    const response = await fetch(endpoint, {
+    const response = await fetch(`${base}/health`, {
       headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(3000),
     });
+    if (!response.ok) {
+      return {
+        enabled: true,
+        ok: false,
+        mode: 'local-container',
+        status: response.status,
+        auth_status: 0,
+        endpoint: '127.0.0.1',
+        error: `health HTTP ${response.status}`,
+      };
+    }
+
+    const apiKey = String(env.DOWNLOADER_API_KEY || '').trim();
+    if (!apiKey) {
+      return {
+        enabled: true,
+        ok: false,
+        mode: 'local-container',
+        status: response.status,
+        auth_status: 401,
+        endpoint: '127.0.0.1',
+        error: 'DOWNLOADER_API_KEY is missing',
+      };
+    }
+
+    const authResponse = await fetch(`${base}/internal/files/__hf_auth_probe__`, {
+      headers: { Accept: 'application/json', 'X-API-Key': apiKey },
+      signal: AbortSignal.timeout(3000),
+    });
+    const authOk = authResponse.status === 404;
     return {
       enabled: true,
-      ok: response.ok,
+      ok: authOk,
       mode: 'local-container',
       status: response.status,
+      auth_status: authResponse.status,
       endpoint: '127.0.0.1',
-      ...(response.ok ? {} : { error: `HTTP ${response.status}` }),
+      ...(authOk ? {} : { error: `auth probe HTTP ${authResponse.status}` }),
     };
   } catch (error) {
     return {
@@ -75,6 +108,7 @@ export async function probeHfLocalDownloader(env: HfEnv): Promise<LocalDownloade
       ok: false,
       mode: 'local-container',
       status: 0,
+      auth_status: 0,
       endpoint: '127.0.0.1',
       error: error instanceof Error ? error.message : String(error),
     };
