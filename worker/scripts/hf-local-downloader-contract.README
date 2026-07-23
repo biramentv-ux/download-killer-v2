@@ -1,1 +1,0 @@
-The Vitest contract in src/hf_local_downloader_contract.test.ts is authoritative. The mjs runners are lightweight standalone diagnostics for CI and local inspection.
