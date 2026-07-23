@@ -82,9 +82,14 @@ export default {
       // Spotify URLs are resolved before the legacy bot creates a job. High-confidence
       // authorized matches are rewritten to their external audio URL; all other matches
       // receive a Spotify playback/review response and do not create a failed job.
-      const spotifyTelegram = await handleSpotifyTelegramResolverWebhook(request.clone(), env);
+      const spotifyTelegram = await handleSpotifyTelegramResolverWebhook(
+        request.clone() as unknown as Request,
+        env,
+      );
       if (spotifyTelegram?.response) return spotifyTelegram.response;
-      if (spotifyTelegram?.request) downstreamRequest = spotifyTelegram.request;
+      if (spotifyTelegram?.request) {
+        downstreamRequest = spotifyTelegram.request as unknown as typeof request;
+      }
     }
 
     return platformV2.fetch(downstreamRequest, env, context);
