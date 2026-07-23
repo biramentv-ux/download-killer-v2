@@ -8,7 +8,6 @@ type HfEnv = Env & {
   HF_LOCAL_DOWNLOADER_ENABLED?: string;
   HF_LOCAL_DOWNLOADER_PORT?: string;
   PUBLIC_BASE_URL?: string;
-  DOWNLOADER_API_KEY?: string;
 };
 
 interface LocalDownloaderHealth {
@@ -53,15 +52,24 @@ function resolveLocalDownloaderPort(env: HfEnv): number {
   return Number.isFinite(parsed) && parsed >= 1024 && parsed <= 65535 ? parsed : 8081;
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 3000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function probeHfLocalDownloader(env: HfEnv): Promise<LocalDownloaderHealth> {
   const enabled = String(env.HF_LOCAL_DOWNLOADER_ENABLED || '1') !== '0';
   if (!enabled) return { enabled: false, ok: true, mode: 'disabled', status: 0, auth_status: 0 };
 
   const base = `http://127.0.0.1:${resolveLocalDownloaderPort(env)}`;
   try {
-    const response = await fetch(`${base}/health`, {
+    const response = await fetchWithTimeout(`${base}/health`, {
       headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(3000),
     });
     if (!response.ok) {
       return {
@@ -88,9 +96,8 @@ export async function probeHfLocalDownloader(env: HfEnv): Promise<LocalDownloade
       };
     }
 
-    const authResponse = await fetch(`${base}/internal/files/__hf_auth_probe__`, {
+    const authResponse = await fetchWithTimeout(`${base}/internal/files/__hf_auth_probe__`, {
       headers: { Accept: 'application/json', 'X-API-Key': apiKey },
-      signal: AbortSignal.timeout(3000),
     });
     const authOk = authResponse.status === 404;
     return {
