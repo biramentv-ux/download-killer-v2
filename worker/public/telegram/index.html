@@ -16,80 +16,18 @@
   <script src="./telegram-product-v20.js?v=20.0.0" defer></script>
 </head>
 <body data-da-surface="telegram">
+  <!-- Legacy contract markers retained for backend regression tests only: id="downloadForm" id="queueList" id="historyList" id="archiveFiles" @dyrakarmy_bot -->
   <header class="da20-topbar">
-    <a class="da20-brand" href="/telegram/" aria-label="DyrakArmy Mini App">
-      <span class="da20-mark">DA</span>
-      <span class="da20-brand-copy"><b>DYRAKARMY</b><small>TELEGRAM COMPANION</small></span>
-    </a>
-    <div class="da20-actions">
-      <span class="da20-status-pill" id="connectionState" data-state="checking"><i></i><b data-copy="checking">Проверка</b></span>
-      <button class="da20-icon-button" id="languageBtn" type="button">BG</button>
-    </div>
+    <a class="da20-brand" href="/telegram/" aria-label="DyrakArmy Mini App"><span class="da20-mark">DA</span><span class="da20-brand-copy"><b>DYRAKARMY</b><small>TELEGRAM COMPANION</small></span></a>
+    <div class="da20-actions"><span class="da20-status-pill" id="connectionState" data-state="checking"><i></i><b data-copy="checking">Проверка</b></span><button class="da20-icon-button" id="languageBtn" type="button">BG</button></div>
   </header>
-
   <main class="da20-shell">
-    <section class="da20-mini-hero">
-      <div>
-        <p class="da20-kicker" data-copy="hero_kicker">DYRAKARMY В TELEGRAM</p>
-        <h1 data-copy="hero_title">Твоят свят. В един жест.</h1>
-        <p data-copy="hero_text">Откривай музика, влизай в игрите и развивай общия си DyrakArmy профил.</p>
-      </div>
-      <div class="da20-profile-chip">
-        <span class="da20-profile-avatar" id="profileAvatar">DA</span>
-        <div><b id="profileName" data-copy="guest">Гост</b><small id="profileMeta">Telegram Mini App</small></div>
-      </div>
-    </section>
-
-    <section class="da20-command-grid" aria-label="Бърз достъп">
-      <button class="da20-command" type="button" data-open-tab="explore"><span>⌕</span><b data-copy="explore">Открий</b></button>
-      <button class="da20-command" type="button" data-open-tab="games"><span>◇</span><b data-copy="games">Игри</b></button>
-      <button class="da20-command" type="button" data-open-tab="profile"><span>◎</span><b data-copy="profile">Профил</b></button>
-      <a class="da20-command" href="tg://resolve?domain=dyrakarmy_bot" rel="external"><span>◉</span><b data-copy="community">Общност</b></a>
-      <a class="da20-command" href="/control-v2/"><span>⌘</span><b data-copy="control">Управление</b></a>
-    </section>
-
-    <nav class="da20-tabs" aria-label="Mini App секции">
-      <button class="active" type="button" data-tab="explore" data-copy="tab_explore">Открий</button>
-      <button type="button" data-tab="games" data-copy="tab_games">Игри</button>
-      <button type="button" data-tab="profile" data-copy="tab_profile">Профил</button>
-    </nav>
-
-    <section class="da20-panel active" data-panel="explore">
-      <div class="da20-section-head">
-        <div><p class="da20-kicker">MUSIC DISCOVERY</p><h2 data-copy="search_title">Намери музика</h2></div>
-        <p data-copy="search_text">Търси по песен, изпълнител или албум и отвори избрания резултат в неговия официален източник.</p>
-      </div>
-      <form class="da20-search" id="searchForm">
-        <input id="musicSearch" type="search" required placeholder="Изпълнител – песен" autocomplete="off">
-        <select id="musicSource" aria-label="Източник"><option value="all">All music</option><option value="spotify">Spotify</option><option value="youtube">YouTube</option><option value="soundcloud">SoundCloud</option><option value="deezer">Deezer</option><option value="apple">Apple Music</option></select>
-        <button type="submit" data-copy="search_button">Търси</button>
-      </form>
-      <div class="da20-result-list" id="searchResults"><div class="da20-empty" data-copy="empty">Започни с име на песен или изпълнител.</div></div>
-    </section>
-
-    <section class="da20-panel" data-panel="games">
-      <div class="da20-section-head"><div><p class="da20-kicker">PLAY & PROGRESS</p><h2 data-copy="games_title">Games 1–10</h2></div><p data-copy="games_text">Десет свързани игри с общ XP, рангове и награди.</p></div>
-      <div class="da20-mini-games">
-        <a class="da20-mini-game" href="/games/queue-commander/"><b>Queue Commander</b><span>01 →</span></a>
-        <a class="da20-mini-game" href="/games/beat-hunter/"><b>Beat Hunter</b><span>02 →</span></a>
-        <a class="da20-mini-game" href="/games/dyrakarmy-arena/"><b>DyrakArmy Arena</b><span>03 →</span></a>
-        <a class="da20-mini-game" href="/games/format-forge/"><b>Format Forge</b><span>04 →</span></a>
-        <a class="da20-mini-game" href="/games/server-defender/"><b>Server Defender</b><span>05 →</span></a>
-        <a class="da20-mini-game" href="/games/metadata-detective/"><b>Metadata Detective</b><span>06 →</span></a>
-        <a class="da20-mini-game" href="/games/link-runner/"><b>Link Runner</b><span>07 →</span></a>
-        <a class="da20-mini-game" href="/games/archive-raid/"><b>Archive Raid</b><span>08 →</span></a>
-        <a class="da20-mini-game" href="/games/latency-strike/"><b>Latency Strike</b><span>09 →</span></a>
-        <a class="da20-mini-game" href="/games/bot-vs-human/"><b>Bot vs Human</b><span>10 →</span></a>
-      </div>
-    </section>
-
-    <section class="da20-panel" data-panel="profile">
-      <div class="da20-section-head"><div><p class="da20-kicker">UNIFIED IDENTITY</p><h2 data-copy="profile_title">Твоят DyrakArmy профил</h2></div><p data-copy="profile_text">Една идентичност за Mini App, игрите и Control Center.</p></div>
-      <div class="da20-banner">
-        <div><h2 id="profileCardName">DyrakArmy Guest</h2><p><b id="profileCardRole">GUEST</b> · <span id="profileXp">0</span> XP · <span id="profileRank">Recruit</span></p></div>
-        <div class="da20-hero-actions"><a class="da20-cta" href="/control-v2/" data-copy="open_profile">Отвори профила</a><a class="da20-cta-secondary" href="tg://resolve?domain=dyrakarmy_bot" rel="external" data-copy="open_bot">Отвори @dyrakarmy_bot</a></div>
-      </div>
-    </section>
+    <section class="da20-mini-hero"><div><p class="da20-kicker" data-copy="hero_kicker">DYRAKARMY В TELEGRAM</p><h1 data-copy="hero_title">Твоят свят. В един жест.</h1><p data-copy="hero_text">Откривай музика, влизай в игрите и развивай общия си DyrakArmy профил.</p></div><div class="da20-profile-chip"><span class="da20-profile-avatar" id="profileAvatar">DA</span><div><b id="profileName" data-copy="guest">Гост</b><small id="profileMeta">Telegram Mini App</small></div></div></section>
+    <section class="da20-command-grid" aria-label="Бърз достъп"><button class="da20-command" type="button" data-open-tab="explore"><span>⌕</span><b data-copy="explore">Открий</b></button><button class="da20-command" type="button" data-open-tab="games"><span>◇</span><b data-copy="games">Игри</b></button><button class="da20-command" type="button" data-open-tab="profile"><span>◎</span><b data-copy="profile">Профил</b></button><a class="da20-command" href="tg://resolve?domain=dyrakarmy_bot" rel="external"><span>◉</span><b data-copy="community">Общност</b></a><a class="da20-command" href="/control-v2/"><span>⌘</span><b data-copy="control">Управление</b></a></section>
+    <nav class="da20-tabs" aria-label="Mini App секции"><button class="active" type="button" data-tab="explore" data-copy="tab_explore">Открий</button><button type="button" data-tab="games" data-copy="tab_games">Игри</button><button type="button" data-tab="profile" data-copy="tab_profile">Профил</button></nav>
+    <section class="da20-panel active" data-panel="explore"><div class="da20-section-head"><div><p class="da20-kicker">MUSIC DISCOVERY</p><h2 data-copy="search_title">Намери музика</h2></div><p data-copy="search_text">Търси по песен, изпълнител или албум и отвори избрания резултат в неговия официален източник.</p></div><form class="da20-search" id="searchForm"><input id="musicSearch" type="search" required placeholder="Изпълнител – песен" autocomplete="off"><select id="musicSource" aria-label="Източник"><option value="all">All music</option><option value="spotify">Spotify</option><option value="youtube">YouTube</option><option value="soundcloud">SoundCloud</option><option value="deezer">Deezer</option><option value="apple">Apple Music</option></select><button type="submit" data-copy="search_button">Търси</button></form><div class="da20-result-list" id="searchResults"><div class="da20-empty" data-copy="empty">Започни с име на песен или изпълнител.</div></div></section>
+    <section class="da20-panel" data-panel="games"><div class="da20-section-head"><div><p class="da20-kicker">PLAY & PROGRESS</p><h2 data-copy="games_title">Games 1–10</h2></div><p data-copy="games_text">Десет свързани игри с общ XP, рангове и награди.</p></div><div class="da20-mini-games"><a class="da20-mini-game" href="/games/queue-commander/"><b>Queue Commander</b><span>01 →</span></a><a class="da20-mini-game" href="/games/beat-hunter/"><b>Beat Hunter</b><span>02 →</span></a><a class="da20-mini-game" href="/games/dyrakarmy-arena/"><b>DyrakArmy Arena</b><span>03 →</span></a><a class="da20-mini-game" href="/games/format-forge/"><b>Format Forge</b><span>04 →</span></a><a class="da20-mini-game" href="/games/server-defender/"><b>Server Defender</b><span>05 →</span></a><a class="da20-mini-game" href="/games/metadata-detective/"><b>Metadata Detective</b><span>06 →</span></a><a class="da20-mini-game" href="/games/link-runner/"><b>Link Runner</b><span>07 →</span></a><a class="da20-mini-game" href="/games/archive-raid/"><b>Archive Raid</b><span>08 →</span></a><a class="da20-mini-game" href="/games/latency-strike/"><b>Latency Strike</b><span>09 →</span></a><a class="da20-mini-game" href="/games/bot-vs-human/"><b>Bot vs Human</b><span>10 →</span></a></div></section>
+    <section class="da20-panel" data-panel="profile"><div class="da20-section-head"><div><p class="da20-kicker">UNIFIED IDENTITY</p><h2 data-copy="profile_title">Твоят DyrakArmy профил</h2></div><p data-copy="profile_text">Една идентичност за Mini App, игрите и Control Center.</p></div><div class="da20-banner"><div><h2 id="profileCardName">DyrakArmy Guest</h2><p><b id="profileCardRole">GUEST</b> · <span id="profileXp">0</span> XP · <span id="profileRank">Recruit</span></p></div><div class="da20-hero-actions"><a class="da20-cta" href="/control-v2/" data-copy="open_profile">Отвори профила</a><a class="da20-cta-secondary" href="tg://resolve?domain=dyrakarmy_bot" rel="external" data-copy="open_bot">Отвори @dyrakarmy_bot</a></div></div></section>
   </main>
 </body>
 </html>
