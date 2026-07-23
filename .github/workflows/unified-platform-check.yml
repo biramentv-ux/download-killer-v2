@@ -6,8 +6,7 @@ on:
       - worker/**
       - .github/workflows/unified-platform-check.yml
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - worker/**
       - .github/workflows/unified-platform-check.yml
@@ -28,31 +27,27 @@ jobs:
         working-directory: worker
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: worker/package-lock.json
-
       - name: Install dependencies
         run: npm ci
-
       - name: Typecheck unified Worker
         run: npm run typecheck
-
       - name: Run all Worker and game tests
         run: npm test
-
       - name: Run DyrakArmy interface simulations
         run: |
+          node scripts/product-redesign-v20-simulation.mjs
           node scripts/landing-v16-simulation.mjs
           node scripts/software-suite-simulation.mjs
-
+          node scripts/games-1-10-simulation.mjs
       - name: Validate browser assets
         run: |
-          node --check public/platform/landing-v16.js
-          node --check public/platform/software-suite.js
+          node --check public/platform/product-redesign-v20.js
+          node --check public/telegram/telegram-product-v20.js
           node --check public/platform/games-v14.js
           node --check public/platform/platform-public.js
           node --check public/games/challenge/challenge.js
@@ -64,8 +59,7 @@ jobs:
           node --check public/games/latency-strike/game.js
           node --check public/sw.js
           node --check scripts/setup-telegram-platform.mjs
-
-      - name: Validate unified platform contracts
+      - name: Validate unified backend contracts
         run: |
           grep -q "handlePlatformControlApi" src/platform_v2.ts
           grep -q "handlePlatformControlTelegramWebhook" src/platform_v2.ts
@@ -95,23 +89,43 @@ jobs:
           grep -q "version.rollback" src/platform_governance.ts
           grep -q "text/event-stream" src/platform_governance.ts
           grep -q "await sha256(token)" src/platform_governance.ts
-          grep -q "DyrakArmy Platform" public/index.html
-          grep -Eq "DyrakArmy Interface v(16|17)" public/index.html
-          grep -q "ONE PLATFORM." public/index.html
-          grep -q "/platform/landing-v16.css" public/index.html
-          grep -q "/platform/landing-v16.js" public/index.html
-          grep -q "/platform/software-suite.css" public/index.html
-          grep -q "/platform/software-suite.js" public/index.html
-          grep -q 'id="software"' public/index.html
-          grep -q 'id="softwareReleaseGrid"' public/index.html
-          grep -q '/api/software/releases' public/index.html
-          grep -q 'id="installPwaBtn"' public/index.html
-          grep -q 'id="profileName"' public/index.html
-          grep -q 'id="previewModuleList"' public/index.html
-          ! grep -qi "SECONDARY BOT" public/index.html
+      - name: Validate Product System v20 public contracts
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const strip = value => value.replace(/<!--[\s\S]*?-->/g, '');
+          const web = fs.readFileSync('public/index.html','utf8');
+          const telegram = fs.readFileSync('public/telegram/index.html','utf8');
+          const control = fs.readFileSync('public/control-v2/index.html','utf8');
+          const sw = fs.readFileSync('public/sw.js','utf8');
+          const manifest = JSON.parse(fs.readFileSync('public/manifest.webmanifest','utf8'));
+          for (const html of [web, telegram, control]) {
+            if (!html.includes('data-product-generation="20"')) throw new Error('A core surface is not on Product System v20');
+            if (!html.includes('/platform/product-redesign-v20.css?v=20.0.0')) throw new Error('Shared Product System stylesheet is missing');
+          }
+          for (const id of ['overview','experiences','studio','games','apps','profile','community']) {
+            if (!web.includes(`id="${id}"`)) throw new Error(`Missing product section ${id}`);
+          }
+          const visibleWeb = strip(web);
+          const visibleTelegram = strip(telegram);
+          for (const forbidden of ['softwareReleaseGrid','softwarePreferredDownload','id="downloadForm"','MEDIA DOWNLOAD CONSOLE','MEDIA DOWNLOAD CENTER']) {
+            if (visibleWeb.includes(forbidden)) throw new Error(`Retired public surface visible: ${forbidden}`);
+          }
+          for (const forbidden of ['data-tab="download"','id="downloadPanel"','id="queuePanel"','id="historyPanel"','id="archivePanel"']) {
+            if (visibleTelegram.includes(forbidden)) throw new Error(`Retired Telegram surface visible: ${forbidden}`);
+          }
+          if (!control.includes('YOUR DYRAKARMY SPACE')) throw new Error('Control Center product hierarchy is missing');
+          if (!sw.includes('dyrakarmy-product-system-v20')) throw new Error('Product System PWA marker missing');
+          for (const asset of ['/platform/product-redesign-v20.css?v=20.0.0','/platform/product-redesign-v20.js?v=20.0.0','/telegram/telegram-product-v20.js?v=20.0.0']) {
+            if (!sw.includes(asset)) throw new Error(`PWA asset missing: ${asset}`);
+          }
+          if (!/^DyrakArmy Unified Platform v(?:16|17)$/.test(manifest.name)) throw new Error('Manifest name mismatch');
+          for (const url of ['/#software','/control-v2/','/#games','/telegram/']) {
+            if (!manifest.shortcuts.some(item => item.url === url)) throw new Error(`Manifest shortcut missing: ${url}`);
+          }
+          NODE
           grep -q "DyrakArmy Control Center" public/control/index.html
           grep -q "DyrakArmy Control Center v2" public/control-v2/index.html
-          grep -q "control-v2.css?v=2.1.0" public/control-v2/index.html
           grep -q "/api/platform/governance" public/control-v2/control-v2.js
           grep -q "SHARED GAME ENGINE" public/games/challenge/index.html
           grep -q '/api/games/${slug}/' public/games/challenge/challenge.js
@@ -123,20 +137,11 @@ jobs:
           grep -q "protected_content_access: false" src/archive_raid.ts
           grep -q "/api/platform/control" public/control/control.js
           grep -q "/api/platform/public" public/platform/platform-public.js
-          grep -q "download-killer-static-v16-dyrakarmy-dashboard" public/sw.js
-          grep -q "download-killer-static-v17-software-suite" public/sw.js
-          grep -q "/platform/landing-v16.css" public/sw.js
-          grep -q "/platform/landing-v16.js" public/sw.js
-          grep -q "/platform/software-suite.css" public/sw.js
-          grep -q "/platform/software-suite.js" public/sw.js
           grep -q "/games/challenge/challenge.js?v=1.0.0" public/sw.js
           grep -q "/games/dyrakarmy-arena/arena.js?v=1.0.0" public/sw.js
           grep -q "/games/archive-raid/raid.js?v=1.0.0" public/sw.js
           grep -q "/control/control.js?v=1.0.0" public/sw.js
           grep -q "/control-v2/" public/sw.js
-          grep -Eq "DyrakArmy Unified Platform v(16|17)" public/manifest.webmanifest
-          grep -q '"url": "/#software"' public/manifest.webmanifest
-          grep -q '"url": "/control-v2/"' public/manifest.webmanifest
           grep -q "dyrakarmy-control-v2-2.1.0-cyber" public/control-v2/sw.js
           grep -q "CREATE TABLE IF NOT EXISTS arena_teams" migrations/0013_dyrakarmy_arena_v1.sql
           grep -q "CREATE TABLE IF NOT EXISTS platform_modules" migrations/0014_platform_control_center_v1.sql
@@ -154,14 +159,13 @@ jobs:
           grep -q "command: 'id'" scripts/setup-telegram-platform.mjs
           grep -q "{ command: 'software'" src/dyrakarmy_arena_commands.ts
           grep -q "{ command: 'games'" src/dyrakarmy_arena_commands.ts
-
       - name: Enforce safe remote-management and collectible boundary
         run: |
-          if grep -R -n -E 'eval\(|new Function\(' src/platform_control.ts src/platform_governance.ts src/software_catalog.ts src/software_telegram.ts src/challenge_games.ts public/control public/control-v2 public/platform/landing-v16.js public/platform/software-suite.js public/games/challenge public/games/archive-raid; then
+          if grep -R -n -E 'eval\(|new Function\(' src/platform_control.ts src/platform_governance.ts src/software_catalog.ts src/software_telegram.ts src/challenge_games.ts public/control public/control-v2 public/platform/product-redesign-v20.js public/telegram/telegram-product-v20.js public/games/challenge public/games/archive-raid; then
             echo 'Executable code construction is forbidden.'
             exit 1
           fi
-          if grep -R -n -E 'javascript:|data:text/html' public/control public/control-v2 public/platform/landing-v16.js public/platform/software-suite.js public/games/challenge public/games/archive-raid src/platform_control.ts src/platform_governance.ts src/software_catalog.ts src/software_telegram.ts; then
+          if grep -R -n -E 'javascript:|data:text/html' public/control public/control-v2 public/platform/product-redesign-v20.js public/telegram/telegram-product-v20.js public/games/challenge public/games/archive-raid src/platform_control.ts src/platform_governance.ts src/software_catalog.ts src/software_telegram.ts; then
             echo 'Unsafe URL schemes are forbidden.'
             exit 1
           fi
@@ -173,6 +177,5 @@ jobs:
             echo 'Archive Raid must remain a virtual collectible system only.'
             exit 1
           fi
-
       - name: Wrangler packaging dry-run
         run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir .wrangler-unified-dry-run

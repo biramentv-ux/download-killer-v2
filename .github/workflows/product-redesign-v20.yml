@@ -1,0 +1,69 @@
+name: Product System v20
+
+on:
+  pull_request:
+    paths:
+      - worker/public/**
+      - worker/scripts/product-redesign-v20-simulation.mjs
+      - worker/scripts/landing-v16-simulation.mjs
+      - worker/scripts/software-suite-simulation.mjs
+      - .github/workflows/product-redesign-v20.yml
+  push:
+    branches: [main]
+    paths:
+      - worker/public/**
+      - worker/scripts/product-redesign-v20-simulation.mjs
+      - worker/scripts/landing-v16-simulation.mjs
+      - worker/scripts/software-suite-simulation.mjs
+      - .github/workflows/product-redesign-v20.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: product-system-v20-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install Worker dependencies
+        run: npm ci
+
+      - name: Validate Product System JavaScript
+        run: |
+          node --check public/platform/product-redesign-v20.js
+          node --check public/telegram/telegram-product-v20.js
+          node --check public/sw.js
+
+      - name: Run Product System v20 simulation
+        run: node scripts/product-redesign-v20-simulation.mjs
+
+      - name: Run compatibility design simulations
+        run: |
+          node scripts/landing-v16-simulation.mjs
+          node scripts/software-suite-simulation.mjs
+          node scripts/games-1-10-simulation.mjs
+
+      - name: Typecheck Worker
+        run: npm run typecheck
+
+      - name: Run Worker regression tests
+        run: npm test
+
+      - name: Package Worker assets
+        run: npx wrangler deploy --dry-run --outdir .wrangler-product-v20

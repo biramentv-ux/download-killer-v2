@@ -11,8 +11,7 @@ on:
       - .github/workflows/release-assets.yml
       - .github/workflows/software-suite-check.yml
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - worker/**
       - desktop_launcher/**
@@ -62,20 +61,31 @@ jobs:
           path: worker/typecheck.log
       - name: Run complete Worker test suite
         run: npm test
-      - name: Run deterministic software suite simulation
+      - name: Run deterministic product-family simulation
         run: node scripts/software-suite-simulation.mjs
       - name: Validate public JavaScript and service worker syntax
         run: |
           node --check public/platform/software-suite.js
-          node --check public/platform/landing-v16.js
+          node --check public/platform/product-redesign-v20.js
           node --check public/sw.js
-      - name: Validate PWA manifest and public v17 contract
+      - name: Validate PWA manifest and Product System v20 Apps contract
         run: |
-          node -e "const fs=require('fs'); const manifest=JSON.parse(fs.readFileSync('public/manifest.webmanifest','utf8')); if(manifest.name!=='DyrakArmy Unified Platform v17') process.exit(1); if(!manifest.shortcuts.some(x=>x.url==='/#software')) process.exit(1);"
-          grep -q 'id="software"' public/index.html
-          grep -q '/platform/software-suite.css' public/index.html
-          grep -q '/platform/software-suite.js' public/index.html
-          grep -q '/api/software/releases' public/index.html
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const manifest = JSON.parse(fs.readFileSync('public/manifest.webmanifest','utf8'));
+          const html = fs.readFileSync('public/index.html','utf8');
+          const visible = html.replace(/<!--[\s\S]*?-->/g, '');
+          if (manifest.name !== 'DyrakArmy Unified Platform v17') process.exit(1);
+          if (!manifest.shortcuts.some(x => x.url === '/#software')) process.exit(1);
+          for (const marker of ['data-product-generation="20"', 'id="apps"', 'DyrakArmy Apps', 'Desktop', 'Mobile', 'Browser', 'PWA']) {
+            if (!html.includes(marker)) throw new Error(`Missing Apps product marker: ${marker}`);
+          }
+          for (const forbidden of ['softwareReleaseGrid', 'softwarePreferredDownload', 'DOWNLOAD FOR MY DEVICE', 'OPEN VERIFIED RELEASE', 'MEDIA DOWNLOAD CONSOLE']) {
+            if (visible.includes(forbidden)) throw new Error(`Retired public software/download surface remains visible: ${forbidden}`);
+          }
+          NODE
+          grep -q '/platform/product-redesign-v20.css' public/index.html
+          grep -q '/platform/product-redesign-v20.js' public/index.html
           grep -q "{ command: 'software'" src/dyrakarmy_arena_commands.ts
           grep -q "{ command: 'games'" src/dyrakarmy_arena_commands.ts
       - name: Wrangler packaging dry-run
@@ -91,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Require every catalog package in the release pipeline
+      - name: Require every catalog package in the private release pipeline
         shell: bash
         run: |
           set -euo pipefail
@@ -131,5 +141,5 @@ jobs:
           if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
             echo "PR validation only. Production deployment is not authorized from this event."
           else
-            echo "Main push or manual validation event. Deployment remains controlled by the configured Cloudflare/GitHub release pipeline."
+            echo "Main push or manual validation event. Deployment remains controlled by the configured release pipeline."
           fi

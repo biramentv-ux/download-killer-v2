@@ -1,107 +1,29 @@
 <!doctype html>
-<html lang="bg">
+<html lang="bg" data-product-generation="20">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#080511">
-  <meta name="description" content="Latency Strike v1 — Telegram reaction game with ranks, rewards and weekly leaderboard.">
-  <title>Latency Strike v1 · Download Killer</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#03040b">
+  <meta name="description" content="Latency Strike — reaction game with ranks, rewards and weekly leaderboard.">
+  <title>Latency Strike · DyrakArmy</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./game.css?v=1.0.0">
+  <link rel="stylesheet" href="/platform/product-redesign-v20.css?v=20.0.0">
   <script src="https://telegram.org/js/telegram-web-app.js?59"></script>
   <script src="https://telegram.org/js/games.js"></script>
   <script src="./native-bridge.js?v=1.0.0"></script>
 </head>
-<body data-theme="theme_violet">
-  <div class="ambient ambient-a" aria-hidden="true"></div>
-  <div class="ambient ambient-b" aria-hidden="true"></div>
-  <div class="scanlines" aria-hidden="true"></div>
-
-  <header class="topbar">
-    <a class="back-link" href="/telegram/?v=12.2.0" aria-label="Назад към Mini App">‹ <span>Mini App</span></a>
-    <div class="brand"><span class="brand-pulse"></span><b>Latency Strike</b><em>v1</em></div>
-    <button class="icon-button" id="soundBtn" type="button" aria-label="Звук">♪</button>
-  </header>
-
+<body data-da-surface="game" data-theme="theme_violet">
+  <div class="ambient ambient-a" aria-hidden="true"></div><div class="ambient ambient-b" aria-hidden="true"></div><div class="scanlines" aria-hidden="true"></div>
+  <header class="topbar"><a class="back-link" href="/telegram/" aria-label="Назад към Mini App">‹ <span>Mini App</span></a><div class="brand"><span class="brand-pulse"></span><b>Latency Strike</b><em>DA</em></div><button class="icon-button" id="soundBtn" type="button" aria-label="Звук">♪</button></header>
   <main>
-    <section class="profile-shell" id="profileShell" data-frame="frame_neon">
-      <div class="profile-avatar" id="profileAvatar" data-icon="icon_pulse"><span id="profileGlyph">◌</span></div>
-      <div class="profile-copy">
-        <div class="profile-name-row"><h1 id="profileName">Latency Player</h1><span class="animated-badge" id="profileBadge" data-badge="badge_recruit">R</span></div>
-        <p><span id="profileTitle">Recruit</span> · <strong id="profileRank">Recruit</strong></p>
-        <div class="xp-track"><i id="xpBar"></i></div>
-        <small><span id="profileXp">0</span> XP · седмично място <b id="weeklyRank">—</b></small>
-      </div>
-      <div class="waveform" id="profileWaveform" data-waveform="waveform_pulse" aria-hidden="true">
-        <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-      </div>
-    </section>
-
-    <section class="game-layout">
-      <article class="game-card">
-        <div class="game-head">
-          <div><span class="eyebrow">REACTION PROTOCOL</span><h2>Удари точно при READY</h2></div>
-          <div class="round-counter"><span id="roundCurrent">0</span>/<b id="roundTotal">5</b></div>
-        </div>
-
-        <div class="arena" id="arena" data-state="idle" role="button" tabindex="0" aria-label="Игрално поле">
-          <div class="arena-rings" aria-hidden="true"><i></i><i></i><i></i></div>
-          <div class="signal-core">
-            <span id="phaseCode">STANDBY</span>
-            <strong id="phaseLabel">Натисни START</strong>
-            <small id="phaseHint">Пет рунда. Не натискай преди READY.</small>
-          </div>
-          <div class="reaction-readout"><span id="reactionValue">—</span><small>ms</small></div>
-        </div>
-
-        <div class="game-actions">
-          <button class="primary-button" id="startBtn" type="button"><span>START RUN</span><b>→</b></button>
-          <button class="secondary-button" id="resetBtn" type="button" disabled>Нулирай</button>
-        </div>
-
-        <div class="round-dots" id="roundDots" aria-label="Резултати от рундовете"></div>
-      </article>
-
-      <aside class="run-panel">
-        <div class="stat-grid">
-          <article><span>Резултат</span><strong id="runScore">0</strong></article>
-          <article><span>Средна реакция</span><strong><b id="runAverage">—</b> ms</strong></article>
-          <article><span>Точност</span><strong><b id="runAccuracy">0</b>%</strong></article>
-          <article><span>XP награда</span><strong>+<b id="runXp">0</b></strong></article>
-        </div>
-        <div class="run-log" id="runLog"><p>Системата е готова за нов опит.</p></div>
-        <button class="share-button" id="shareBtn" type="button" disabled>Сподели резултата ↗</button>
-      </aside>
-    </section>
-
-    <section class="content-section">
-      <div class="section-head">
-        <div><span class="eyebrow">REWARD INVENTORY</span><h2>Награди и персонализация</h2></div>
-        <div class="filter-tabs" id="rewardFilters">
-          <button class="active" data-filter="all">Всички</button>
-          <button data-filter="frame">Рамки</button>
-          <button data-filter="icon">Иконки</button>
-          <button data-filter="badge">Badges</button>
-          <button data-filter="waveform">Waveforms</button>
-          <button data-filter="theme">Теми</button>
-          <button data-filter="title">Заглавия</button>
-        </div>
-      </div>
-      <div class="reward-grid" id="rewardGrid"></div>
-    </section>
-
-    <section class="content-section leaderboard-section">
-      <div class="section-head">
-        <div><span class="eyebrow">WEEKLY SIGNAL</span><h2>Седмична класация</h2><p id="weekLabel">Текуща седмица</p></div>
-        <button class="secondary-button" id="refreshLeaderboardBtn" type="button">Обнови</button>
-      </div>
-      <div class="podium" id="podium"></div>
-      <div class="leaderboard-list" id="leaderboardList"></div>
-    </section>
+    <section class="profile-shell" id="profileShell" data-frame="frame_neon"><div class="profile-avatar" id="profileAvatar" data-icon="icon_pulse"><span id="profileGlyph">◌</span></div><div class="profile-copy"><div class="profile-name-row"><h1 id="profileName">Latency Player</h1><span class="animated-badge" id="profileBadge" data-badge="badge_recruit">R</span></div><p><span id="profileTitle">Recruit</span> · <strong id="profileRank">Recruit</strong></p><div class="xp-track"><i id="xpBar"></i></div><small><span id="profileXp">0</span> XP · седмично място <b id="weeklyRank">—</b></small></div><div class="waveform" id="profileWaveform" data-waveform="waveform_pulse" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></section>
+    <section class="game-layout"><article class="game-card"><div class="game-head"><div><span class="eyebrow">REACTION RUN</span><h2>Удари точно при READY</h2></div><div class="round-counter"><span id="roundCurrent">0</span>/<b id="roundTotal">5</b></div></div><div class="arena" id="arena" data-state="idle" role="button" tabindex="0" aria-label="Игрално поле"><div class="arena-rings" aria-hidden="true"><i></i><i></i><i></i></div><div class="signal-core"><span id="phaseCode">STANDBY</span><strong id="phaseLabel">Натисни START</strong><small id="phaseHint">Пет рунда. Изчакай точния момент.</small></div><div class="reaction-readout"><span id="reactionValue">—</span><small>ms</small></div></div><div class="game-actions"><button class="primary-button" id="startBtn" type="button"><span>START RUN</span><b>→</b></button><button class="secondary-button" id="resetBtn" type="button" disabled>Нулирай</button></div><div class="round-dots" id="roundDots" aria-label="Резултати от рундовете"></div></article><aside class="run-panel"><div class="stat-grid"><article><span>Резултат</span><strong id="runScore">0</strong></article><article><span>Средна реакция</span><strong><b id="runAverage">—</b> ms</strong></article><article><span>Точност</span><strong><b id="runAccuracy">0</b>%</strong></article><article><span>XP награда</span><strong>+<b id="runXp">0</b></strong></article></div><div class="run-log" id="runLog"><p>Готово за нов опит.</p></div><button class="share-button" id="shareBtn" type="button" disabled>Сподели резултата ↗</button></aside></section>
+    <section class="content-section"><div class="section-head"><div><span class="eyebrow">REWARD INVENTORY</span><h2>Награди и персонализация</h2></div><div class="filter-tabs" id="rewardFilters"><button class="active" data-filter="all">Всички</button><button data-filter="frame">Рамки</button><button data-filter="icon">Иконки</button><button data-filter="badge">Badges</button><button data-filter="waveform">Waveforms</button><button data-filter="theme">Теми</button><button data-filter="title">Заглавия</button></div></div><div class="reward-grid" id="rewardGrid"></div></section>
+    <section class="content-section leaderboard-section"><div class="section-head"><div><span class="eyebrow">WEEKLY SIGNAL</span><h2>Седмична класация</h2><p id="weekLabel">Текуща седмица</p></div><button class="secondary-button" id="refreshLeaderboardBtn" type="button">Обнови</button></div><div class="podium" id="podium"></div><div class="leaderboard-list" id="leaderboardList"></div></section>
   </main>
-
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
   <script src="./game.js?v=1.0.0" defer></script>
 </body>

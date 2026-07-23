@@ -1,4 +1,5 @@
 const CACHE_NAME = 'download-killer-static-v15-games-1-10';
+const PRODUCT_CACHE_VERSION = 'dyrakarmy-product-system-v20';
 const INTERFACE_CACHE_VERSION = 'download-killer-static-v16-dyrakarmy-dashboard';
 const SOFTWARE_SUITE_VERSION = 'download-killer-static-v17-software-suite';
 const MEDIA_CACHE_NAME = 'download-killer-offline-media-v2';
@@ -11,22 +12,13 @@ const APP_SHELL = [
   '/index.html',
   '/favicon.svg',
   '/manifest.webmanifest',
-  '/platform/platform.css',
-  '/platform/landing-v13.css',
-  '/platform/landing-v16.css',
-  '/platform/software-suite.css',
-  '/platform/games-v14.css',
-  '/platform/platform-public.css',
-  '/platform/status-backoff.js',
-  '/platform/site-defaults.js',
-  '/platform/landing-v13.js',
-  '/platform/landing-v16.js',
-  '/platform/software-suite.js',
-  '/platform/platform.js',
+  '/platform/product-redesign-v20.css?v=20.0.0',
+  '/platform/product-redesign-v20.js?v=20.0.0',
   '/platform/games-v14.js',
   '/platform/platform-public.js',
-  '/media-lab/media-lab.css',
-  '/media-lab/media-lab.js',
+  '/telegram/',
+  '/telegram/index.html',
+  '/telegram/telegram-product-v20.js?v=20.0.0',
   '/games/challenge/index.html',
   '/games/challenge/challenge.css?v=1.0.0',
   '/games/challenge/challenge.js?v=1.0.0',
@@ -139,11 +131,11 @@ self.addEventListener('fetch', (event) => {
   const isChallengeRoute = CHALLENGE_GAME_SLUGS.includes(gameSlug);
 
   if (isTelegramAsset || isGameAsset || isControlAsset) {
-    let offlineMessage = 'Telegram Mini App is temporarily offline. Reopen it from the bot.';
+    let offlineMessage = 'DyrakArmy is temporarily offline. Reopen the experience when the connection returns.';
     let fallbackUrl = '';
-    if (isGameAsset) offlineMessage = 'DyrakArmy Game is temporarily offline. Reopen it from @dyrakarmy_bot.';
+    if (isGameAsset) offlineMessage = 'DyrakArmy Game is temporarily offline. Reopen it from the platform or Telegram.';
     if (isChallengeRoute) fallbackUrl = '/games/challenge/index.html';
-    if (isControlAsset) offlineMessage = 'Control Center needs a network connection and a valid Telegram administrator session.';
+    if (isControlAsset) offlineMessage = 'Your DyrakArmy profile needs a network connection.';
     event.respondWith(networkFirstApp(request, offlineMessage, fallbackUrl));
     return;
   }
